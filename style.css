@@ -9,29 +9,31 @@ html, body {
 }
 
 #app-container {
-    display: flex;
+    position: relative; /* This will be the canvas for our panels */
     width: 100%;
     height: 100%;
     background-color: #1e1e1e;
 }
 
 .panel {
-    height: 100%;
-    border-left: 1px solid #444;
-    border-right: 1px solid #444;
-    box-sizing: border-box;
+    position: absolute; /* Panels can be placed anywhere */
+    border: 1px solid #444;
+    background-color: #2a2a2a;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
 }
 
-#panel-jerarquia {
-    width: 250px;
-    flex-shrink: 0; /* Prevents shrinking */
+.panel-title {
+    background-color: #3c3c3c;
+    padding: 8px;
+    cursor: move; /* Indicates that the title bar is draggable */
+    font-weight: bold;
+    user-select: none; /* Prevents text selection while dragging */
 }
 
-#panel-visor {
-    flex-grow: 1; /* Takes up remaining space */
-}
-
-#panel-inspector {
-    width: 250px;
-    flex-shrink: 0; /* Prevents shrinking */
+.panel-content {
+    flex-grow: 1; /* Content area fills the rest of the panel */
+    position: relative; /* For positioning child elements like the canvas */
+    overflow: hidden;
 }

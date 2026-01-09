@@ -1,24 +1,11 @@
-window.onload = () => {
-    const visorPanel = document.getElementById('panel-visor');
-
-    if (!visorPanel) {
-        console.error('Visor panel not found');
-        return;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = visorPanel.clientWidth;
-    canvas.height = visorPanel.clientHeight;
-    visorPanel.appendChild(canvas);
-
+// --- WebGL Rendering Logic (from previous step) ---
+function initWebGL(canvas) {
     const gl = canvas.getContext('webgl');
-
     if (!gl) {
         console.error('WebGL not supported');
-        return;
+        return null;
     }
 
-    // Shaders
     const vertexShaderSource = `
         attribute vec2 a_position;
         void main() {
@@ -32,7 +19,6 @@ window.onload = () => {
         }
     `;
 
-    // Shader compilation
     function createShader(gl, type, source) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
@@ -48,7 +34,6 @@ window.onload = () => {
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
 
-    // Program linking
     function createProgram(gl, vertexShader, fragmentShader) {
         const program = gl.createProgram();
         gl.attachShader(program, vertexShader);
@@ -64,45 +49,105 @@ window.onload = () => {
 
     const program = createProgram(gl, vertexShader, fragmentShader);
 
-    // Vertex data and buffer
-    const positions = [
-        0.0,  0.5,
-       -0.5, -0.5,
-        0.5, -0.5,
-    ];
+    const positions = [0.0, 0.5, -0.5, -0.5, 0.5, -0.5];
     const positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
 
-    // Render loop
-    function render() {
-        // Resize canvas and viewport
-        if (canvas.width !== visorPanel.clientWidth || canvas.height !== visorPanel.clientHeight) {
-            canvas.width = visorPanel.clientWidth;
-            canvas.height = visorPanel.clientHeight;
-            gl.viewport(0, 0, canvas.width, canvas.height);
-        }
+    return { gl, program, positionBuffer };
+}
 
-        // Clear the canvas
-        gl.clearColor(0.13, 0.13, 0.13, 1.0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+function renderWebGL(webglContext, canvas) {
+    const { gl, program, positionBuffer } = webglContext;
 
-        // Use the program
-        gl.useProgram(program);
-
-        // Set up the position attribute
-        const positionAttributeLocation = gl.getAttribLocation(program, 'a_position');
-        gl.enableVertexAttribArray(positionAttributeLocation);
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
-
-        // Draw the triangle
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-        // Request next frame
-        requestAnimationFrame(render);
+    if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        gl.viewport(0, 0, canvas.width, canvas.height);
     }
 
-    // Start rendering
-    requestAnimationFrame(render);
+    gl.clearColor(0.13, 0.13, 0.13, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    gl.useProgram(program);
+    const positionAttributeLocation = gl.getAttribLocation(program, 'a_position');
+    gl.enableVertexAttribArray(positionAttributeLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+// --- Windowing System Logic ---
+window.onload = () => {
+    const appContainer = document.getElementById('app-container');
+    let webglContext = null;
+
+    const panelConfig = [
+        { id: 'panel-jerarquia', title: 'Jerarquía', x: 20, y: 20, width: 250, height: 400 },
+        { id: 'panel-visor', title: 'Visor 3D', x: 300, y: 20, width: 600, height: 500 },
+        { id: 'panel-inspector', title: 'Inspector', x: 930, y: 20, width: 250, height: 400 }
+    ];
+
+    panelConfig.forEach(config => {
+        const panel = document.createElement('div');
+        panel.id = config.id;
+        panel.className = 'panel';
+        panel.style.left = `${config.x}px`;
+        panel.style.top = `${config.y}px`;
+        panel.style.width = `${config.width}px`;
+        panel.style.height = `${config.height}px`;
+
+        const titleBar = document.createElement('div');
+        titleBar.className = 'panel-title';
+        titleBar.textContent = config.title;
+
+        // Drag logic
+        titleBar.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            let startX = e.clientX;
+            let startY = e.clientY;
+            let startLeft = panel.offsetLeft;
+            let startTop = panel.offsetTop;
+
+            function onMouseMove(e) {
+                const newLeft = startLeft + e.clientX - startX;
+                const newTop = startTop + e.clientY - startY;
+                panel.style.left = `${newLeft}px`;
+                panel.style.top = `${newTop}px`;
+            }
+
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        const contentArea = document.createElement('div');
+        contentArea.className = 'panel-content';
+
+        panel.appendChild(titleBar);
+        panel.appendChild(contentArea);
+        appContainer.appendChild(panel);
+
+        if (config.id === 'panel-visor') {
+            const canvas = document.createElement('canvas');
+            contentArea.appendChild(canvas);
+            webglContext = initWebGL(canvas);
+        }
+    });
+
+    function mainLoop() {
+        if (webglContext) {
+            const visorPanel = document.getElementById('panel-visor');
+            const canvas = visorPanel.querySelector('canvas');
+            renderWebGL(webglContext, canvas);
+        }
+        requestAnimationFrame(mainLoop);
+    }
+
+    requestAnimationFrame(mainLoop);
 };
