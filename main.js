@@ -78,10 +78,16 @@ function renderWebGL(webglContext, canvas) {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 
+// --- Utility Functions ---
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
 // --- Windowing System Logic ---
 window.onload = () => {
     const appContainer = document.getElementById('app-container');
     let webglContext = null;
+    let maxZIndex = 10;
 
     const panelConfig = [
         { id: 'panel-jerarquia', title: 'Jerarquía', x: 20, y: 20, width: 250, height: 400 },
@@ -105,14 +111,27 @@ window.onload = () => {
         // Drag logic
         titleBar.addEventListener('mousedown', (e) => {
             e.preventDefault();
+
+            // Bring panel to front
+            maxZIndex++;
+            panel.style.zIndex = maxZIndex;
+
             let startX = e.clientX;
             let startY = e.clientY;
             let startLeft = panel.offsetLeft;
             let startTop = panel.offsetTop;
 
             function onMouseMove(e) {
-                const newLeft = startLeft + e.clientX - startX;
-                const newTop = startTop + e.clientY - startY;
+                let newLeft = startLeft + e.clientX - startX;
+                let newTop = startTop + e.clientY - startY;
+
+                // Clamp position to keep the title bar within the viewport
+                const maxLeft = appContainer.clientWidth - panel.offsetWidth;
+                const maxTop = appContainer.clientHeight - titleBar.offsetHeight;
+
+                newLeft = clamp(newLeft, 0, maxLeft);
+                newTop = clamp(newTop, 0, maxTop);
+
                 panel.style.left = `${newLeft}px`;
                 panel.style.top = `${newTop}px`;
             }
@@ -129,8 +148,47 @@ window.onload = () => {
         const contentArea = document.createElement('div');
         contentArea.className = 'panel-content';
 
+        const resizeHandle = document.createElement('div');
+        resizeHandle.className = 'resize-handle';
+
+        // Resize logic
+        resizeHandle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation(); // Prevent drag logic from firing
+            let startX = e.clientX;
+            let startY = e.clientY;
+            let startWidth = panel.offsetWidth;
+            let startHeight = panel.offsetHeight;
+
+            function onMouseMove(e) {
+                let newWidth = startWidth + e.clientX - startX;
+                let newHeight = startHeight + e.clientY - startY;
+
+                // Clamp size
+                const minWidth = 150;
+                const minHeight = 100;
+                const maxWidth = appContainer.clientWidth - panel.offsetLeft;
+                const maxHeight = appContainer.clientHeight - panel.offsetTop;
+
+                newWidth = clamp(newWidth, minWidth, maxWidth);
+                newHeight = clamp(newHeight, minHeight, maxHeight);
+
+                panel.style.width = `${newWidth}px`;
+                panel.style.height = `${newHeight}px`;
+            }
+
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
         panel.appendChild(titleBar);
         panel.appendChild(contentArea);
+        panel.appendChild(resizeHandle);
         appContainer.appendChild(panel);
 
         if (config.id === 'panel-visor') {

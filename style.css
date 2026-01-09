@@ -17,6 +17,7 @@ html, body {
 
 .panel {
     position: absolute; /* Panels can be placed anywhere */
+    z-index: 1; /* Default stacking index */
     border: 1px solid #444;
     background-color: #2a2a2a;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
@@ -36,4 +37,17 @@ html, body {
     flex-grow: 1; /* Content area fills the rest of the panel */
     position: relative; /* For positioning child elements like the canvas */
     overflow: hidden;
+}
+
+.resize-handle {
+    position: absolute;
+    width: 0;
+    height: 0;
+    right: 0;
+    bottom: 0;
+    border-style: solid;
+    border-width: 0 0 12px 12px;
+    border-color: transparent transparent #888 transparent;
+    cursor: se-resize;
+    z-index: 100;
 }
