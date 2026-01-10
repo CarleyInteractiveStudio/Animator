@@ -1,4 +1,4 @@
-// --- WebGL Rendering Logic (from previous step) ---
+// --- WebGL Rendering Logic (Encapsulated) ---
 function initWebGL(canvas) {
     const gl = canvas.getContext('webgl');
     if (!gl) {
@@ -78,134 +78,269 @@ function renderWebGL(webglContext, canvas) {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 
-// --- Utility Functions ---
-function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-}
+// --- New Layout Engine ---
 
-// --- Windowing System Logic ---
-window.onload = () => {
-    const appContainer = document.getElementById('app-container');
-    let webglContext = null;
-    let maxZIndex = 10;
-
-    const panelConfig = [
-        { id: 'panel-jerarquia', title: 'Jerarquía', x: 20, y: 20, width: 250, height: 400 },
-        { id: 'panel-visor', title: 'Visor 3D', x: 300, y: 20, width: 600, height: 500 },
-        { id: 'panel-inspector', title: 'Inspector', x: 930, y: 20, width: 250, height: 400 }
-    ];
-
-    panelConfig.forEach(config => {
-        const panel = document.createElement('div');
-        panel.id = config.id;
-        panel.className = 'panel';
-        panel.style.left = `${config.x}px`;
-        panel.style.top = `${config.y}px`;
-        panel.style.width = `${config.width}px`;
-        panel.style.height = `${config.height}px`;
-
-        const titleBar = document.createElement('div');
-        titleBar.className = 'panel-title';
-        titleBar.textContent = config.title;
-
-        // Drag logic
-        titleBar.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-
-            // Bring panel to front
-            maxZIndex++;
-            panel.style.zIndex = maxZIndex;
-
-            let startX = e.clientX;
-            let startY = e.clientY;
-            let startLeft = panel.offsetLeft;
-            let startTop = panel.offsetTop;
-
-            function onMouseMove(e) {
-                let newLeft = startLeft + e.clientX - startX;
-                let newTop = startTop + e.clientY - startY;
-
-                // Clamp position to keep the title bar within the viewport
-                const maxLeft = appContainer.clientWidth - panel.offsetWidth;
-                const maxTop = appContainer.clientHeight - titleBar.offsetHeight;
-
-                newLeft = clamp(newLeft, 0, maxLeft);
-                newTop = clamp(newTop, 0, maxTop);
-
-                panel.style.left = `${newLeft}px`;
-                panel.style.top = `${newTop}px`;
-            }
-
-            function onMouseUp() {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
-            }
-
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
-
-        const contentArea = document.createElement('div');
-        contentArea.className = 'panel-content';
-
-        const resizeHandle = document.createElement('div');
-        resizeHandle.className = 'resize-handle';
-
-        // Resize logic
-        resizeHandle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            e.stopPropagation(); // Prevent drag logic from firing
-            let startX = e.clientX;
-            let startY = e.clientY;
-            let startWidth = panel.offsetWidth;
-            let startHeight = panel.offsetHeight;
-
-            function onMouseMove(e) {
-                let newWidth = startWidth + e.clientX - startX;
-                let newHeight = startHeight + e.clientY - startY;
-
-                // Clamp size
-                const minWidth = 150;
-                const minHeight = 100;
-                const maxWidth = appContainer.clientWidth - panel.offsetLeft;
-                const maxHeight = appContainer.clientHeight - panel.offsetTop;
-
-                newWidth = clamp(newWidth, minWidth, maxWidth);
-                newHeight = clamp(newHeight, minHeight, maxHeight);
-
-                panel.style.width = `${newWidth}px`;
-                panel.style.height = `${newHeight}px`;
-            }
-
-            function onMouseUp() {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
-            }
-
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
-
-        panel.appendChild(titleBar);
-        panel.appendChild(contentArea);
-        panel.appendChild(resizeHandle);
-        appContainer.appendChild(panel);
-
-        if (config.id === 'panel-visor') {
+// 1. Panel Registry: Defines the content of each panel type
+const panelRegistry = {
+    'jerarquia': {
+        title: 'Jerarquía',
+        init: (contentArea) => {
+            contentArea.innerHTML = '<p>Contenido de Jerarquía...</p>';
+        }
+    },
+    'visor': {
+        title: 'Visor 3D',
+        init: (contentArea) => {
             const canvas = document.createElement('canvas');
             contentArea.appendChild(canvas);
-            webglContext = initWebGL(canvas);
-        }
-    });
+            const webglContext = initWebGL(canvas);
 
-    function mainLoop() {
-        if (webglContext) {
-            const visorPanel = document.getElementById('panel-visor');
-            const canvas = visorPanel.querySelector('canvas');
-            renderWebGL(webglContext, canvas);
+            function mainLoop() {
+                if (webglContext) {
+                    renderWebGL(webglContext, canvas);
+                }
+                requestAnimationFrame(mainLoop);
+            }
+            requestAnimationFrame(mainLoop);
         }
-        requestAnimationFrame(mainLoop);
+    },
+    'inspector': {
+        title: 'Inspector',
+        init: (contentArea) => {
+            contentArea.innerHTML = '<p>Contenido del Inspector...</p>';
+        }
+    }
+};
+
+// 2. Layout Configuration: A tree structure defining the UI layout
+const layoutConfig = {
+    type: 'row',
+    content: [
+        { type: 'component', componentName: 'jerarquia', width: 20 },
+        {
+            type: 'column',
+            content: [
+                { type: 'component', componentName: 'visor', height: 70 },
+                { type: 'component', componentName: 'inspector', height: 30 }
+            ],
+            width: 80
+        }
+    ]
+};
+
+// --- Main Application Logic ---
+const domNodeMap = new WeakMap(); // Maps DOM elements to layout config nodes
+
+function findNode(targetNode, rootNode = layoutConfig) {
+    if (rootNode === targetNode) {
+        return { parent: null, node: rootNode };
+    }
+    if (rootNode.content) {
+        for (const child of rootNode.content) {
+            if (child === targetNode) {
+                return { parent: rootNode, node: child };
+            }
+            const result = findNode(targetNode, child);
+            if (result) {
+                return result;
+            }
+        }
+    }
+    return null;
+}
+
+function updateLayout(draggedNode, targetNode, dropZone) {
+    // 1. Remove the dragged node from its original parent
+    const { parent: oldParent } = findNode(draggedNode);
+    if (oldParent) {
+        oldParent.content = oldParent.content.filter(child => child !== draggedNode);
     }
 
-    requestAnimationFrame(mainLoop);
+    // 2. Find the target node's position in the tree
+    const { parent: targetParent, node: target } = findNode(targetNode);
+    const targetIndex = targetParent.content.indexOf(target);
+
+    // 3. Create a new container that inherits the target's size properties
+    const newContainer = {
+        type: (dropZone === 'top' || dropZone === 'bottom') ? 'column' : 'row',
+        width: target.width,
+        height: target.height,
+        content: []
+    };
+
+    // 4. Clean up the nodes and add them to the new container
+    // Remove old size properties
+    delete target.width;
+    delete target.height;
+    delete draggedNode.width;
+    delete draggedNode.height;
+
+    // Assign new size properties to divide the space
+    const isHorizontal = newContainer.type === 'row';
+    draggedNode[isHorizontal ? 'width' : 'height'] = 50;
+    target[isHorizontal ? 'width' : 'height'] = 50;
+
+    if (dropZone === 'top' || dropZone === 'left') {
+        newContainer.content = [draggedNode, target];
+    } else { // bottom or right
+        newContainer.content = [target, draggedNode];
+    }
+
+    // 5. Replace target with the new container in the tree
+    targetParent.content.splice(targetIndex, 1, newContainer);
+
+    // 6. Redraw the entire layout
+    const appContainer = document.getElementById('app-container');
+    appContainer.innerHTML = ''; // Clear old layout
+    buildLayout(layoutConfig, appContainer);
+}
+
+function buildLayout(node, parentElement) {
+    const element = document.createElement('div');
+    domNodeMap.set(element, node); // Associate DOM element with its config node
+
+    if (node.type === 'row' || node.type === 'column') {
+        element.className = node.type === 'row' ? 'layout-row' : 'layout-column';
+        if (node.width) element.style.flex = `0 0 ${node.width}%`;
+        if (node.height) element.style.flex = `0 0 ${node.height}%`;
+
+        node.content.forEach(childNode => {
+            buildLayout(childNode, element);
+        });
+
+    } else if (node.type === 'component') {
+        element.className = 'panel';
+        if (node.width) element.style.flex = `0 0 ${node.width}%`;
+        if (node.height) element.style.flex = `0 0 ${node.height}%`;
+
+        const panelInfo = panelRegistry[node.componentName];
+        if (panelInfo) {
+            const titleBar = document.createElement('div');
+            titleBar.className = 'panel-title';
+            titleBar.textContent = panelInfo.title;
+
+            // Drag to dock logic
+            titleBar.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+
+                const draggedNode = domNodeMap.get(element);
+                const overlay = document.getElementById('dock-overlay');
+                let currentDropTarget = null;
+                let activeDropZone = null;
+
+                function onMouseMove(e) {
+                    let dropTarget = null;
+                    const allPanels = document.querySelectorAll('.panel');
+                    for (const otherPanel of allPanels) {
+                        if (otherPanel === element) continue;
+                        const rect = otherPanel.getBoundingClientRect();
+                        if (e.clientX > rect.left && e.clientX < rect.right && e.clientY > rect.top && e.clientY < rect.bottom) {
+                            dropTarget = otherPanel;
+                            break;
+                        }
+                    }
+
+                    if (dropTarget !== currentDropTarget) {
+                        if (dropTarget) {
+                            showOverlay(dropTarget);
+                        } else {
+                            hideOverlay();
+                        }
+                        currentDropTarget = dropTarget;
+                    }
+
+                    if (currentDropTarget) {
+                        activeDropZone = getActiveDropZone(e, currentDropTarget.getBoundingClientRect());
+                        highlightDropZone(activeDropZone);
+                    }
+                }
+
+                function onMouseUp() {
+                    if (currentDropTarget && activeDropZone && activeDropZone !== 'center') {
+                        const targetNode = domNodeMap.get(currentDropTarget);
+                        updateLayout(draggedNode, targetNode, activeDropZone);
+                    }
+                    hideOverlay();
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                }
+
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+
+            const contentArea = document.createElement('div');
+            contentArea.className = 'panel-content';
+
+            element.appendChild(titleBar);
+            element.appendChild(contentArea);
+
+            panelInfo.init(contentArea);
+        }
+    }
+
+    parentElement.appendChild(element);
+}
+
+window.onload = () => {
+    const appContainer = document.getElementById('app-container');
+    buildLayout(layoutConfig, appContainer);
 };
+
+function showOverlay(targetPanel) {
+    const overlay = document.getElementById('dock-overlay');
+    const rect = targetPanel.getBoundingClientRect();
+    overlay.classList.remove('hidden');
+
+    // Position the overlay exactly on top of the target panel
+    overlay.style.left = `${rect.left}px`;
+    overlay.style.top = `${rect.top}px`;
+    overlay.style.width = `${rect.width}px`;
+    overlay.style.height = `${rect.height}px`;
+
+    // Position drop zones (simplified example)
+    const center = overlay.querySelector('[data-zone="center"]');
+    center.style.left = '25%'; center.style.top = '25%'; center.style.width = '50%'; center.style.height = '50%';
+
+    const top = overlay.querySelector('[data-zone="top"]');
+    top.style.left = '25%'; top.style.top = '0'; top.style.width = '50%'; top.style.height = '25%';
+
+    const bottom = overlay.querySelector('[data-zone="bottom"]');
+    bottom.style.left = '25%'; bottom.style.top = '75%'; bottom.style.width = '50%'; bottom.style.height = '25%';
+
+    const left = overlay.querySelector('[data-zone="left"]');
+    left.style.left = '0'; left.style.top = '25%'; left.style.width = '25%'; left.style.height = '50%';
+
+    const right = overlay.querySelector('[data-zone="right"]');
+    right.style.left = '75%'; right.style.top = '25%'; right.style.width = '25%'; right.style.height = '50%';
+}
+
+function hideOverlay() {
+    const overlay = document.getElementById('dock-overlay');
+    overlay.classList.add('hidden');
+}
+
+function getActiveDropZone(mouseEvent, targetRect) {
+    // Simplified logic: determine which quadrant the mouse is in
+    const relX = (mouseEvent.clientX - targetRect.left) / targetRect.width;
+    const relY = (mouseEvent.clientY - targetRect.top) / targetRect.height;
+
+    if (relX > 0.25 && relX < 0.75 && relY > 0.25 && relY < 0.75) return 'center';
+    if (relY < 0.25) return 'top';
+    if (relY > 0.75) return 'bottom';
+    if (relX < 0.25) return 'left';
+    if (relX > 0.75) return 'right';
+
+    return null;
+}
+
+function highlightDropZone(activeZone) {
+    const overlay = document.getElementById('dock-overlay');
+    overlay.querySelectorAll('.drop-zone').forEach(zone => {
+        if (zone.dataset.zone === activeZone) {
+            zone.style.backgroundColor = 'rgba(0, 150, 255, 0.5)';
+        } else {
+            zone.style.backgroundColor = 'rgba(0, 150, 255, 0.3)';
+        }
+    });
+}

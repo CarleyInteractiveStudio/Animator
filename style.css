@@ -9,45 +9,77 @@ html, body {
 }
 
 #app-container {
-    position: relative; /* This will be the canvas for our panels */
     width: 100%;
     height: 100%;
     background-color: #1e1e1e;
 }
 
+/* New Flexbox-based layout system */
+.layout-row, .layout-column {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.layout-row {
+    flex-direction: row;
+}
+
+.layout-column {
+    flex-direction: column;
+}
+
 .panel {
-    position: absolute; /* Panels can be placed anywhere */
-    z-index: 1; /* Default stacking index */
-    border: 1px solid #444;
+    border: 1px solid #000;
     background-color: #2a2a2a;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     display: flex;
     flex-direction: column;
+    overflow: hidden; /* Prevent content from spilling out */
 }
 
 .panel-title {
     background-color: #3c3c3c;
     padding: 8px;
-    cursor: move; /* Indicates that the title bar is draggable */
     font-weight: bold;
-    user-select: none; /* Prevents text selection while dragging */
+    user-select: none;
+    flex-shrink: 0; /* Prevent title from shrinking */
 }
 
 .panel-content {
-    flex-grow: 1; /* Content area fills the rest of the panel */
-    position: relative; /* For positioning child elements like the canvas */
+    flex-grow: 1;
+    position: relative;
     overflow: hidden;
 }
 
-.resize-handle {
+canvas {
+    width: 100%;
+    height: 100%;
+    display: block; /* Remove any potential extra space below the canvas */
+}
+
+/* Docking Overlay */
+#dock-overlay {
     position: absolute;
-    width: 0;
-    height: 0;
-    right: 0;
-    bottom: 0;
-    border-style: solid;
-    border-width: 0 0 12px 12px;
-    border-color: transparent transparent #888 transparent;
-    cursor: se-resize;
-    z-index: 100;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Allows mouse events to pass through */
+    z-index: 1000;
+}
+
+#dock-overlay .drop-zone {
+    position: absolute;
+    background-color: rgba(0, 150, 255, 0.3);
+    border: 1px dashed #0096ff;
+    box-sizing: border-box;
+    transition: background-color 0.2s;
+}
+
+#dock-overlay .drop-zone:hover {
+    background-color: rgba(0, 150, 255, 0.5);
+}
+
+.hidden {
+    display: none;
 }
