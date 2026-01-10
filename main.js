@@ -204,8 +204,63 @@ function buildLayout(node, parentElement) {
         if (node.width) element.style.flex = `0 0 ${node.width}%`;
         if (node.height) element.style.flex = `0 0 ${node.height}%`;
 
-        node.content.forEach(childNode => {
+        node.content.forEach((childNode, index) => {
             buildLayout(childNode, element);
+
+            // Add a splitter after each element except the last one
+            if (index < node.content.length - 1) {
+                const splitter = document.createElement('div');
+                splitter.className = 'layout-splitter';
+                element.appendChild(splitter);
+
+                // Attach references to sibling nodes for resizing logic
+                splitter.previousNode = childNode;
+                splitter.nextNode = node.content[index + 1];
+
+                splitter.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+
+                    const prevElement = splitter.previousElementSibling;
+                    const nextElement = splitter.nextElementSibling;
+                    const isRow = element.classList.contains('layout-row');
+
+                    const startPos = isRow ? e.clientX : e.clientY;
+                    const prevSize = isRow ? prevElement.offsetWidth : prevElement.offsetHeight;
+                    const nextSize = isRow ? nextElement.offsetWidth : nextElement.offsetHeight;
+
+                    function onMouseMove(e) {
+                        const delta = (isRow ? e.clientX : e.clientY) - startPos;
+
+                        let prevNewSize = prevSize + delta;
+                        let nextNewSize = nextSize - delta;
+
+                        const totalSize = prevSize + nextSize;
+                        let prevNewPercent = (prevNewSize / totalSize) * 100;
+                        let nextNewPercent = (nextNewSize / totalSize) * 100;
+
+                        // Update the data model (layoutConfig)
+                        if (isRow) {
+                            splitter.previousNode.width = prevNewPercent;
+                            splitter.nextNode.width = nextNewPercent;
+                        } else {
+                            splitter.previousNode.height = prevNewPercent;
+                            splitter.nextNode.height = nextNewPercent;
+                        }
+
+                        // Update the live DOM styles
+                        prevElement.style.flex = `0 0 ${prevNewPercent}%`;
+                        nextElement.style.flex = `0 0 ${nextNewPercent}%`;
+                    }
+
+                    function onMouseUp() {
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.removeEventListener('mouseup', onMouseUp);
+                    }
+
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                });
+            }
         });
 
     } else if (node.type === 'component') {

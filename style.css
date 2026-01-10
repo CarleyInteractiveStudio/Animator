@@ -57,6 +57,22 @@ canvas {
     display: block; /* Remove any potential extra space below the canvas */
 }
 
+/* Splitter */
+.layout-splitter {
+    background-color: #4f4f4f;
+    flex-shrink: 0;
+}
+
+.layout-row > .layout-splitter {
+    width: 4px;
+    cursor: col-resize;
+}
+
+.layout-column > .layout-splitter {
+    height: 4px;
+    cursor: row-resize;
+}
+
 /* Docking Overlay */
 #dock-overlay {
     position: absolute;
