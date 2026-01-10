@@ -113,52 +113,89 @@ const panelRegistry = {
 };
 
 // 2. Layout Configuration: A tree structure defining the UI layout
-const layoutConfig = {
-    type: 'row',
-    content: [
-        { type: 'component', componentName: 'jerarquia', width: 20 },
-        {
-            type: 'column',
-            content: [
-                { type: 'component', componentName: 'visor', height: 70 },
-                { type: 'component', componentName: 'inspector', height: 30 }
-            ],
-            width: 80
-        }
-    ]
+const applicationLayout = {
+    docked: {
+        type: 'row',
+        content: [
+            { type: 'component', componentName: 'jerarquia', width: 20 },
+            {
+                type: 'column',
+                content: [
+                    { type: 'component', componentName: 'visor', height: 70 },
+                    { type: 'component', componentName: 'inspector', height: 30 }
+                ],
+                width: 80
+            }
+        ]
+    },
+    floating: []
 };
 
 // --- Main Application Logic ---
 const domNodeMap = new WeakMap(); // Maps DOM elements to layout config nodes
 
-function findNode(targetNode, rootNode = layoutConfig) {
+function findNode(targetNode, rootNode = applicationLayout.docked) {
     if (rootNode === targetNode) {
-        return { parent: null, node: rootNode };
+        return { parent: null, node: rootNode, index: -1 };
     }
-    if (rootNode.content) {
-        for (const child of rootNode.content) {
-            if (child === targetNode) {
-                return { parent: rootNode, node: child };
-            }
-            const result = findNode(targetNode, child);
-            if (result) {
-                return result;
-            }
+    if (!rootNode.content) {
+        return null;
+    }
+    for (let i = 0; i < rootNode.content.length; i++) {
+        const child = rootNode.content[i];
+        if (child === targetNode) {
+            return { parent: rootNode, node: child, index: i };
+        }
+        const result = findNode(targetNode, child);
+        if (result) {
+            return result;
         }
     }
     return null;
 }
 
+
+function removeNodeAndCleanup(nodeToRemove) {
+    const found = findNode(nodeToRemove);
+    if (!found || !found.parent) return;
+
+    let currentParent = found.parent;
+    currentParent.content.splice(found.index, 1);
+
+    while (currentParent) {
+        const parentInfo = findNode(currentParent);
+        if (currentParent.content && currentParent.content.length === 1) {
+            const child = currentParent.content[0];
+            child.width = child.width || currentParent.width;
+            child.height = child.height || currentParent.height;
+
+            if (parentInfo && parentInfo.parent) {
+                parentInfo.parent.content[parentInfo.index] = child;
+            } else {
+                applicationLayout.docked = child;
+            }
+        } else if (currentParent.content && currentParent.content.length === 0) {
+             if (parentInfo && parentInfo.parent) {
+                parentInfo.parent.content.splice(parentInfo.index, 1);
+            } else {
+                applicationLayout.docked = null;
+            }
+        }
+        currentParent = parentInfo ? parentInfo.parent : null;
+    }
+}
+
+
 function updateLayout(draggedNode, targetNode, dropZone) {
-    // 1. Remove the dragged node from its original parent
-    const { parent: oldParent } = findNode(draggedNode);
-    if (oldParent) {
-        oldParent.content = oldParent.content.filter(child => child !== draggedNode);
+    // This function now handles both docking a floating panel and rearranging docked ones.
+    const isFloating = applicationLayout.floating.includes(draggedNode);
+    if (isFloating) {
+        applicationLayout.floating = applicationLayout.floating.filter(p => p !== draggedNode);
+    } else {
+        removeNodeAndCleanup(draggedNode);
     }
 
-    // 2. Find the target node's position in the tree
-    const { parent: targetParent, node: target } = findNode(targetNode);
-    const targetIndex = targetParent.content.indexOf(target);
+    const { parent: targetParent, node: target, index: targetIndex } = findNode(targetNode);
 
     // 3. Create a new container that inherits the target's size properties
     const newContainer = {
@@ -192,7 +229,7 @@ function updateLayout(draggedNode, targetNode, dropZone) {
     // 6. Redraw the entire layout
     const appContainer = document.getElementById('app-container');
     appContainer.innerHTML = ''; // Clear old layout
-    buildLayout(layoutConfig, appContainer);
+    buildLayout(applicationLayout.docked, appContainer);
 }
 
 function buildLayout(node, parentElement) {
@@ -238,7 +275,13 @@ function buildLayout(node, parentElement) {
                         let prevNewPercent = (prevNewSize / totalSize) * 100;
                         let nextNewPercent = (nextNewSize / totalSize) * 100;
 
-                        // Update the data model (layoutConfig)
+                        // Prevent resizing below a minimum size
+                        const minSize = 50; // 50px minimum
+                        if (prevNewSize < minSize || nextNewSize < minSize) {
+                            return;
+                        }
+
+                        // Update the data model
                         if (isRow) {
                             splitter.previousNode.width = prevNewPercent;
                             splitter.nextNode.width = nextNewPercent;
@@ -274,54 +317,44 @@ function buildLayout(node, parentElement) {
             titleBar.className = 'panel-title';
             titleBar.textContent = panelInfo.title;
 
-            // Drag to dock logic
+            // Drag to undock logic
             titleBar.addEventListener('mousedown', (e) => {
                 e.preventDefault();
 
                 const draggedNode = domNodeMap.get(element);
-                const overlay = document.getElementById('dock-overlay');
-                let currentDropTarget = null;
-                let activeDropZone = null;
+                const startX = e.clientX;
+                const startY = e.clientY;
 
-                function onMouseMove(e) {
-                    let dropTarget = null;
-                    const allPanels = document.querySelectorAll('.panel');
-                    for (const otherPanel of allPanels) {
-                        if (otherPanel === element) continue;
-                        const rect = otherPanel.getBoundingClientRect();
-                        if (e.clientX > rect.left && e.clientX < rect.right && e.clientY > rect.top && e.clientY < rect.bottom) {
-                            dropTarget = otherPanel;
-                            break;
-                        }
-                    }
+                function onInitialMove(moveEvent) {
+                    // If mouse moves more than a few pixels, initiate undock
+                    if (Math.abs(moveEvent.clientX - startX) > 5 || Math.abs(moveEvent.clientY - startY) > 5) {
+                        document.removeEventListener('mousemove', onInitialMove);
+                        document.removeEventListener('mouseup', onInitialUp);
 
-                    if (dropTarget !== currentDropTarget) {
-                        if (dropTarget) {
-                            showOverlay(dropTarget);
-                        } else {
-                            hideOverlay();
-                        }
-                        currentDropTarget = dropTarget;
-                    }
+                        const rect = element.getBoundingClientRect();
+                        removeNodeAndCleanup(draggedNode);
 
-                    if (currentDropTarget) {
-                        activeDropZone = getActiveDropZone(e, currentDropTarget.getBoundingClientRect());
-                        highlightDropZone(activeDropZone);
+                        const floatingPanelData = {
+                            ...draggedNode,
+                            x: rect.left,
+                            y: rect.top,
+                            width: rect.width,
+                            height: rect.height,
+                        };
+                        applicationLayout.floating.push(floatingPanelData);
+
+                        rerender();
+                        // The next step will be to implement dragging for the new floating panel
                     }
                 }
 
-                function onMouseUp() {
-                    if (currentDropTarget && activeDropZone && activeDropZone !== 'center') {
-                        const targetNode = domNodeMap.get(currentDropTarget);
-                        updateLayout(draggedNode, targetNode, activeDropZone);
-                    }
-                    hideOverlay();
-                    document.removeEventListener('mousemove', onMouseMove);
-                    document.removeEventListener('mouseup', onMouseUp);
+                function onInitialUp() {
+                    document.removeEventListener('mousemove', onInitialMove);
+                    document.removeEventListener('mouseup', onInitialUp);
                 }
 
-                document.addEventListener('mousemove', onMouseMove);
-                document.addEventListener('mouseup', onMouseUp);
+                document.addEventListener('mousemove', onInitialMove);
+                document.addEventListener('mouseup', onInitialUp);
             });
 
             const contentArea = document.createElement('div');
@@ -337,10 +370,109 @@ function buildLayout(node, parentElement) {
     parentElement.appendChild(element);
 }
 
-window.onload = () => {
+function buildFloatingPanel(panelData, parentElement) {
+    const element = document.createElement('div');
+    element.className = 'panel floating-panel';
+    element.style.left = `${panelData.x}px`;
+    element.style.top = `${panelData.y}px`;
+    element.style.width = `${panelData.width}px`;
+    element.style.height = `${panelData.height}px`;
+
+    const panelInfo = panelRegistry[panelData.componentName];
+    if (panelInfo) {
+        const titleBar = document.createElement('div');
+        titleBar.className = 'panel-title';
+        titleBar.textContent = panelInfo.title;
+
+        // --- Drag to Move / Dock Logic ---
+        titleBar.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const initialX = panelData.x;
+            const initialY = panelData.y;
+
+            const overlay = document.getElementById('dock-overlay');
+            let currentDropTarget = null;
+            let activeDropZone = null;
+
+            function onMouseMove(moveEvent) {
+                // --- Update position for free dragging ---
+                panelData.x = initialX + (moveEvent.clientX - startX);
+                panelData.y = initialY + (moveEvent.clientY - startY);
+                element.style.left = `${panelData.x}px`;
+                element.style.top = `${panelData.y}px`;
+
+                // --- Check for docking opportunities ---
+                 let dropTarget = null;
+                 const allPanels = document.querySelectorAll('.panel:not(.floating-panel)');
+                 for (const otherPanel of allPanels) {
+                     const rect = otherPanel.getBoundingClientRect();
+                     if (moveEvent.clientX > rect.left && moveEvent.clientX < rect.right && moveEvent.clientY > rect.top && moveEvent.clientY < rect.bottom) {
+                         dropTarget = otherPanel;
+                         break;
+                     }
+                 }
+
+                 if (dropTarget !== currentDropTarget) {
+                     if (dropTarget) {
+                         showOverlay(dropTarget);
+                     } else {
+                         hideOverlay();
+                     }
+                     currentDropTarget = dropTarget;
+                 }
+
+                 if (currentDropTarget) {
+                     activeDropZone = getActiveDropZone(moveEvent, currentDropTarget.getBoundingClientRect());
+                     highlightDropZone(activeDropZone);
+                 }
+            }
+
+            function onMouseUp() {
+                if (currentDropTarget && activeDropZone && activeDropZone !== 'center') {
+                    const targetNode = domNodeMap.get(currentDropTarget);
+                    updateLayout(panelData, targetNode, activeDropZone);
+                    rerender(); // Re-render to show the new docked layout
+                }
+                hideOverlay();
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        const contentArea = document.createElement('div');
+        contentArea.className = 'panel-content';
+
+        element.appendChild(titleBar);
+        element.appendChild(contentArea);
+
+        panelInfo.init(contentArea);
+    }
+
+    parentElement.appendChild(element);
+}
+
+function rerender() {
     const appContainer = document.getElementById('app-container');
-    buildLayout(layoutConfig, appContainer);
+    appContainer.innerHTML = ''; // Clear the entire layout
+    if (applicationLayout.docked) {
+        buildLayout(applicationLayout.docked, appContainer);
+    }
+    applicationLayout.floating.forEach(panelData => {
+        buildFloatingPanel(panelData, appContainer);
+    });
+}
+
+window.onload = () => {
+    rerender();
 };
+
 
 function showOverlay(targetPanel) {
     const overlay = document.getElementById('dock-overlay');
