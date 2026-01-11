@@ -1,15 +1,16 @@
 import { initWebGL, renderWebGL } from './engine/renderer.js';
 import { Camera } from './engine/camera.js';
 import { Input } from './engine/input.js';
-import glMatrix from './engine/math.js';
-
-const { mat4, vec3 } = glMatrix;
+import { Scene } from './engine/scene.js';
+import { mat4, vec3 } from './engine/math.js';
 
 let webglContext;
 let canvas;
 let camera;
 
 const Engine = {
+    scene: null,
+
     initialize: (canvasElement) => {
         canvas = canvasElement;
         webglContext = initWebGL(canvas);
@@ -20,6 +21,7 @@ const Engine = {
 
         camera = new Camera();
         Input.initialize(canvas);
+        Engine.scene = new Scene();
 
         return true;
     },
@@ -42,7 +44,7 @@ const Engine = {
 
             const viewMatrix = camera.getViewMatrix();
 
-            renderWebGL(webglContext, canvas, projectionMatrix, viewMatrix);
+            renderWebGL(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix);
             requestAnimationFrame(gameLoop);
         }
         requestAnimationFrame(gameLoop);

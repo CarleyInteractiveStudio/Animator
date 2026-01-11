@@ -1,5 +1,4 @@
-import glMatrix from './math.js';
-const { mat4, vec3 } = glMatrix;
+import { mat4, vec3, glMatrix } from './math.js';
 
 export class Camera {
     constructor() {
@@ -22,8 +21,8 @@ export class Camera {
     }
 
     updateVectors() {
-        const yaw = glMatrix.glMatrix.toRadian(this.rotation.yaw);
-        const pitch = glMatrix.glMatrix.toRadian(this.rotation.pitch);
+        const yaw = glMatrix.toRadian(this.rotation.yaw);
+        const pitch = glMatrix.toRadian(this.rotation.pitch);
 
         const front = vec3.create();
         front[0] = Math.cos(yaw) * Math.cos(pitch);

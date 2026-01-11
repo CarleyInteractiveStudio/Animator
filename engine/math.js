@@ -1,7 +1,3 @@
-// The purpose of this file is to import gl-matrix and re-export it.
-// This makes it easy to manage the dependency from a single point.
-
-// Import from a CDN. In a real project, you would use a package manager like npm.
-import * as glMatrix from "https://cdn.skypack.dev/gl-matrix";
-
-export default glMatrix;
+// This file re-exports the gl-matrix library from its CDN location.
+// This allows other modules in the engine to import it with a local-like path.
+export * from "https://cdn.jsdelivr.net/npm/gl-matrix@3.3.0/esm/index.js";

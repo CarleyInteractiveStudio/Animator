@@ -7,10 +7,11 @@ export function initWebGL(canvas) {
 
     const vertexShaderSource = `
         attribute vec4 a_position;
-        uniform mat4 u_modelViewMatrix;
         uniform mat4 u_projectionMatrix;
+        uniform mat4 u_viewMatrix;
+        uniform mat4 u_modelMatrix;
         void main() {
-            gl_Position = u_projectionMatrix * u_modelViewMatrix * a_position;
+            gl_Position = u_projectionMatrix * u_viewMatrix * u_modelMatrix * a_position;
         }
     `;
 
@@ -57,7 +58,8 @@ export function initWebGL(canvas) {
         },
         uniformLocations: {
             projectionMatrix: gl.getUniformLocation(program, 'u_projectionMatrix'),
-            modelViewMatrix: gl.getUniformLocation(program, 'u_modelViewMatrix'),
+            viewMatrix: gl.getUniformLocation(program, 'u_viewMatrix'),
+            modelMatrix: gl.getUniformLocation(program, 'u_modelMatrix'),
         },
     };
 
@@ -73,7 +75,7 @@ export function initWebGL(canvas) {
     return { gl, programInfo, buffers: { position: positionBuffer } };
 }
 
-export function renderWebGL(webglContext, canvas, projectionMatrix, viewMatrix) {
+export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix) {
     const { gl, programInfo, buffers } = webglContext;
 
     if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
@@ -89,11 +91,15 @@ export function renderWebGL(webglContext, canvas, projectionMatrix, viewMatrix) 
     gl.useProgram(programInfo.program);
 
     gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
-    gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, viewMatrix);
+    gl.uniformMatrix4fv(programInfo.uniformLocations.viewMatrix, false, viewMatrix);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
     gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
 
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    for (const gameObject of scene.gameObjects) {
+        const modelMatrix = gameObject.getModelMatrix();
+        gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, modelMatrix);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
 }
