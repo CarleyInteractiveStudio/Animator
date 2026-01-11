@@ -20,19 +20,13 @@ html, body {
     border-right: 1px solid #000;
 }
 
-.main-area {
-    width: 80%;
-    display: flex;
-    flex-direction: column;
-}
-
 #visor-panel {
-    height: 70%;
-    border-bottom: 1px solid #000;
+    width: 60%;
+    border-right: 1px solid #000;
 }
 
 #inspector-panel {
-    height: 30%;
+    width: 20%;
 }
 
 .panel {
