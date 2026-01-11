@@ -63,20 +63,11 @@ export function initWebGL(canvas) {
         },
     };
 
-    const positions = [
-         0.0,  0.5, 0.0,
-        -0.5, -0.5, 0.0,
-         0.5, -0.5, 0.0
-    ];
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-
-    return { gl, programInfo, buffers: { position: positionBuffer } };
+    return { gl, programInfo };
 }
 
 export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix) {
-    const { gl, programInfo, buffers } = webglContext;
+    const { gl, programInfo } = webglContext;
 
     if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
         canvas.width = canvas.clientWidth;
@@ -93,13 +84,24 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
     gl.uniformMatrix4fv(programInfo.uniformLocations.viewMatrix, false, viewMatrix);
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
-    gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
-
     for (const gameObject of scene.gameObjects) {
+        if (!gameObject.mesh) {
+            continue; // Skip objects without a mesh
+        }
+
+        // Bind the vertex buffer for the current object's mesh
+        gl.bindBuffer(gl.ARRAY_BUFFER, gameObject.mesh.vertexBuffer);
+        gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
+
+        // Bind the index buffer for the current object's mesh
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gameObject.mesh.indexBuffer);
+
+        // Set the model matrix uniform
         const modelMatrix = gameObject.getModelMatrix();
         gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, modelMatrix);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+        // Draw the object using its index buffer
+        gl.drawElements(gl.TRIANGLES, gameObject.mesh.vertexCount, gl.UNSIGNED_SHORT, 0);
     }
 }

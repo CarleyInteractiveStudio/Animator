@@ -1,5 +1,6 @@
 import Engine from './engine.js';
 import { GameObject } from './engine/gameObject.js';
+import { Mesh } from './engine/mesh.js';
 import { vec3 } from './engine/math.js';
 
 function updateHierarchyPanel() {
@@ -30,20 +31,23 @@ function main() {
         visorContent.appendChild(canvas);
 
         if (Engine.initialize(canvas)) {
-            // Create test GameObjects
-            const triangle1 = new GameObject('Triangle 1');
-            vec3.set(triangle1.transform.position, -1.5, 0, 0);
+            // Create a single cube mesh to be shared by all cube objects
+            const cubeMesh = Mesh.createCube(Engine.gl);
 
-            const triangle2 = new GameObject('Triangle 2');
+            // Create test GameObjects
+            const cube1 = new GameObject('Cube 1', cubeMesh);
+            vec3.set(cube1.transform.position, -2.0, 0, 0);
+
+            const cube2 = new GameObject('Cube 2', cubeMesh);
             // position is (0,0,0) by default
 
-            const triangle3 = new GameObject('Triangle 3');
-            vec3.set(triangle3.transform.position, 1.5, 0, 0);
+            const cube3 = new GameObject('Cube 3', cubeMesh);
+            vec3.set(cube3.transform.position, 2.0, 0, 0);
 
             // Add them to the scene
-            Engine.scene.addGameObject(triangle1);
-            Engine.scene.addGameObject(triangle2);
-            Engine.scene.addGameObject(triangle3);
+            Engine.scene.addGameObject(cube1);
+            Engine.scene.addGameObject(cube2);
+            Engine.scene.addGameObject(cube3);
 
             // Update the hierarchy panel
             updateHierarchyPanel();

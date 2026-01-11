@@ -10,10 +10,12 @@ let camera;
 
 const Engine = {
     scene: null,
+    gl: null,
 
     initialize: (canvasElement) => {
         canvas = canvasElement;
         webglContext = initWebGL(canvas);
+        Engine.gl = webglContext.gl;
         if (!webglContext) {
             console.error("Engine initialization failed.");
             return false;
