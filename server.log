@@ -1,0 +1,8 @@
+127.0.0.1 - - [11/Jan/2026 07:06:44] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [11/Jan/2026 07:06:44] "GET /style.css HTTP/1.1" 200 -
+127.0.0.1 - - [11/Jan/2026 07:06:44] "GET /main.js HTTP/1.1" 200 -
+127.0.0.1 - - [11/Jan/2026 07:06:44] "GET /engine.js HTTP/1.1" 200 -
+127.0.0.1 - - [11/Jan/2026 07:06:44] "GET /engine/input.js HTTP/1.1" 200 -
+127.0.0.1 - - [11/Jan/2026 07:06:44] "GET /engine/renderer.js HTTP/1.1" 200 -
+127.0.0.1 - - [11/Jan/2026 07:06:44] "GET /engine/camera.js HTTP/1.1" 200 -
+127.0.0.1 - - [11/Jan/2026 07:06:44] "GET /engine/math.js HTTP/1.1" 200 -
