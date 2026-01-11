@@ -9,39 +9,37 @@ html, body {
 }
 
 #app-container {
+    display: flex;
     width: 100%;
     height: 100%;
     background-color: #1e1e1e;
 }
 
-/* New Flexbox-based layout system */
-.layout-row, .layout-column {
+#jerarquia-panel {
+    width: 20%;
+    border-right: 1px solid #000;
+}
+
+.main-area {
+    width: 80%;
     display: flex;
-    flex: 1;
-    overflow: hidden;
-}
-
-.layout-row {
-    flex-direction: row;
-}
-
-.layout-column {
     flex-direction: column;
+}
+
+#visor-panel {
+    height: 70%;
+    border-bottom: 1px solid #000;
+}
+
+#inspector-panel {
+    height: 30%;
 }
 
 .panel {
-    border: 1px solid #000;
     background-color: #2a2a2a;
     display: flex;
     flex-direction: column;
-    overflow: hidden; /* Prevent content from spilling out */
-}
-
-.floating-panel {
-    position: absolute;
-    z-index: 100;
-    border: 1px solid #555;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    overflow: hidden;
 }
 
 .panel-title {
@@ -49,7 +47,6 @@ html, body {
     padding: 8px;
     font-weight: bold;
     user-select: none;
-    flex-shrink: 0; /* Prevent title from shrinking */
 }
 
 .panel-content {
@@ -61,48 +58,5 @@ html, body {
 canvas {
     width: 100%;
     height: 100%;
-    display: block; /* Remove any potential extra space below the canvas */
-}
-
-/* Splitter */
-.layout-splitter {
-    background-color: #4f4f4f;
-    flex-shrink: 0;
-}
-
-.layout-row > .layout-splitter {
-    width: 4px;
-    cursor: col-resize;
-}
-
-.layout-column > .layout-splitter {
-    height: 4px;
-    cursor: row-resize;
-}
-
-/* Docking Overlay */
-#dock-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none; /* Allows mouse events to pass through */
-    z-index: 1000;
-}
-
-#dock-overlay .drop-zone {
-    position: absolute;
-    background-color: rgba(0, 150, 255, 0.3);
-    border: 1px dashed #0096ff;
-    box-sizing: border-box;
-    transition: background-color 0.2s;
-}
-
-#dock-overlay .drop-zone:hover {
-    background-color: rgba(0, 150, 255, 0.5);
-}
-
-.hidden {
-    display: none;
+    display: block;
 }

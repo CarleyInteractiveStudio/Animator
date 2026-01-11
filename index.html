@@ -3,17 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Web Editor</title>
+    <title>3D Animation App</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="app-container"></div>
-    <div id="dock-overlay" class="hidden">
-        <div class="drop-zone" data-zone="center"></div>
-        <div class="drop-zone" data-zone="top"></div>
-        <div class="drop-zone" data-zone="bottom"></div>
-        <div class="drop-zone" data-zone="left"></div>
-        <div class="drop-zone" data-zone="right"></div>
+    <div id="app-container">
+        <div id="jerarquia-panel" class="panel">
+            <div class="panel-title">Jerarquía</div>
+            <div class="panel-content"></div>
+        </div>
+        <div class="main-area">
+            <div id="visor-panel" class="panel">
+                <div class="panel-title">Visor 3D</div>
+                <div class="panel-content"></div>
+            </div>
+            <div id="inspector-panel" class="panel">
+                <div class="panel-title">Inspector</div>
+                <div class="panel-content"></div>
+            </div>
+        </div>
     </div>
     <script src="main.js"></script>
 </body>
