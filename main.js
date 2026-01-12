@@ -124,6 +124,13 @@ function main() {
             const light = new DirectionalLight();
             Engine.scene.directionalLight = light;
 
+            // Create a visual representation for the light source
+            const lightVisualizer = new GameObject('Light Source', sphereMesh);
+            vec3.set(lightVisualizer.transform.scale, 0.2, 0.2, 0.2); // Make it small
+            lightVisualizer.material.color = vec3.fromValues(1.0, 1.0, 0.0); // Bright yellow
+            lightVisualizer.material.isUnlit = true;
+            Engine.scene.addGameObject(lightVisualizer);
+
             // Initial UI update
             updateHierarchyPanel();
             updateInspectorPanel();

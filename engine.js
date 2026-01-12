@@ -52,6 +52,12 @@ const Engine = {
                 light.position[2] = Math.cos(time * speed * 0.001) * radius;
                 // Recalculate the light's view matrix after changing its position
                 mat4.lookAt(light.lightViewMatrix, light.position, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
+
+                // Update the visualizer's position to match the light
+                const lightVisualizer = Engine.scene.gameObjects.find(obj => obj.name === 'Light Source');
+                if (lightVisualizer) {
+                    vec3.copy(lightVisualizer.transform.position, light.position);
+                }
             }
 
             const projectionMatrix = mat4.create();

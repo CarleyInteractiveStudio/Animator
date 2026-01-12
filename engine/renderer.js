@@ -69,6 +69,7 @@ export function initWebGL(canvas) {
         uniform sampler2D u_sampler;
         uniform bool u_useTexture;
         uniform sampler2D u_shadowMap;
+        uniform bool u_isUnlit;
 
         float calculateShadow() {
             vec3 projCoords = v_lightSpacePosition.xyz / v_lightSpacePosition.w;
@@ -90,6 +91,11 @@ export function initWebGL(canvas) {
 
         void main() {
             vec4 baseColor = u_useTexture ? texture2D(u_sampler, v_texCoord) : vec4(u_color, 1.0);
+
+            if (u_isUnlit) {
+                gl_FragColor = baseColor;
+                return;
+            }
 
             float ambientStrength = 0.15;
             vec3 ambient = ambientStrength * baseColor.rgb;
@@ -174,6 +180,7 @@ export function initWebGL(canvas) {
             color: gl.getUniformLocation(sceneProgram, 'u_color'),
             useTexture: gl.getUniformLocation(sceneProgram, 'u_useTexture'),
             shadowMap: gl.getUniformLocation(sceneProgram, 'u_shadowMap'),
+            isUnlit: gl.getUniformLocation(sceneProgram, 'u_isUnlit'),
         },
     };
 
@@ -208,6 +215,7 @@ function renderScene(gl, programInfo, scene, isDepthPass, lightSpaceMatrix) {
         gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, modelMatrix);
 
         if (!isDepthPass) {
+            gl.uniform1i(programInfo.uniformLocations.isUnlit, gameObject.material.isUnlit ? 1 : 0);
             gl.uniform1f(programInfo.uniformLocations.shininess, gameObject.material.shininess);
             if (gameObject.material.texture) {
                 gameObject.material.texture.bind(0);
@@ -276,9 +284,7 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     gl.uniformMatrix4fv(sceneProgramInfo.uniformLocations.lightSpaceMatrix, false, lightSpaceMatrix);
     gl.uniform3fv(sceneProgramInfo.uniformLocations.viewPosition, cameraPosition);
 
-    const lightPos = scene.directionalLight.position;
-    // La dirección de la luz es el opuesto de la posición de la luz (ya que la luz apunta al origen)
-    const lightDir = [-lightPos[0], -lightPos[1], -lightPos[2]];
+    const lightDir = scene.directionalLight.position;
     const normalizedLightDir = new Float32Array(3);
     const len = Math.sqrt(lightDir[0]*lightDir[0] + lightDir[1]*lightDir[1] + lightDir[2]*lightDir[2]);
     normalizedLightDir[0] = lightDir[0] / len;
