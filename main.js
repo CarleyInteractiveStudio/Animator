@@ -1,6 +1,7 @@
 import Engine from './engine.js';
 import { GameObject } from './engine/gameObject.js';
 import { Mesh } from './engine/mesh.js';
+import { Texture } from './engine/texture.js';
 import { vec3 } from './engine/math.js';
 
 function updateHierarchyPanel() {
@@ -81,16 +82,19 @@ function main() {
             const planeMesh = Mesh.createPlane(Engine.gl);
             const sphereMesh = Mesh.createSphere(Engine.gl);
 
+            // Create a texture
+            const stoneTexture = new Texture(Engine.gl, 'https://upload.wikimedia.org/wikipedia/commons/4/4a/Stone_high_definition_texture.jpg');
+
             // Create test GameObjects
             const floor = new GameObject('Floor', planeMesh);
             vec3.set(floor.transform.position, 0, -1.5, 0);
             vec3.set(floor.transform.scale, 10, 1, 10);
-            vec3.set(floor.material.color, 0.5, 0.5, 0.5);
+            floor.material.texture = stoneTexture;
             floor.material.shininess = 16.0;
 
             const cube1 = new GameObject('Cube 1', cubeMesh);
             vec3.set(cube1.transform.position, -2.0, 0, 0);
-            vec3.set(cube1.material.color, 1.0, 0.5, 0.31);
+            vec3.set(cube1.material.color, 1.0, 0.5, 0.31); // This color will be overridden by the default blue texture for a moment
             cube1.material.shininess = 32.0;
 
             const cube2 = new GameObject('Cube 2', cubeMesh);

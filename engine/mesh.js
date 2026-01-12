@@ -1,8 +1,9 @@
 export class Mesh {
-    constructor(gl, vertices, indices, normals) {
+    constructor(gl, vertices, indices, normals, uvs) {
         this.vertices = vertices;
         this.indices = indices;
         this.normals = normals;
+        this.uvs = uvs;
         this.vertexCount = indices.length;
 
         this.vertexBuffer = gl.createBuffer();
@@ -16,6 +17,10 @@ export class Mesh {
         this.normalBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+
+        this.uvBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvs), gl.STATIC_DRAW);
     }
 
     static createCube(gl) {
@@ -94,7 +99,40 @@ export class Mesh {
             -1.0, 0.0, 0.0,
         ];
 
-        return new Mesh(gl, vertices, indices, normals);
+        const uvs = [
+            // Front
+            0.0, 0.0,
+            1.0, 0.0,
+            1.0, 1.0,
+            0.0, 1.0,
+            // Back
+            1.0, 0.0,
+            1.0, 1.0,
+            0.0, 1.0,
+            0.0, 0.0,
+            // Top
+            0.0, 1.0,
+            0.0, 0.0,
+            1.0, 0.0,
+            1.0, 1.0,
+            // Bottom
+            0.0, 0.0,
+            1.0, 0.0,
+            1.0, 1.0,
+            0.0, 1.0,
+            // Right
+            1.0, 0.0,
+            1.0, 1.0,
+            0.0, 1.0,
+            0.0, 0.0,
+            // Left
+            0.0, 0.0,
+            1.0, 0.0,
+            1.0, 1.0,
+            0.0, 1.0,
+        ];
+
+        return new Mesh(gl, vertices, indices, normals, uvs);
     }
 
     static createPlane(gl) {
@@ -117,13 +155,21 @@ export class Mesh {
             0.0, 1.0, 0.0,
         ];
 
-        return new Mesh(gl, vertices, indices, normals);
+        const uvs = [
+            0.0, 1.0,
+            1.0, 1.0,
+            1.0, 0.0,
+            0.0, 0.0,
+        ];
+
+        return new Mesh(gl, vertices, indices, normals, uvs);
     }
 
     static createSphere(gl, radius = 0.5, latitudeBands = 30, longitudeBands = 30) {
         const vertices = [];
         const indices = [];
         const normals = [];
+        const uvs = [];
 
         for (let latNumber = 0; latNumber <= latitudeBands; latNumber++) {
             const theta = latNumber * Math.PI / latitudeBands;
@@ -139,6 +185,9 @@ export class Mesh {
                 const y = cosTheta;
                 const z = sinPhi * sinTheta;
 
+                const u = 1 - (longNumber / longitudeBands);
+                const v = 1 - (latNumber / latitudeBands);
+
                 vertices.push(radius * x);
                 vertices.push(radius * y);
                 vertices.push(radius * z);
@@ -146,6 +195,9 @@ export class Mesh {
                 normals.push(x);
                 normals.push(y);
                 normals.push(z);
+
+                uvs.push(u);
+                uvs.push(v);
             }
         }
 
@@ -163,6 +215,6 @@ export class Mesh {
             }
         }
 
-        return new Mesh(gl, vertices, indices, normals);
+        return new Mesh(gl, vertices, indices, normals, uvs);
     }
 }
