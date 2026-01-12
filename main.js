@@ -85,18 +85,28 @@ function main() {
             const floor = new GameObject('Floor', planeMesh);
             vec3.set(floor.transform.position, 0, -1.5, 0);
             vec3.set(floor.transform.scale, 10, 1, 10);
+            vec3.set(floor.material.color, 0.5, 0.5, 0.5);
+            floor.material.shininess = 16.0;
 
             const cube1 = new GameObject('Cube 1', cubeMesh);
             vec3.set(cube1.transform.position, -2.0, 0, 0);
+            vec3.set(cube1.material.color, 1.0, 0.5, 0.31);
+            cube1.material.shininess = 32.0;
 
             const cube2 = new GameObject('Cube 2', cubeMesh);
             vec3.set(cube2.transform.position, 0, 0, -2.0);
+            vec3.set(cube2.material.color, 0.2, 0.8, 0.2);
+            cube2.material.shininess = 64.0;
 
             const cube3 = new GameObject('Cube 3', cubeMesh);
             vec3.set(cube3.transform.position, 2.0, 0, 0);
+            vec3.set(cube3.material.color, 0.3, 0.5, 1.0);
+            cube3.material.shininess = 128.0;
 
             const sphere = new GameObject('Sphere', sphereMesh);
             vec3.set(sphere.transform.position, 0, 0, 0);
+            vec3.set(sphere.material.color, 1.0, 0.8, 0.0);
+            sphere.material.shininess = 256.0;
 
             // Add them to the scene
             Engine.scene.addGameObject(floor);

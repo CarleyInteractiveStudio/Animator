@@ -47,7 +47,7 @@ const Engine = {
 
             const viewMatrix = camera.getViewMatrix();
 
-            renderWebGL(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix);
+            renderWebGL(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix, camera.position);
             requestAnimationFrame(gameLoop);
         }
         requestAnimationFrame(gameLoop);
