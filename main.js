@@ -34,6 +34,7 @@ function main() {
             // Create meshes to be used by the GameObjects
             const cubeMesh = Mesh.createCube(Engine.gl);
             const planeMesh = Mesh.createPlane(Engine.gl);
+            const sphereMesh = Mesh.createSphere(Engine.gl);
 
             // Create test GameObjects
             const floor = new GameObject('Floor', planeMesh);
@@ -44,16 +45,20 @@ function main() {
             vec3.set(cube1.transform.position, -2.0, 0, 0);
 
             const cube2 = new GameObject('Cube 2', cubeMesh);
-            // position is (0,0,0) by default
+            vec3.set(cube2.transform.position, 0, 0, -2.0);
 
             const cube3 = new GameObject('Cube 3', cubeMesh);
             vec3.set(cube3.transform.position, 2.0, 0, 0);
+
+            const sphere = new GameObject('Sphere', sphereMesh);
+            vec3.set(sphere.transform.position, 0, 0, 0);
 
             // Add them to the scene
             Engine.scene.addGameObject(floor);
             Engine.scene.addGameObject(cube1);
             Engine.scene.addGameObject(cube2);
             Engine.scene.addGameObject(cube3);
+            Engine.scene.addGameObject(sphere);
 
             // Update the hierarchy panel
             updateHierarchyPanel();

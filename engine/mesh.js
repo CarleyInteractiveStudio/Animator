@@ -61,4 +61,45 @@ export class Mesh {
 
         return new Mesh(gl, vertices, indices);
     }
+
+    static createSphere(gl, radius = 0.5, latitudeBands = 30, longitudeBands = 30) {
+        const vertices = [];
+        const indices = [];
+
+        for (let latNumber = 0; latNumber <= latitudeBands; latNumber++) {
+            const theta = latNumber * Math.PI / latitudeBands;
+            const sinTheta = Math.sin(theta);
+            const cosTheta = Math.cos(theta);
+
+            for (let longNumber = 0; longNumber <= longitudeBands; longNumber++) {
+                const phi = longNumber * 2 * Math.PI / longitudeBands;
+                const sinPhi = Math.sin(phi);
+                const cosPhi = Math.cos(phi);
+
+                const x = cosPhi * sinTheta;
+                const y = cosTheta;
+                const z = sinPhi * sinTheta;
+
+                vertices.push(radius * x);
+                vertices.push(radius * y);
+                vertices.push(radius * z);
+            }
+        }
+
+        for (let latNumber = 0; latNumber < latitudeBands; latNumber++) {
+            for (let longNumber = 0; longNumber < longitudeBands; longNumber++) {
+                const first = (latNumber * (longitudeBands + 1)) + longNumber;
+                const second = first + longitudeBands + 1;
+                indices.push(first);
+                indices.push(second);
+                indices.push(first + 1);
+
+                indices.push(second);
+                indices.push(second + 1);
+                indices.push(first + 1);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices);
+    }
 }
