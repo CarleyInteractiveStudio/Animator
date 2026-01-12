@@ -31,10 +31,15 @@ function main() {
         visorContent.appendChild(canvas);
 
         if (Engine.initialize(canvas)) {
-            // Create a single cube mesh to be shared by all cube objects
+            // Create meshes to be used by the GameObjects
             const cubeMesh = Mesh.createCube(Engine.gl);
+            const planeMesh = Mesh.createPlane(Engine.gl);
 
             // Create test GameObjects
+            const floor = new GameObject('Floor', planeMesh);
+            vec3.set(floor.transform.position, 0, -1.5, 0);
+            vec3.set(floor.transform.scale, 10, 1, 10);
+
             const cube1 = new GameObject('Cube 1', cubeMesh);
             vec3.set(cube1.transform.position, -2.0, 0, 0);
 
@@ -45,6 +50,7 @@ function main() {
             vec3.set(cube3.transform.position, 2.0, 0, 0);
 
             // Add them to the scene
+            Engine.scene.addGameObject(floor);
             Engine.scene.addGameObject(cube1);
             Engine.scene.addGameObject(cube2);
             Engine.scene.addGameObject(cube3);

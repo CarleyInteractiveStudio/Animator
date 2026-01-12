@@ -45,4 +45,20 @@ export class Mesh {
 
         return new Mesh(gl, vertices, indices);
     }
+
+    static createPlane(gl) {
+        const vertices = [
+            // Top face
+            -0.5, 0.0, -0.5,
+             0.5, 0.0, -0.5,
+             0.5, 0.0,  0.5,
+            -0.5, 0.0,  0.5,
+        ];
+
+        const indices = [
+            0, 1, 2, 0, 2, 3,
+        ];
+
+        return new Mesh(gl, vertices, indices);
+    }
 }
