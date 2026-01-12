@@ -3,6 +3,7 @@ import { Camera } from './engine/camera.js';
 import { Input } from './engine/input.js';
 import { Scene } from './engine/scene.js';
 import { mat4, vec3 } from './engine/math.js';
+import DirectionalLight from './engine/light.js';
 
 let webglContext;
 let canvas;
@@ -41,6 +42,17 @@ const Engine = {
 
             // Update camera
             updateCamera(deltaTime);
+
+            // Animate the light
+            if (Engine.scene && Engine.scene.directionalLight) {
+                const light = Engine.scene.directionalLight;
+                const radius = 10.0;
+                const speed = 0.5;
+                light.position[0] = Math.sin(time * speed * 0.001) * radius;
+                light.position[2] = Math.cos(time * speed * 0.001) * radius;
+                // Recalculate the light's view matrix after changing its position
+                mat4.lookAt(light.lightViewMatrix, light.position, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
+            }
 
             const projectionMatrix = mat4.create();
             mat4.perspective(projectionMatrix, 45 * Math.PI / 180, canvas.clientWidth / canvas.clientHeight, 0.1, 100.0);

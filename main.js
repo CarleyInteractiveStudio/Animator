@@ -3,6 +3,7 @@ import { GameObject } from './engine/gameObject.js';
 import { Mesh } from './engine/mesh.js';
 import { Texture } from './engine/texture.js';
 import { vec3 } from './engine/math.js';
+import DirectionalLight from './engine/light.js';
 
 function updateHierarchyPanel() {
     const jerarquiaContent = document.querySelector('#jerarquia-panel .panel-content');
@@ -118,6 +119,10 @@ function main() {
             Engine.scene.addGameObject(cube2);
             Engine.scene.addGameObject(cube3);
             Engine.scene.addGameObject(sphere);
+
+            // Create and set up the directional light
+            const light = new DirectionalLight();
+            Engine.scene.directionalLight = light;
 
             // Initial UI update
             updateHierarchyPanel();
