@@ -11,6 +11,7 @@ let camera;
 const Engine = {
     scene: null,
     gl: null,
+    selectedGameObject: null,
 
     initialize: (canvasElement) => {
         canvas = canvasElement;

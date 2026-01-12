@@ -54,3 +54,23 @@ canvas {
     height: 100%;
     display: block;
 }
+
+.hierarchy-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.hierarchy-list li {
+    padding: 6px 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.hierarchy-list li.selected {
+    background-color: #0078d7;
+}
+
+.hierarchy-list li:hover:not(.selected) {
+    background-color: #3e3e3e;
+}

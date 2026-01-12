@@ -12,15 +12,60 @@ function updateHierarchyPanel() {
     jerarquiaContent.innerHTML = ''; // Clear existing content
 
     const ul = document.createElement('ul');
+    ul.className = 'hierarchy-list';
     if (Engine.scene && Engine.scene.gameObjects) {
         for (const gameObject of Engine.scene.gameObjects) {
             const li = document.createElement('li');
             li.textContent = gameObject.name;
+            li.dataset.gameObjectId = gameObject.id; // Custom data attribute to find the object
+
+            if (Engine.selectedGameObject && Engine.selectedGameObject.id === gameObject.id) {
+                li.classList.add('selected');
+            }
+
+            li.addEventListener('click', () => {
+                Engine.selectedGameObject = gameObject;
+                updateHierarchyPanel(); // Re-render to update selection highlight
+                updateInspectorPanel();
+            });
             ul.appendChild(li);
         }
     }
     jerarquiaContent.appendChild(ul);
 }
+
+function updateInspectorPanel() {
+    const inspectorContent = document.querySelector('#inspector-panel .panel-content');
+    if (!inspectorContent) {
+        console.error("Inspector panel content not found!");
+        return;
+    }
+
+    const selected = Engine.selectedGameObject;
+    if (selected) {
+        const pos = selected.transform.position;
+        const rot = selected.transform.rotation;
+        const scale = selected.transform.scale;
+        inspectorContent.innerHTML = `
+            <h3>${selected.name}</h3>
+            <div>
+                <strong>Position:</strong>
+                <span>X: ${pos[0].toFixed(2)}, Y: ${pos[1].toFixed(2)}, Z: ${pos[2].toFixed(2)}</span>
+            </div>
+            <div>
+                <strong>Rotation:</strong>
+                <span>X: ${rot.pitch.toFixed(2)}, Y: ${rot.yaw.toFixed(2)}, Z: ${rot.roll.toFixed(2)}</span>
+            </div>
+            <div>
+                <strong>Scale:</strong>
+                <span>X: ${scale[0].toFixed(2)}, Y: ${scale[1].toFixed(2)}, Z: ${scale[2].toFixed(2)}</span>
+            </div>
+        `;
+    } else {
+        inspectorContent.innerHTML = '<p>No object selected</p>';
+    }
+}
+
 
 function main() {
     try {
@@ -60,19 +105,16 @@ function main() {
             Engine.scene.addGameObject(cube3);
             Engine.scene.addGameObject(sphere);
 
-            // Update the hierarchy panel
+            // Initial UI update
             updateHierarchyPanel();
+            updateInspectorPanel();
+
 
             // Start the engine's game loop
             Engine.start();
         } else {
             throw new Error("Engine initialization failed");
         }
-
-        // Initialize Inspector Panel
-        const inspectorContent = document.querySelector('#inspector-panel .panel-content');
-        if (!inspectorContent) throw new Error("Inspector panel not found");
-        inspectorContent.innerHTML = '<p>Contenido del Inspector...</p>';
 
     } catch (error) {
         console.error("An error occurred during initialization:", error);
