@@ -63,12 +63,22 @@ export function initWebGL(canvas) {
     const sceneFragmentSource = `
         precision mediump float;
 
+        #define MAX_POINT_LIGHTS 4
+
+        struct PointLight {
+            vec3 position;
+            vec3 color;
+            float constant;
+            float linear;
+            float quadratic;
+        };
+
         varying vec3 v_normal;
         varying vec3 v_worldPosition;
         varying vec2 v_texCoord;
         varying vec4 v_lightSpacePosition;
 
-        uniform vec3 u_lightDirection;
+        uniform vec3 u_lightDirection; // For Directional Light
         uniform vec3 u_viewPosition;
         uniform vec3 u_color;
         uniform float u_shininess;
@@ -78,13 +88,13 @@ export function initWebGL(canvas) {
         uniform bool u_isUnlit;
         uniform vec2 u_shadowMapTexelSize;
 
+        uniform PointLight u_pointLights[MAX_POINT_LIGHTS];
+        uniform int u_numPointLights;
+
         float calculateShadow() {
             vec3 projCoords = v_lightSpacePosition.xyz / v_lightSpacePosition.w;
             projCoords = projCoords * 0.5 + 0.5;
-
-            if (projCoords.z > 1.0) {
-                return 0.0;
-            }
+            if (projCoords.z > 1.0) return 0.0;
 
             vec3 normal = normalize(v_normal);
             vec3 lightDir = normalize(u_lightDirection);
@@ -98,8 +108,47 @@ export function initWebGL(canvas) {
                 }
             }
             shadow /= 9.0;
-
             return shadow;
+        }
+
+        vec3 calcDirLight(vec3 normal, vec3 viewDir, vec4 baseColor) {
+            vec3 lightDir = normalize(u_lightDirection);
+
+            // Diffuse
+            float diff = max(dot(normal, lightDir), 0.0);
+            vec3 diffuse = diff * baseColor.rgb;
+
+            // Specular
+            vec3 reflectDir = reflect(-lightDir, normal);
+            float spec = pow(max(dot(viewDir, reflectDir), 0.0), u_shininess);
+            vec3 specular = 0.8 * spec * vec3(1.0, 1.0, 1.0);
+
+            // Shadow
+            float shadow = calculateShadow();
+
+            return (1.0 - shadow) * (diffuse + specular);
+        }
+
+        vec3 calcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec4 baseColor) {
+            vec3 lightDir = normalize(light.position - fragPos);
+
+            // Diffuse
+            float diff = max(dot(normal, lightDir), 0.0);
+            vec3 diffuse = diff * light.color * baseColor.rgb;
+
+            // Specular
+            vec3 reflectDir = reflect(-lightDir, normal);
+            float spec = pow(max(dot(viewDir, reflectDir), 0.0), u_shininess);
+            vec3 specular = 0.8 * spec * light.color;
+
+            // Attenuation
+            float dist = length(light.position - fragPos);
+            float attenuation = 1.0 / (light.constant + light.linear * dist + light.quadratic * (dist * dist));
+
+            diffuse *= attenuation;
+            specular *= attenuation;
+
+            return (diffuse + specular);
         }
 
         void main() {
@@ -110,23 +159,24 @@ export function initWebGL(canvas) {
                 return;
             }
 
+            vec3 normal = normalize(v_normal);
+            vec3 viewDir = normalize(u_viewPosition - v_worldPosition);
+
+            // Ambient (global)
             float ambientStrength = 0.15;
             vec3 ambient = ambientStrength * baseColor.rgb;
 
-            vec3 normal = normalize(v_normal);
-            vec3 lightDir = normalize(u_lightDirection);
-            float diff = max(dot(normal, lightDir), 0.0);
-            vec3 diffuse = diff * baseColor.rgb;
+            // Directional Light
+            vec3 result = calcDirLight(normal, viewDir, baseColor);
 
-            vec3 viewDir = normalize(u_viewPosition - v_worldPosition);
-            vec3 reflectDir = reflect(-lightDir, normal);
-            float spec = pow(max(dot(viewDir, reflectDir), 0.0), u_shininess);
-            vec3 specular = 0.8 * spec * vec3(1.0, 1.0, 1.0);
+            // Point Lights
+            for (int i = 0; i < MAX_POINT_LIGHTS; i++) {
+                if (i < u_numPointLights) {
+                    result += calcPointLight(u_pointLights[i], normal, v_worldPosition, viewDir, baseColor);
+                }
+            }
 
-            float shadow = calculateShadow();
-            vec3 result = ambient + (1.0 - shadow) * (diffuse + specular);
-
-            gl_FragColor = vec4(result, baseColor.a);
+            gl_FragColor = vec4(ambient + result, baseColor.a);
         }
     `;
 
@@ -195,8 +245,20 @@ export function initWebGL(canvas) {
             shadowMap: gl.getUniformLocation(sceneProgram, 'u_shadowMap'),
             isUnlit: gl.getUniformLocation(sceneProgram, 'u_isUnlit'),
             shadowMapTexelSize: gl.getUniformLocation(sceneProgram, 'u_shadowMapTexelSize'),
+            numPointLights: gl.getUniformLocation(sceneProgram, 'u_numPointLights'),
+            pointLights: [],
         },
     };
+
+    for (let i = 0; i < 4; i++) { // MAX_POINT_LIGHTS = 4
+        sceneProgramInfo.uniformLocations.pointLights.push({
+            position: gl.getUniformLocation(sceneProgram, `u_pointLights[${i}].position`),
+            color: gl.getUniformLocation(sceneProgram, `u_pointLights[${i}].color`),
+            constant: gl.getUniformLocation(sceneProgram, `u_pointLights[${i}].constant`),
+            linear: gl.getUniformLocation(sceneProgram, `u_pointLights[${i}].linear`),
+            quadratic: gl.getUniformLocation(sceneProgram, `u_pointLights[${i}].quadratic`),
+        });
+    }
 
     // --- Framebuffer para el mapa de sombras ---
     const depthTexture = gl.createTexture();
@@ -311,6 +373,20 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     gl.uniform1i(sceneProgramInfo.uniformLocations.shadowMap, 1);
 
     gl.uniform2f(sceneProgramInfo.uniformLocations.shadowMapTexelSize, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+
+    // --- Cargar datos de las Point Lights ---
+    const numPointLights = scene.pointLights.length;
+    gl.uniform1i(sceneProgramInfo.uniformLocations.numPointLights, numPointLights);
+
+    for (let i = 0; i < numPointLights; i++) {
+        const light = scene.pointLights[i];
+        const locations = sceneProgramInfo.uniformLocations.pointLights[i];
+        gl.uniform3fv(locations.position, light.position);
+        gl.uniform3fv(locations.color, light.color);
+        gl.uniform1f(locations.constant, light.constant);
+        gl.uniform1f(locations.linear, light.linear);
+        gl.uniform1f(locations.quadratic, light.quadratic);
+    }
 
     renderScene(gl, sceneProgramInfo, scene, false);
 }
