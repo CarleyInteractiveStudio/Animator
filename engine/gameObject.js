@@ -1,4 +1,5 @@
 import { vec3, quat, mat4 } from './math.js';
+import { Material } from './material.js';
 
 let nextId = 0;
 
@@ -7,6 +8,7 @@ export class GameObject {
         this.id = nextId++;
         this.name = name;
         this.mesh = mesh;
+        this.material = new Material();
         this.transform = {
             position: vec3.create(),
             // Let's use Euler angles (pitch, yaw, roll) for easier UI manipulation
