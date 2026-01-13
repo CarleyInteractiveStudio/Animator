@@ -11,6 +11,7 @@ let camera;
 const Engine = {
     scene: null,
     gl: null,
+    selectedGameObject: null,
 
     initialize: (canvasElement) => {
         canvas = canvasElement;
@@ -60,13 +61,18 @@ function updateCamera(deltaTime) {
     if (Input.isKeyDown('a')) vec3.scaleAndAdd(camera.position, camera.position, camera.right, -speed);
     if (Input.isKeyDown('d')) vec3.scaleAndAdd(camera.position, camera.position, camera.right, speed);
 
-    const mouseDelta = Input.getMouseDelta();
-    const sensitivity = 0.1;
-    camera.rotation.yaw += mouseDelta.x * sensitivity;
-    camera.rotation.pitch -= mouseDelta.y * sensitivity;
+    if (Input.isRightMouseButtonDown()) {
+        const mouseDelta = Input.getMouseDelta();
+        const sensitivity = 0.1;
+        camera.rotation.yaw += mouseDelta.x * sensitivity;
+        camera.rotation.pitch -= mouseDelta.y * sensitivity;
 
-    if (camera.rotation.pitch > 89.0) camera.rotation.pitch = 89.0;
-    if (camera.rotation.pitch < -89.0) camera.rotation.pitch = -89.0;
+        if (camera.rotation.pitch > 89.0) camera.rotation.pitch = 89.0;
+        if (camera.rotation.pitch < -89.0) camera.rotation.pitch = -89.0;
+    } else {
+        // We still need to call getMouseDelta to clear it, even if we don't use it
+        Input.getMouseDelta();
+    }
 
     camera.updateVectors();
 }
