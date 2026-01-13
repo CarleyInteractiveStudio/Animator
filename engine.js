@@ -8,6 +8,7 @@ import DirectionalLight from './engine/light.js';
 let webglContext;
 let canvas;
 let camera;
+let onUpdateCallback = () => {};
 
 const Engine = {
     scene: null,
@@ -29,6 +30,13 @@ const Engine = {
 
         return true;
     },
+
+    setOnUpdate: (callback) => {
+        if (typeof callback === 'function') {
+            onUpdateCallback = callback;
+        }
+    },
+
     start: () => {
         if (!webglContext) {
             console.error("Engine not initialized. Call Engine.initialize() first.");
@@ -39,6 +47,8 @@ const Engine = {
         function gameLoop(time) {
             const deltaTime = (time - lastTime) / 1000;
             lastTime = time;
+
+            onUpdateCallback();
 
             // Update camera
             updateCamera(deltaTime);

@@ -136,7 +136,8 @@ function main() {
             updateInspectorPanel();
 
 
-            // Start the engine's game loop
+            // Set the update callback and start the engine's game loop
+            Engine.setOnUpdate(updateHierarchyPanel);
             Engine.start();
         } else {
             throw new Error("Engine initialization failed");

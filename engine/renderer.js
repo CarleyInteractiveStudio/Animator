@@ -9,6 +9,12 @@ export function initWebGL(canvas) {
         return null;
     }
 
+    const ext = gl.getExtension('WEBGL_depth_texture');
+    if (!ext) {
+        console.error('WEBGL_depth_texture extension not supported');
+        return null;
+    }
+
     // --- Shader para el pase de profundidad (Depth Pass) ---
     const depthVertexSource = `
         attribute vec4 a_position;
@@ -76,6 +82,10 @@ export function initWebGL(canvas) {
             projCoords = projCoords * 0.5 + 0.5;
             float closestDepth = texture2D(u_shadowMap, projCoords.xy).r;
             float currentDepth = projCoords.z;
+
+            if (projCoords.z > 1.0) {
+                return 0.0;
+            }
 
             vec3 normal = normalize(v_normal);
             vec3 lightDir = normalize(u_lightDirection);
