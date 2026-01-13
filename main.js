@@ -4,6 +4,7 @@ import { Mesh } from './engine/mesh.js';
 import { Material } from './engine/material.js';
 import { Texture } from './engine/texture.js';
 import { PointLight } from './engine/pointLight.js';
+import { SpotLight } from './engine/spotLight.js';
 import { vec3 } from './engine/math.js';
 import DirectionalLight from './engine/light.js';
 
@@ -156,6 +157,11 @@ function main() {
             pointLight2Viz.transform.position = pointLight2.position;
             Engine.scene.addGameObject(pointLight2Viz);
 
+            // --- SpotLight (Flashlight) ---
+            // const spotLight = new SpotLight();
+            // Engine.scene.spotLights.push(spotLight);
+
+
             // Initial UI update
             updateHierarchyPanel();
             updateInspectorPanel();
@@ -174,6 +180,10 @@ function main() {
                 light.position[0] = Math.sin(time * 0.5) * 10;
                 light.position[2] = Math.cos(time * 0.5) * 10;
                 vec3.copy(lightVisualizer.transform.position, light.position);
+
+                // Update flashlight to follow camera
+                // vec3.copy(spotLight.position, Engine.camera.position);
+                // vec3.copy(spotLight.direction, Engine.camera.front);
 
                 updateHierarchyPanel();
             });

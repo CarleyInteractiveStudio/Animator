@@ -5,6 +5,7 @@ export class Scene {
         this.gameObjects = [];
         this.directionalLight = new DirectionalLight();
         this.pointLights = [];
+        this.spotLights = [];
     }
 
     addGameObject(gameObject) {
