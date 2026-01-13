@@ -76,12 +76,11 @@ export function initWebGL(canvas) {
         uniform bool u_useTexture;
         uniform sampler2D u_shadowMap;
         uniform bool u_isUnlit;
+        uniform vec2 u_shadowMapTexelSize;
 
         float calculateShadow() {
             vec3 projCoords = v_lightSpacePosition.xyz / v_lightSpacePosition.w;
             projCoords = projCoords * 0.5 + 0.5;
-            float closestDepth = texture2D(u_shadowMap, projCoords.xy).r;
-            float currentDepth = projCoords.z;
 
             if (projCoords.z > 1.0) {
                 return 0.0;
@@ -92,9 +91,13 @@ export function initWebGL(canvas) {
             float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
 
             float shadow = 0.0;
-            if (currentDepth - bias > closestDepth) {
-                shadow = 1.0;
+            for (int x = -1; x <= 1; ++x) {
+                for (int y = -1; y <= 1; ++y) {
+                    float pcfDepth = texture2D(u_shadowMap, projCoords.xy + vec2(x, y) * u_shadowMapTexelSize).r;
+                    shadow += (projCoords.z - bias > pcfDepth) ? 1.0 : 0.0;
+                }
             }
+            shadow /= 9.0;
 
             return shadow;
         }
@@ -191,6 +194,7 @@ export function initWebGL(canvas) {
             useTexture: gl.getUniformLocation(sceneProgram, 'u_useTexture'),
             shadowMap: gl.getUniformLocation(sceneProgram, 'u_shadowMap'),
             isUnlit: gl.getUniformLocation(sceneProgram, 'u_isUnlit'),
+            shadowMapTexelSize: gl.getUniformLocation(sceneProgram, 'u_shadowMapTexelSize'),
         },
     };
 
@@ -305,6 +309,8 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, depthTexture);
     gl.uniform1i(sceneProgramInfo.uniformLocations.shadowMap, 1);
+
+    gl.uniform2f(sceneProgramInfo.uniformLocations.shadowMapTexelSize, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
 
     renderScene(gl, sceneProgramInfo, scene, false);
 }
