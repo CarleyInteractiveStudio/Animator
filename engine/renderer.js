@@ -348,18 +348,78 @@ export function initWebGL(canvas) {
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-    return { gl, sceneProgramInfo, depthProgramInfo, depthFramebuffer, depthTexture };
+    // --- Picking Shader ---
+    const pickingVertexSource = `
+        attribute vec4 a_position;
+        uniform mat4 u_projectionMatrix;
+        uniform mat4 u_viewMatrix;
+        uniform mat4 u_modelMatrix;
+
+        void main() {
+            gl_Position = u_projectionMatrix * u_viewMatrix * u_modelMatrix * a_position;
+        }
+    `;
+    const pickingFragmentSource = `
+        precision mediump float;
+        uniform vec4 u_idColor;
+
+        void main() {
+            gl_FragColor = u_idColor;
+        }
+    `;
+    const pickingProgram = createProgram(gl, pickingVertexSource, pickingFragmentSource);
+    const pickingProgramInfo = {
+        program: pickingProgram,
+        attribLocations: {
+            vertexPosition: gl.getAttribLocation(pickingProgram, 'a_position'),
+        },
+        uniformLocations: {
+            projectionMatrix: gl.getUniformLocation(pickingProgram, 'u_projectionMatrix'),
+            viewMatrix: gl.getUniformLocation(pickingProgram, 'u_viewMatrix'),
+            modelMatrix: gl.getUniformLocation(pickingProgram, 'u_modelMatrix'),
+            idColor: gl.getUniformLocation(pickingProgram, 'u_idColor'),
+        },
+    };
+
+    // --- Picking Framebuffer ---
+    const pickingTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, pickingTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); // Start with 1x1, will resize
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+    const pickingFramebuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, pickingFramebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pickingTexture, 0);
+
+    const pickingRenderbuffer = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, pickingRenderbuffer);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, 1, 1);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, pickingRenderbuffer);
+
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+
+    return { gl, sceneProgramInfo, depthProgramInfo, depthFramebuffer, depthTexture, pickingProgramInfo, pickingFramebuffer, pickingTexture, pickingRenderbuffer };
 }
 
-function renderScene(gl, programInfo, scene, isDepthPass, lightSpaceMatrix) {
+function renderScene(gl, programInfo, scene, renderOptions) {
+    const { isDepthPass = false, isPickingPass = false } = renderOptions;
+
     for (const gameObject of scene.gameObjects) {
-        if (!gameObject.mesh) continue;
+        if (!gameObject.mesh || !gameObject.isSelectable) continue;
 
         const modelMatrix = gameObject.getModelMatrix();
         gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, modelMatrix);
 
-        if (!isDepthPass) {
-            gl.uniform1i(programInfo.uniformLocations.isUnlit, gameObject.material.isUnlit ? 1 : 0);
+        if (isPickingPass) {
+            const r = ((gameObject.id + 1) & 0xFF) / 255.0;
+            const g = (((gameObject.id + 1) >> 8) & 0xFF) / 255.0;
+            const b = (((gameObject.id + 1) >> 16) & 0xFF) / 255.0;
+            gl.uniform4f(programInfo.uniformLocations.idColor, r, g, b, 1.0);
+        } else if (!isDepthPass) {
+             gl.uniform1i(programInfo.uniformLocations.isUnlit, gameObject.material.isUnlit ? 1 : 0);
             gl.uniform1f(programInfo.uniformLocations.shininess, gameObject.material.shininess);
             if (gameObject.material.texture) {
                 gameObject.material.texture.bind(0);
@@ -393,9 +453,84 @@ function renderScene(gl, programInfo, scene, isDepthPass, lightSpaceMatrix) {
     }
 }
 
+function resize(gl, webglContext) {
+    const canvas = gl.canvas;
+    const displayWidth  = canvas.clientWidth;
+    const displayHeight = canvas.clientHeight;
 
-export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix, cameraPosition) {
-    const { gl, sceneProgramInfo, depthProgramInfo, depthFramebuffer, depthTexture } = webglContext;
+    if (canvas.width  !== displayWidth || canvas.height !== displayHeight) {
+        canvas.width  = displayWidth;
+        canvas.height = displayHeight;
+
+        // Resize picking framebuffer attachments
+        const { pickingTexture, pickingRenderbuffer } = webglContext;
+        gl.bindTexture(gl.TEXTURE_2D, pickingTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, pickingRenderbuffer);
+        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, canvas.width, canvas.height);
+    }
+}
+
+// Nueva función para el "picking"
+export function pickObject(webglContext, canvas, scene, projectionMatrix, viewMatrix, x, y) {
+    const { gl, pickingProgramInfo, pickingFramebuffer } = webglContext;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, pickingFramebuffer);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+    gl.useProgram(pickingProgramInfo.program);
+
+    gl.uniformMatrix4fv(pickingProgramInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
+    gl.uniformMatrix4fv(pickingProgramInfo.uniformLocations.viewMatrix, false, viewMatrix);
+
+    renderScene(gl, pickingProgramInfo, scene, { isPickingPass: true });
+
+    const pixelData = new Uint8Array(4);
+    // Leer el píxel en la coordenada del ratón.
+    // WebGL tiene el origen (0,0) en la esquina inferior izquierda, pero el ratón lo tiene en la superior izquierda.
+    gl.readPixels(x, canvas.height - y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    const id = (pixelData[0]) | (pixelData[1] << 8) | (pixelData[2] << 16);
+    // Se resta 1 porque el ID 0 se confunde con el color de fondo (negro)
+    return id - 1;
+}
+
+export function pickGizmoAxis(webglContext, canvas, gizmo, projectionMatrix, viewMatrix, x, y) {
+    const { gl, pickingProgramInfo, pickingFramebuffer } = webglContext;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, pickingFramebuffer);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+    gl.useProgram(pickingProgramInfo.program);
+
+    gl.uniformMatrix4fv(pickingProgramInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
+    gl.uniformMatrix4fv(pickingProgramInfo.uniformLocations.viewMatrix, false, viewMatrix);
+
+    // Render only the gizmo in picking mode
+    gizmo.render(gl, pickingProgramInfo, true);
+
+    const pixelData = new Uint8Array(4);
+    gl.readPixels(x, canvas.height - y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    const id = (pixelData[0]) | (pixelData[1] << 8) | (pixelData[2] << 16);
+    return id; // Gizmo IDs are 1, 2, 3. 0 means nothing was picked.
+}
+
+
+export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix, cameraPosition, gizmo) {
+    const { gl, sceneProgramInfo, depthProgramInfo, depthFramebuffer, depthTexture, pickingProgramInfo } = webglContext;
+
+    resize(gl, webglContext);
 
     const lightSpaceMatrix = scene.directionalLight.getLightSpaceMatrix();
 
@@ -407,16 +542,12 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
 
     gl.useProgram(depthProgramInfo.program);
     gl.uniformMatrix4fv(depthProgramInfo.uniformLocations.lightSpaceMatrix, false, lightSpaceMatrix);
-    renderScene(gl, depthProgramInfo, scene, true);
+    renderScene(gl, depthProgramInfo, scene, { isDepthPass: true });
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.cullFace(gl.BACK);
 
     // --- 2. Pase de la Escena (Render normal desde la cámara) ---
-    if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
-    }
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.clearColor(0.13, 0.13, 0.13, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -474,4 +605,14 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     }
 
     renderScene(gl, sceneProgramInfo, scene, false);
+
+    // --- 3. Pase del Gizmo (Renderizar el gizmo encima de todo) ---
+    if (gizmo && gizmo.isVisible) {
+        gl.clear(gl.DEPTH_BUFFER_BIT); // Clear depth buffer to draw gizmo on top
+        gl.useProgram(sceneProgramInfo.program); // Use the scene shader
+        // We need to re-bind the main matrices as the program was switched
+        gl.uniformMatrix4fv(sceneProgramInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
+        gl.uniformMatrix4fv(sceneProgramInfo.uniformLocations.viewMatrix, false, viewMatrix);
+        gizmo.render(gl, sceneProgramInfo, false);
+    }
 }
