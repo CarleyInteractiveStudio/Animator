@@ -1,109 +1,91 @@
-import { initWebGL, renderWebGL } from './engine/renderer.js';
-import { Camera } from './engine/camera.js';
-import { Input } from './engine/input.js';
-import { Scene } from './engine/scene.js';
-import { mat4, vec3 } from './engine/math.js';
-import DirectionalLight from './engine/light.js';
 
-let webglContext;
-let canvas;
-let camera;
-let onUpdateCallback = () => {};
+function onMouseDown(event) {
+    if (event.button !== 0) return; // Only handle left clicks
 
-const Engine = {
-    scene: null,
-    gl: null,
-    selectedGameObject: null,
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
 
-    initialize: (canvasElement) => {
-        canvas = canvasElement;
-        webglContext = initWebGL(canvas);
-        Engine.gl = webglContext.gl;
-        if (!webglContext) {
-            console.error("Engine initialization failed.");
-            return false;
-        }
+    const projectionMatrix = mat4.create();
+    mat4.perspective(projectionMatrix, 45 * Math.PI / 180, canvas.clientWidth / canvas.clientHeight, 0.1, 100.0);
+    const viewMatrix = camera.getViewMatrix();
 
-        camera = new Camera();
-        Input.initialize(canvas);
-        Engine.scene = new Scene();
-
-        return true;
-    },
-
-    setOnUpdate: (callback) => {
-        if (typeof callback === 'function') {
-            onUpdateCallback = callback;
-        }
-    },
-
-    start: () => {
-        if (!webglContext) {
-            console.error("Engine not initialized. Call Engine.initialize() first.");
+    if (Engine.selectedGameObject) {
+        selectedAxis = pickGizmoAxis(webglContext, canvas, gizmo, projectionMatrix, viewMatrix, x, y);
+        if (selectedAxis) {
+            isDragging = true;
+            initialMousePos = { x, y };
+            vec3.copy(initialObjectPos, Engine.selectedGameObject.transform.position);
+            gizmo.setActiveAxis(selectedAxis);
             return;
         }
-
-        let lastTime = 0;
-        function gameLoop(time) {
-            const deltaTime = (time - lastTime) / 1000;
-            lastTime = time;
-
-            onUpdateCallback();
-
-            // Update camera
-            updateCamera(deltaTime);
-
-            // Animate the light
-            if (Engine.scene && Engine.scene.directionalLight) {
-                const light = Engine.scene.directionalLight;
-                const radius = 10.0;
-                const speed = 0.5;
-                light.position[0] = Math.sin(time * speed * 0.001) * radius;
-                light.position[2] = Math.cos(time * speed * 0.001) * radius;
-                // Recalculate the light's view matrix after changing its position
-                mat4.lookAt(light.lightViewMatrix, light.position, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
-
-                // Update the visualizer's position to match the light
-                const lightVisualizer = Engine.scene.gameObjects.find(obj => obj.name === 'Light Source');
-                if (lightVisualizer) {
-                    vec3.copy(lightVisualizer.transform.position, light.position);
-                }
-            }
-
-            const projectionMatrix = mat4.create();
-            mat4.perspective(projectionMatrix, 45 * Math.PI / 180, canvas.clientWidth / canvas.clientHeight, 0.1, 100.0);
-
-            const viewMatrix = camera.getViewMatrix();
-
-            renderWebGL(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix, camera.position);
-            requestAnimationFrame(gameLoop);
-        }
-        requestAnimationFrame(gameLoop);
     }
-};
 
-function updateCamera(deltaTime) {
-    const speed = 3.0 * deltaTime;
-    if (Input.isKeyDown('w')) vec3.scaleAndAdd(camera.position, camera.position, camera.front, speed);
-    if (Input.isKeyDown('s')) vec3.scaleAndAdd(camera.position, camera.position, camera.front, -speed);
-    if (Input.isKeyDown('a')) vec3.scaleAndAdd(camera.position, camera.position, camera.right, -speed);
-    if (Input.isKeyDown('d')) vec3.scaleAndAdd(camera.position, camera.position, camera.right, speed);
-
-    if (Input.isRightMouseButtonDown()) {
-        const mouseDelta = Input.getMouseDelta();
-        const sensitivity = 0.1;
-        camera.rotation.yaw += mouseDelta.x * sensitivity;
-        camera.rotation.pitch -= mouseDelta.y * sensitivity;
-
-        if (camera.rotation.pitch > 89.0) camera.rotation.pitch = 89.0;
-        if (camera.rotation.pitch < -89.0) camera.rotation.pitch = -89.0;
+    const pickedId = pickObject(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix, x, y);
+    if (pickedId !== -1) {
+        Engine.selectedGameObject = Engine.scene.getGameObjectById(pickedId);
+        gizmo.isVisible = true;
     } else {
-        // We still need to call getMouseDelta to clear it, even if we don't use it
-        Input.getMouseDelta();
+        Engine.selectedGameObject = null;
+        gizmo.isVisible = false;
     }
-
-    camera.updateVectors();
+    gizmo.setActiveAxis(null);
 }
 
+function onMouseUp(event) {
+    if (event.button !== 0) return;
+    isDragging = false;
+    selectedAxis = null;
+    gizmo.setActiveAxis(null);
+}
 
-export default Engine;
+function onMouseMove(event) {
+    if (!isDragging || !Engine.selectedGameObject || !selectedAxis) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const currentMousePos = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+
+    const projectionMatrix = mat4.create();
+    mat4.perspective(projectionMatrix, 45 * Math.PI / 180, canvas.clientWidth / canvas.clientHeight, 0.1, 100.0);
+    const viewMatrix = camera.getViewMatrix();
+    const viewProjMatrix = mat4.multiply(mat4.create(), projectionMatrix, viewMatrix);
+
+    const delta = projectMouseToWorld(currentMousePos, initialMousePos, initialObjectPos, selectedAxis, viewProjMatrix, canvas);
+
+    vec3.add(Engine.selectedGameObject.transform.position, initialObjectPos, delta);
+}
+
+function projectMouseToWorld(currentMouse, initialMouse, objectPos, axis, viewProj, canvas) {
+    const objectScreenPos = vec3.transformMat4(vec3.create(), objectPos, viewProj);
+    objectScreenPos[0] = (objectScreenPos[0] + 1) * 0.5 * canvas.width;
+    objectScreenPos[1] = (1 - objectScreenPos[1]) * 0.5 * canvas.height;
+
+    const axisDirection = vec3.create();
+    if (axis === 1) vec3.set(axisDirection, 1, 0, 0); // X
+    if (axis === 2) vec3.set(axisDirection, 0, 1, 0); // Y
+    if (axis === 3) vec3.set(axisDirection, 0, 0, 1); // Z
+
+    const axisScreen = vec3.transformMat4(vec3.create(), vec3.add(vec3.create(), objectPos, axisDirection), viewProj);
+    axisScreen[0] = (axisScreen[0] + 1) * 0.5 * canvas.width;
+    axisScreen[1] = (1 - axisScreen[1]) * 0.5 * canvas.height;
+
+    const axisVectorScreen = vec3.subtract(vec3.create(), axisScreen, objectScreenPos);
+    vec3.normalize(axisVectorScreen, axisVectorScreen);
+
+    const mouseVector = vec3.fromValues(currentMouse.x - initialMouse.x, currentMouse.y - initialMouse.y, 0);
+    const dotProduct = vec3.dot(mouseVector, axisVectorScreen);
+
+    const worldAxis = vec3.create();
+    const modelMatrix = Engine.selectedGameObject.getModelMatrix();
+    vec3.transformMat4(worldAxis, axisDirection, modelMatrix);
+    vec3.subtract(worldAxis, worldAxis, Engine.selectedGameObject.transform.position);
+    vec3.normalize(worldAxis, worldAxis);
+
+    // This is a simplification. A more robust solution would involve unprojecting
+    // the mouse movement onto a plane defined by the axis and the camera.
+    // For now, we scale based on distance and a magic factor.
+    const distance = vec3.distance(camera.position, objectPos);
+    const scaleFactor = 0.01 * distance;
+
+    return vec3.scale(vec3.create(), axisDirection, dotProduct * scaleFactor);
+}
