@@ -10,5 +10,8 @@ export class Material {
 
         // The texture object
         this.texture = null;
+
+        // If true, the object will be rendered with its base color, ignoring all lighting.
+        this.isUnlit = false;
     }
 }

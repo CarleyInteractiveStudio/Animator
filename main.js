@@ -1,8 +1,12 @@
 import Engine from './engine.js';
 import { GameObject } from './engine/gameObject.js';
 import { Mesh } from './engine/mesh.js';
+import { Material } from './engine/material.js';
 import { Texture } from './engine/texture.js';
+import { PointLight } from './engine/pointLight.js';
+import { SpotLight } from './engine/spotLight.js';
 import { vec3 } from './engine/math.js';
+import DirectionalLight from './engine/light.js';
 
 function updateHierarchyPanel() {
     const jerarquiaContent = document.querySelector('#jerarquia-panel .panel-content');
@@ -119,12 +123,70 @@ function main() {
             Engine.scene.addGameObject(cube3);
             Engine.scene.addGameObject(sphere);
 
+            // Create and set up the directional light
+            const light = new DirectionalLight();
+            Engine.scene.directionalLight = light;
+
+            // Create a visual representation for the light source
+            const lightVisualizer = new GameObject('Light Source', sphereMesh);
+            vec3.set(lightVisualizer.transform.scale, 0.2, 0.2, 0.2); // Make it small
+            lightVisualizer.material.color = vec3.fromValues(1.0, 1.0, 0.0); // Bright yellow
+            lightVisualizer.material.isUnlit = true;
+            Engine.scene.addGameObject(lightVisualizer);
+
+            // --- Point Lights ---
+            const pointLight1 = new PointLight(vec3.fromValues(3, 2, 2), vec3.fromValues(1, 0, 0)); // Red light
+            Engine.scene.pointLights.push(pointLight1);
+
+            const pointLight1Viz = new GameObject('Point Light 1');
+            pointLight1Viz.mesh = sphereMesh;
+            pointLight1Viz.material = new Material(pointLight1.color);
+            pointLight1Viz.material.isUnlit = true;
+            vec3.set(pointLight1Viz.transform.scale, 0.15, 0.15, 0.15);
+            pointLight1Viz.transform.position = pointLight1.position;
+            Engine.scene.addGameObject(pointLight1Viz);
+
+            const pointLight2 = new PointLight(vec3.fromValues(-3, 2, 2), vec3.fromValues(0, 0, 1)); // Blue light
+            Engine.scene.pointLights.push(pointLight2);
+
+            const pointLight2Viz = new GameObject('Point Light 2');
+            pointLight2Viz.mesh = sphereMesh;
+            pointLight2Viz.material = new Material(pointLight2.color);
+            pointLight2Viz.material.isUnlit = true;
+            vec3.set(pointLight2Viz.transform.scale, 0.15, 0.15, 0.15);
+            pointLight2Viz.transform.position = pointLight2.position;
+            Engine.scene.addGameObject(pointLight2Viz);
+
+            // --- SpotLight (Flashlight) ---
+            // const spotLight = new SpotLight();
+            // Engine.scene.spotLights.push(spotLight);
+
+
             // Initial UI update
             updateHierarchyPanel();
             updateInspectorPanel();
 
 
-            // Start the engine's game loop
+            // Set the update callback and start the engine's game loop
+            Engine.setOnUpdate(() => {
+                const time = performance.now() * 0.001;
+                // Animate Point Light 1
+                pointLight1.position[0] = Math.sin(time) * 3;
+                pointLight1.position[2] = Math.cos(time) * 3;
+                pointLight1Viz.transform.position = pointLight1.position;
+
+                // Animate Directional Light
+                const light = Engine.scene.directionalLight;
+                light.position[0] = Math.sin(time * 0.5) * 10;
+                light.position[2] = Math.cos(time * 0.5) * 10;
+                vec3.copy(lightVisualizer.transform.position, light.position);
+
+                // Update flashlight to follow camera
+                // vec3.copy(spotLight.position, Engine.camera.position);
+                // vec3.copy(spotLight.direction, Engine.camera.front);
+
+                updateHierarchyPanel();
+            });
             Engine.start();
         } else {
             throw new Error("Engine initialization failed");

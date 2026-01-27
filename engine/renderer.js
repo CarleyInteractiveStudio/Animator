@@ -1,5 +1,7 @@
 import { mat4 } from './math.js';
 
+const SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
+
 export function initWebGL(canvas) {
     const gl = canvas.getContext('webgl');
     if (!gl) {
@@ -7,7 +9,32 @@ export function initWebGL(canvas) {
         return null;
     }
 
-    const vertexShaderSource = `
+    const ext = gl.getExtension('WEBGL_depth_texture');
+    if (!ext) {
+        console.error('WEBGL_depth_texture extension not supported');
+        return null;
+    }
+
+    // --- Shader para el pase de profundidad (Depth Pass) ---
+    const depthVertexSource = `
+        attribute vec4 a_position;
+        uniform mat4 u_lightSpaceMatrix;
+        uniform mat4 u_modelMatrix;
+
+        void main() {
+            gl_Position = u_lightSpaceMatrix * u_modelMatrix * a_position;
+        }
+    `;
+
+    const depthFragmentSource = `
+        precision mediump float;
+        void main() {
+            // No es necesario escribir color, solo se necesita el buffer de profundidad
+        }
+    `;
+
+    // --- Shader para el pase de la escena (Scene Pass) ---
+    const sceneVertexSource = `
         attribute vec4 a_position;
         attribute vec3 a_normal;
         attribute vec2 a_texCoord;
@@ -16,202 +43,435 @@ export function initWebGL(canvas) {
         uniform mat4 u_viewMatrix;
         uniform mat4 u_modelMatrix;
         uniform mat4 u_normalMatrix;
+        uniform mat4 u_lightSpaceMatrix;
 
         varying vec3 v_normal;
         varying vec3 v_worldPosition;
         varying vec2 v_texCoord;
+        varying vec4 v_lightSpacePosition;
 
         void main() {
-            // Position in world space
             vec4 worldPosition = u_modelMatrix * a_position;
             v_worldPosition = worldPosition.xyz;
-
-            // Output position in clip space
             gl_Position = u_projectionMatrix * u_viewMatrix * worldPosition;
-
-            // Transform normal to world space
             v_normal = mat3(u_normalMatrix) * a_normal;
-
-            // Pass texture coordinates to fragment shader
             v_texCoord = a_texCoord;
+            v_lightSpacePosition = u_lightSpaceMatrix * worldPosition;
         }
     `;
 
-    const fragmentShaderSource = `
+    const sceneFragmentSource = `
         precision mediump float;
+
+        #define MAX_POINT_LIGHTS 4
+        #define MAX_SPOT_LIGHTS 4
+
+        struct PointLight {
+            vec3 position;
+            vec3 color;
+            float constant;
+            float linear;
+            float quadratic;
+        };
+
+        struct SpotLight {
+            vec3 position;
+            vec3 direction;
+            vec3 color;
+            float cutOff;
+            float outerCutOff;
+            float constant;
+            float linear;
+            float quadratic;
+        };
 
         varying vec3 v_normal;
         varying vec3 v_worldPosition;
         varying vec2 v_texCoord;
+        varying vec4 v_lightSpacePosition;
 
-        uniform vec3 u_lightDirection;
+        uniform vec3 u_lightDirection; // For Directional Light
         uniform vec3 u_viewPosition;
         uniform vec3 u_color;
         uniform float u_shininess;
         uniform sampler2D u_sampler;
         uniform bool u_useTexture;
+        uniform sampler2D u_shadowMap;
+        uniform bool u_isUnlit;
+        uniform vec2 u_shadowMapTexelSize;
 
-        void main() {
-            // Get base color
-            vec4 baseColor;
-            if (u_useTexture) {
-                baseColor = texture2D(u_sampler, v_texCoord);
-            } else {
-                baseColor = vec4(u_color, 1.0);
-            }
+        uniform PointLight u_pointLights[MAX_POINT_LIGHTS];
+        uniform int u_numPointLights;
 
-            // Ambient lighting
-            float ambientStrength = 0.15;
-            vec3 ambient = ambientStrength * baseColor.rgb;
+        uniform SpotLight u_spotLights[MAX_SPOT_LIGHTS];
+        uniform int u_numSpotLights;
 
-            // Diffuse lighting
+        float calculateShadow() {
+            vec3 projCoords = v_lightSpacePosition.xyz / v_lightSpacePosition.w;
+            projCoords = projCoords * 0.5 + 0.5;
+            if (projCoords.z > 1.0) return 0.0;
+
             vec3 normal = normalize(v_normal);
             vec3 lightDir = normalize(u_lightDirection);
+            float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
+
+            float shadow = 0.0;
+            for (int x = -1; x <= 1; ++x) {
+                for (int y = -1; y <= 1; ++y) {
+                    float pcfDepth = texture2D(u_shadowMap, projCoords.xy + vec2(x, y) * u_shadowMapTexelSize).r;
+                    shadow += (projCoords.z - bias > pcfDepth) ? 1.0 : 0.0;
+                }
+            }
+            shadow /= 9.0;
+            return shadow;
+        }
+
+        vec3 calcDirLight(vec3 normal, vec3 viewDir, vec4 baseColor) {
+            vec3 lightDir = normalize(u_lightDirection);
+
+            // Diffuse
             float diff = max(dot(normal, lightDir), 0.0);
             vec3 diffuse = diff * baseColor.rgb;
 
-            // Specular lighting
-            vec3 viewDir = normalize(u_viewPosition - v_worldPosition);
+            // Specular
             vec3 reflectDir = reflect(-lightDir, normal);
             float spec = pow(max(dot(viewDir, reflectDir), 0.0), u_shininess);
-            vec3 specular = 0.8 * spec * vec3(1.0, 1.0, 1.0); // Specular highlight is white
+            vec3 specular = 0.8 * spec * vec3(1.0, 1.0, 1.0);
 
-            vec3 result = ambient + diffuse + specular;
-            gl_FragColor = vec4(result, baseColor.a);
+            // Shadow
+            float shadow = calculateShadow();
+
+            return (1.0 - shadow) * (diffuse + specular);
+        }
+
+        vec3 calcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec4 baseColor) {
+            vec3 lightDir = normalize(light.position - fragPos);
+
+            // Diffuse
+            float diff = max(dot(normal, lightDir), 0.0);
+            vec3 diffuse = diff * light.color * baseColor.rgb;
+
+            // Specular
+            vec3 reflectDir = reflect(-lightDir, normal);
+            float spec = pow(max(dot(viewDir, reflectDir), 0.0), u_shininess);
+            vec3 specular = 0.8 * spec * light.color;
+
+            // Attenuation
+            float dist = length(light.position - fragPos);
+            float attenuation = 1.0 / (light.constant + light.linear * dist + light.quadratic * (dist * dist));
+
+            diffuse *= attenuation;
+            specular *= attenuation;
+
+            return (diffuse + specular);
+        }
+
+        vec3 calcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec4 baseColor) {
+            vec3 lightDir = normalize(light.position - fragPos);
+
+            // Spotlight intensity
+            float theta = dot(lightDir, normalize(-light.direction));
+            float epsilon = light.cutOff - light.outerCutOff;
+            float intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
+
+            if(intensity > 0.0) {
+                // Diffuse
+                float diff = max(dot(normal, lightDir), 0.0);
+                vec3 diffuse = diff * light.color * baseColor.rgb;
+
+                // Specular
+                vec3 reflectDir = reflect(-lightDir, normal);
+                float spec = pow(max(dot(viewDir, reflectDir), 0.0), u_shininess);
+                vec3 specular = 0.8 * spec * light.color;
+
+                // Attenuation
+                float dist = length(light.position - fragPos);
+                float attenuation = 1.0 / (light.constant + light.linear * dist + light.quadratic * (dist * dist));
+
+                diffuse *= attenuation * intensity;
+                specular *= attenuation * intensity;
+
+                return (diffuse + specular);
+            }
+            return vec3(0.0, 0.0, 0.0);
+        }
+
+
+        void main() {
+            vec4 baseColor = u_useTexture ? texture2D(u_sampler, v_texCoord) : vec4(u_color, 1.0);
+
+            if (u_isUnlit) {
+                gl_FragColor = baseColor;
+                return;
+            }
+
+            vec3 normal = normalize(v_normal);
+            vec3 viewDir = normalize(u_viewPosition - v_worldPosition);
+
+            // Ambient (global)
+            float ambientStrength = 0.15;
+            vec3 ambient = ambientStrength * baseColor.rgb;
+
+            // Directional Light
+            vec3 result = calcDirLight(normal, viewDir, baseColor);
+
+            // Point Lights
+            for (int i = 0; i < MAX_POINT_LIGHTS; i++) {
+                if (i < u_numPointLights) {
+                    result += calcPointLight(u_pointLights[i], normal, v_worldPosition, viewDir, baseColor);
+                }
+            }
+
+            // Spot Lights
+            for (int i = 0; i < MAX_SPOT_LIGHTS; i++) {
+                if (i < u_numSpotLights) {
+                    result += calcSpotLight(u_spotLights[i], normal, v_worldPosition, viewDir, baseColor);
+                }
+            }
+
+            gl_FragColor = vec4(ambient + result, baseColor.a);
         }
     `;
 
+    // --- Funciones de utilidad para Shaders y Programas ---
     function createShader(gl, type, source) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+            console.error('Error al compilar shader:', gl.getShaderInfoLog(shader));
             gl.deleteShader(shader);
             return null;
         }
         return shader;
     }
 
-    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-
-    function createProgram(gl, vertexShader, fragmentShader) {
+    function createProgram(gl, vertexSource, fragmentSource) {
+        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexSource);
+        const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
         const program = gl.createProgram();
         gl.attachShader(program, vertexShader);
         gl.attachShader(program, fragmentShader);
         gl.linkProgram(program);
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            console.error('Program link error:', gl.getProgramInfoLog(program));
+            console.error('Error al enlazar programa:', gl.getProgramInfoLog(program));
             gl.deleteProgram(program);
             return null;
         }
         return program;
     }
 
-    const program = createProgram(gl, vertexShader, fragmentShader);
+    // --- Creación de programas ---
+    const depthProgram = createProgram(gl, depthVertexSource, depthFragmentSource);
+    const sceneProgram = createProgram(gl, sceneVertexSource, sceneFragmentSource);
 
-    const programInfo = {
-        program: program,
+    const depthProgramInfo = {
+        program: depthProgram,
         attribLocations: {
-            vertexPosition: gl.getAttribLocation(program, 'a_position'),
-            vertexNormal: gl.getAttribLocation(program, 'a_normal'),
-            textureCoord: gl.getAttribLocation(program, 'a_texCoord'),
+            vertexPosition: gl.getAttribLocation(depthProgram, 'a_position'),
         },
         uniformLocations: {
-            projectionMatrix: gl.getUniformLocation(program, 'u_projectionMatrix'),
-            viewMatrix: gl.getUniformLocation(program, 'u_viewMatrix'),
-            modelMatrix: gl.getUniformLocation(program, 'u_modelMatrix'),
-            normalMatrix: gl.getUniformLocation(program, 'u_normalMatrix'),
-            lightDirection: gl.getUniformLocation(program, 'u_lightDirection'),
-            viewPosition: gl.getUniformLocation(program, 'u_viewPosition'),
-            shininess: gl.getUniformLocation(program, 'u_shininess'),
-            sampler: gl.getUniformLocation(program, 'u_sampler'),
-            color: gl.getUniformLocation(program, 'u_color'),
-            useTexture: gl.getUniformLocation(program, 'u_useTexture'),
+            lightSpaceMatrix: gl.getUniformLocation(depthProgram, 'u_lightSpaceMatrix'),
+            modelMatrix: gl.getUniformLocation(depthProgram, 'u_modelMatrix'),
         },
     };
 
-    return { gl, programInfo };
-}
+    const sceneProgramInfo = {
+        program: sceneProgram,
+        attribLocations: {
+            vertexPosition: gl.getAttribLocation(sceneProgram, 'a_position'),
+            vertexNormal: gl.getAttribLocation(sceneProgram, 'a_normal'),
+            textureCoord: gl.getAttribLocation(sceneProgram, 'a_texCoord'),
+        },
+        uniformLocations: {
+            projectionMatrix: gl.getUniformLocation(sceneProgram, 'u_projectionMatrix'),
+            viewMatrix: gl.getUniformLocation(sceneProgram, 'u_viewMatrix'),
+            modelMatrix: gl.getUniformLocation(sceneProgram, 'u_modelMatrix'),
+            normalMatrix: gl.getUniformLocation(sceneProgram, 'u_normalMatrix'),
+            lightSpaceMatrix: gl.getUniformLocation(sceneProgram, 'u_lightSpaceMatrix'),
+            lightDirection: gl.getUniformLocation(sceneProgram, 'u_lightDirection'),
+            viewPosition: gl.getUniformLocation(sceneProgram, 'u_viewPosition'),
+            shininess: gl.getUniformLocation(sceneProgram, 'u_shininess'),
+            sampler: gl.getUniformLocation(sceneProgram, 'u_sampler'),
+            color: gl.getUniformLocation(sceneProgram, 'u_color'),
+            useTexture: gl.getUniformLocation(sceneProgram, 'u_useTexture'),
+            shadowMap: gl.getUniformLocation(sceneProgram, 'u_shadowMap'),
+            isUnlit: gl.getUniformLocation(sceneProgram, 'u_isUnlit'),
+            shadowMapTexelSize: gl.getUniformLocation(sceneProgram, 'u_shadowMapTexelSize'),
+            numPointLights: gl.getUniformLocation(sceneProgram, 'u_numPointLights'),
+            pointLights: [],
+            numSpotLights: gl.getUniformLocation(sceneProgram, 'u_numSpotLights'),
+            spotLights: [],
+        },
+    };
 
-export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix, cameraPosition) {
-    const { gl, programInfo } = webglContext;
-
-    if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
-        gl.viewport(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < 4; i++) { // MAX_POINT_LIGHTS = 4
+        sceneProgramInfo.uniformLocations.pointLights.push({
+            position: gl.getUniformLocation(sceneProgram, `u_pointLights[${i}].position`),
+            color: gl.getUniformLocation(sceneProgram, `u_pointLights[${i}].color`),
+            constant: gl.getUniformLocation(sceneProgram, `u_pointLights[${i}].constant`),
+            linear: gl.getUniformLocation(sceneProgram, `u_pointLights[${i}].linear`),
+            quadratic: gl.getUniformLocation(sceneProgram, `u_pointLights[${i}].quadratic`),
+        });
     }
 
-    gl.clearColor(0.13, 0.13, 0.13, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.enable(gl.DEPTH_TEST);
+    for (let i = 0; i < 4; i++) { // MAX_SPOT_LIGHTS = 4
+        sceneProgramInfo.uniformLocations.spotLights.push({
+            position: gl.getUniformLocation(sceneProgram, `u_spotLights[${i}].position`),
+            direction: gl.getUniformLocation(sceneProgram, `u_spotLights[${i}].direction`),
+            color: gl.getUniformLocation(sceneProgram, `u_spotLights[${i}].color`),
+            cutOff: gl.getUniformLocation(sceneProgram, `u_spotLights[${i}].cutOff`),
+            outerCutOff: gl.getUniformLocation(sceneProgram, `u_spotLights[${i}].outerCutOff`),
+            constant: gl.getUniformLocation(sceneProgram, `u_spotLights[${i}].constant`),
+            linear: gl.getUniformLocation(sceneProgram, `u_spotLights[${i}].linear`),
+            quadratic: gl.getUniformLocation(sceneProgram, `u_spotLights[${i}].quadratic`),
+        });
+    }
 
-    gl.useProgram(programInfo.program);
+    // --- Framebuffer para el mapa de sombras ---
+    const depthTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, depthTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
-    gl.uniformMatrix4fv(programInfo.uniformLocations.viewMatrix, false, viewMatrix);
+    const depthFramebuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, depthFramebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depthTexture, 0);
 
-    // Set lighting uniforms
-    const lightDirection = [0.5, 0.7, 1.0];
-    const normalizedLightDirection = new Float32Array(lightDirection.length);
-    const len = Math.sqrt(lightDirection[0] * lightDirection[0] + lightDirection[1] * lightDirection[1] + lightDirection[2] * lightDirection[2]);
-    normalizedLightDirection[0] = lightDirection[0] / len;
-    normalizedLightDirection[1] = lightDirection[1] / len;
-    normalizedLightDirection[2] = lightDirection[2] / len;
-    gl.uniform3fv(programInfo.uniformLocations.lightDirection, normalizedLightDirection);
+    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    if (status !== gl.FRAMEBUFFER_COMPLETE) {
+        console.error('El framebuffer de profundidad no está completo:', status);
+    }
 
-    // Set camera position uniform for specular lighting
-    gl.uniform3fv(programInfo.uniformLocations.viewPosition, cameraPosition);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
+    return { gl, sceneProgramInfo, depthProgramInfo, depthFramebuffer, depthTexture };
+}
 
+function renderScene(gl, programInfo, scene, isDepthPass, lightSpaceMatrix) {
     for (const gameObject of scene.gameObjects) {
-        if (!gameObject.mesh) {
-            continue; // Skip objects without a mesh
+        if (!gameObject.mesh) continue;
+
+        const modelMatrix = gameObject.getModelMatrix();
+        gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, modelMatrix);
+
+        if (!isDepthPass) {
+            gl.uniform1i(programInfo.uniformLocations.isUnlit, gameObject.material.isUnlit ? 1 : 0);
+            gl.uniform1f(programInfo.uniformLocations.shininess, gameObject.material.shininess);
+            if (gameObject.material.texture) {
+                gameObject.material.texture.bind(0);
+                gl.uniform1i(programInfo.uniformLocations.sampler, 0);
+                gl.uniform1i(programInfo.uniformLocations.useTexture, 1);
+            } else {
+                gl.uniform1i(programInfo.uniformLocations.useTexture, 0);
+                gl.uniform3fv(programInfo.uniformLocations.color, gameObject.material.color);
+            }
+            const normalMatrix = mat4.create();
+            mat4.invert(normalMatrix, modelMatrix);
+            mat4.transpose(normalMatrix, normalMatrix);
+            gl.uniformMatrix4fv(programInfo.uniformLocations.normalMatrix, false, normalMatrix);
         }
 
-        gl.uniform1f(programInfo.uniformLocations.shininess, gameObject.material.shininess);
-
-        // Bind texture and set uniforms
-        if (gameObject.material.texture) {
-            gameObject.material.texture.bind(0); // Bind to texture unit 0
-            gl.uniform1i(programInfo.uniformLocations.sampler, 0); // Tell the shader to use texture unit 0
-            gl.uniform1i(programInfo.uniformLocations.useTexture, 1); // true
-        } else {
-            gl.uniform1i(programInfo.uniformLocations.useTexture, 0); // false
-            gl.uniform3fv(programInfo.uniformLocations.color, gameObject.material.color);
-        }
-
-        // Bind the vertex buffer
         gl.bindBuffer(gl.ARRAY_BUFFER, gameObject.mesh.vertexBuffer);
         gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
 
-        // Bind the normal buffer
-        gl.bindBuffer(gl.ARRAY_BUFFER, gameObject.mesh.normalBuffer);
-        gl.vertexAttribPointer(programInfo.attribLocations.vertexNormal, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(programInfo.attribLocations.vertexNormal);
+        if (!isDepthPass) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, gameObject.mesh.normalBuffer);
+            gl.vertexAttribPointer(programInfo.attribLocations.vertexNormal, 3, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(programInfo.attribLocations.vertexNormal);
+            gl.bindBuffer(gl.ARRAY_BUFFER, gameObject.mesh.uvBuffer);
+            gl.vertexAttribPointer(programInfo.attribLocations.textureCoord, 2, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(programInfo.attribLocations.textureCoord);
+        }
 
-        // Bind the UV buffer
-        gl.bindBuffer(gl.ARRAY_BUFFER, gameObject.mesh.uvBuffer);
-        gl.vertexAttribPointer(programInfo.attribLocations.textureCoord, 2, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(programInfo.attribLocations.textureCoord);
-
-        // Bind the index buffer
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gameObject.mesh.indexBuffer);
-
-        // Set the model matrix uniform
-        const modelMatrix = gameObject.getModelMatrix();
-        gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, modelMatrix);
-
-        // Calculate and set the normal matrix
-        const normalMatrix = new Float32Array(16);
-        mat4.invert(normalMatrix, modelMatrix);
-        mat4.transpose(normalMatrix, normalMatrix);
-        gl.uniformMatrix4fv(programInfo.uniformLocations.normalMatrix, false, normalMatrix);
-
-        // Draw the object
         gl.drawElements(gl.TRIANGLES, gameObject.mesh.vertexCount, gl.UNSIGNED_SHORT, 0);
     }
+}
+
+
+export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix, cameraPosition) {
+    const { gl, sceneProgramInfo, depthProgramInfo, depthFramebuffer, depthTexture } = webglContext;
+
+    const lightSpaceMatrix = scene.directionalLight.getLightSpaceMatrix();
+
+    // --- 1. Pase de Profundidad (Render desde la perspectiva de la luz) ---
+    gl.bindFramebuffer(gl.FRAMEBUFFER, depthFramebuffer);
+    gl.viewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.cullFace(gl.FRONT);
+
+    gl.useProgram(depthProgramInfo.program);
+    gl.uniformMatrix4fv(depthProgramInfo.uniformLocations.lightSpaceMatrix, false, lightSpaceMatrix);
+    renderScene(gl, depthProgramInfo, scene, true);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.cullFace(gl.BACK);
+
+    // --- 2. Pase de la Escena (Render normal desde la cámara) ---
+    if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+    }
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.clearColor(0.13, 0.13, 0.13, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+    gl.useProgram(sceneProgramInfo.program);
+
+    gl.uniformMatrix4fv(sceneProgramInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
+    gl.uniformMatrix4fv(sceneProgramInfo.uniformLocations.viewMatrix, false, viewMatrix);
+    gl.uniformMatrix4fv(sceneProgramInfo.uniformLocations.lightSpaceMatrix, false, lightSpaceMatrix);
+    gl.uniform3fv(sceneProgramInfo.uniformLocations.viewPosition, cameraPosition);
+
+    const lightDir = scene.directionalLight.position;
+    const normalizedLightDir = new Float32Array(3);
+    const len = Math.sqrt(lightDir[0]*lightDir[0] + lightDir[1]*lightDir[1] + lightDir[2]*lightDir[2]);
+    normalizedLightDir[0] = lightDir[0] / len;
+    normalizedLightDir[1] = lightDir[1] / len;
+    normalizedLightDir[2] = lightDir[2] / len;
+    gl.uniform3fv(sceneProgramInfo.uniformLocations.lightDirection, normalizedLightDir);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, depthTexture);
+    gl.uniform1i(sceneProgramInfo.uniformLocations.shadowMap, 1);
+
+    gl.uniform2f(sceneProgramInfo.uniformLocations.shadowMapTexelSize, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+
+    // --- Cargar datos de las Point Lights ---
+    const numPointLights = scene.pointLights.length;
+    gl.uniform1i(sceneProgramInfo.uniformLocations.numPointLights, numPointLights);
+
+    for (let i = 0; i < numPointLights; i++) {
+        const light = scene.pointLights[i];
+        const locations = sceneProgramInfo.uniformLocations.pointLights[i];
+        gl.uniform3fv(locations.position, light.position);
+        gl.uniform3fv(locations.color, light.color);
+        gl.uniform1f(locations.constant, light.constant);
+        gl.uniform1f(locations.linear, light.linear);
+        gl.uniform1f(locations.quadratic, light.quadratic);
+    }
+
+    // --- Cargar datos de las Spot Lights ---
+    const numSpotLights = scene.spotLights.length;
+    gl.uniform1i(sceneProgramInfo.uniformLocations.numSpotLights, numSpotLights);
+
+    for (let i = 0; i < numSpotLights; i++) {
+        const light = scene.spotLights[i];
+        const locations = sceneProgramInfo.uniformLocations.spotLights[i];
+        gl.uniform3fv(locations.position, light.position);
+        gl.uniform3fv(locations.direction, light.direction);
+        gl.uniform3fv(locations.color, light.color);
+        gl.uniform1f(locations.cutOff, light.cutOff);
+        gl.uniform1f(locations.outerCutOff, light.outerCutOff);
+        gl.uniform1f(locations.constant, light.constant);
+        gl.uniform1f(locations.linear, light.linear);
+        gl.uniform1f(locations.quadratic, light.quadratic);
+    }
+
+    renderScene(gl, sceneProgramInfo, scene, false);
 }
