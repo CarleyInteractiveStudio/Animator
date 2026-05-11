@@ -11,7 +11,6 @@ export class GameObject {
         this.material = new Material();
         this.transform = {
             position: vec3.create(),
-            // Let's use Euler angles (pitch, yaw, roll) for easier UI manipulation
             rotation: {
                 pitch: 0,
                 yaw: 0,
@@ -19,6 +18,7 @@ export class GameObject {
             },
             scale: vec3.fromValues(1, 1, 1),
         };
+        this.keyframes = []; // Array of { time, position, rotation, scale }
     }
 
     getModelMatrix() {
@@ -32,5 +32,53 @@ export class GameObject {
             this.transform.scale
         );
         return modelMatrix;
+    }
+
+    addKeyframe(time) {
+        // Remove existing keyframe at same time
+        this.keyframes = this.keyframes.filter(k => k.time !== time);
+        this.keyframes.push({
+            time: time,
+            position: vec3.clone(this.transform.position),
+            rotation: { ...this.transform.rotation },
+            scale: vec3.clone(this.transform.scale)
+        });
+        this.keyframes.sort((a, b) => a.time - b.time);
+    }
+
+    applyAnimation(time) {
+        if (this.keyframes.length === 0) return;
+
+        // Find surrounding keyframes
+        let prev = null;
+        let next = null;
+
+        for (let i = 0; i < this.keyframes.length; i++) {
+            if (this.keyframes[i].time <= time) {
+                prev = this.keyframes[i];
+            } else {
+                next = this.keyframes[i];
+                break;
+            }
+        }
+
+        if (prev && !next) {
+            vec3.copy(this.transform.position, prev.position);
+            Object.assign(this.transform.rotation, prev.rotation);
+            vec3.copy(this.transform.scale, prev.scale);
+        } else if (!prev && next) {
+            vec3.copy(this.transform.position, next.position);
+            Object.assign(this.transform.rotation, next.rotation);
+            vec3.copy(this.transform.scale, next.scale);
+        } else if (prev && next) {
+            const t = (time - prev.time) / (next.time - prev.time);
+
+            vec3.lerp(this.transform.position, prev.position, next.position, t);
+            vec3.lerp(this.transform.scale, prev.scale, next.scale, t);
+
+            this.transform.rotation.pitch = prev.rotation.pitch + (next.rotation.pitch - prev.rotation.pitch) * t;
+            this.transform.rotation.yaw = prev.rotation.yaw + (next.rotation.yaw - prev.rotation.yaw) * t;
+            this.transform.rotation.roll = prev.rotation.roll + (next.rotation.roll - prev.rotation.roll) * t;
+        }
     }
 }
