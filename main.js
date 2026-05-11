@@ -10,11 +10,8 @@ import DirectionalLight from './engine/light.js';
 
 function updateHierarchyPanel() {
     const jerarquiaContent = document.querySelector('#jerarquia-panel .panel-content');
-    if (!jerarquiaContent) {
-        console.error("Hierarchy panel content not found!");
-        return;
-    }
-    jerarquiaContent.innerHTML = ''; // Clear existing content
+    if (!jerarquiaContent) return;
+    jerarquiaContent.innerHTML = '';
 
     const ul = document.createElement('ul');
     ul.className = 'hierarchy-list';
@@ -22,15 +19,12 @@ function updateHierarchyPanel() {
         for (const gameObject of Engine.scene.gameObjects) {
             const li = document.createElement('li');
             li.textContent = gameObject.name;
-            li.dataset.gameObjectId = gameObject.id; // Custom data attribute to find the object
-
             if (Engine.selectedGameObject && Engine.selectedGameObject.id === gameObject.id) {
                 li.classList.add('selected');
             }
-
             li.addEventListener('click', () => {
                 Engine.selectedGameObject = gameObject;
-                updateHierarchyPanel(); // Re-render to update selection highlight
+                updateHierarchyPanel();
                 updateInspectorPanel();
             });
             ul.appendChild(li);
@@ -41,10 +35,7 @@ function updateHierarchyPanel() {
 
 function updateInspectorPanel() {
     const inspectorContent = document.querySelector('#inspector-panel .panel-content');
-    if (!inspectorContent) {
-        console.error("Inspector panel content not found!");
-        return;
-    }
+    if (!inspectorContent) return;
 
     const selected = Engine.selectedGameObject;
     if (selected) {
@@ -53,153 +44,130 @@ function updateInspectorPanel() {
         const scale = selected.transform.scale;
         inspectorContent.innerHTML = `
             <h3>${selected.name}</h3>
-            <div>
-                <strong>Position:</strong>
-                <span>X: ${pos[0].toFixed(2)}, Y: ${pos[1].toFixed(2)}, Z: ${pos[2].toFixed(2)}</span>
-            </div>
-            <div>
-                <strong>Rotation:</strong>
-                <span>X: ${rot.pitch.toFixed(2)}, Y: ${rot.yaw.toFixed(2)}, Z: ${rot.roll.toFixed(2)}</span>
-            </div>
-            <div>
-                <strong>Scale:</strong>
-                <span>X: ${scale[0].toFixed(2)}, Y: ${scale[1].toFixed(2)}, Z: ${scale[2].toFixed(2)}</span>
-            </div>
+            <div><strong>Position:</strong> X: ${pos[0].toFixed(2)}, Y: ${pos[1].toFixed(2)}, Z: ${pos[2].toFixed(2)}</div>
+            <div><strong>Rotation:</strong> P: ${rot.pitch.toFixed(2)}, Y: ${rot.yaw.toFixed(2)}, R: ${rot.roll.toFixed(2)}</div>
+            <div><strong>Scale:</strong> X: ${scale[0].toFixed(2)}, Y: ${scale[1].toFixed(2)}, Z: ${scale[2].toFixed(2)}</div>
+            <div><strong>Keyframes:</strong> ${selected.keyframes.length}</div>
         `;
     } else {
         inspectorContent.innerHTML = '<p>No object selected</p>';
     }
 }
 
+function initUI() {
+    const modeSelector = document.getElementById('mode-selector');
+    const objectTools = document.getElementById('object-tools');
+    const sculptTools = document.getElementById('sculpt-tools');
+    const timelinePanel = document.getElementById('timeline-panel');
+    const animSlider = document.getElementById('anim-slider');
+    const animTimeLabel = document.getElementById('anim-time');
+    const playBtn = document.getElementById('anim-play');
+
+    modeSelector.addEventListener('change', (e) => {
+        Engine.mode = e.target.value;
+        objectTools.style.display = Engine.mode === 'object' ? 'flex' : 'none';
+        sculptTools.style.display = Engine.mode === 'sculpt' ? 'flex' : 'none';
+        timelinePanel.style.display = Engine.mode === 'animate' ? 'flex' : 'none';
+    });
+
+    document.getElementById('sculpt-radius').addEventListener('input', (e) => {
+        Engine.sculptRadius = parseFloat(e.target.value);
+    });
+    document.getElementById('sculpt-strength').addEventListener('input', (e) => {
+        Engine.sculptStrength = parseFloat(e.target.value);
+    });
+
+    animSlider.addEventListener('input', (e) => {
+        Engine.animationTime = parseFloat(e.target.value);
+        animTimeLabel.textContent = `${Math.floor(Engine.animationTime)} / ${Engine.maxAnimationTime}`;
+    });
+
+    playBtn.addEventListener('click', () => {
+        Engine.isPlaying = !Engine.isPlaying;
+        playBtn.textContent = Engine.isPlaying ? 'Pause' : 'Play';
+    });
+
+    document.getElementById('anim-record').addEventListener('click', () => {
+        Engine.addKeyframe();
+        updateInspectorPanel();
+    });
+
+    const toolButtons = {
+        'translate': document.getElementById('tool-translate'),
+        'rotate': document.getElementById('tool-rotate'),
+        'scale': document.getElementById('tool-scale')
+    };
+
+    Object.keys(toolButtons).forEach(mode => {
+        toolButtons[mode].addEventListener('click', () => {
+            Engine.setGizmoMode(mode);
+            Object.values(toolButtons).forEach(btn => btn.classList.remove('active'));
+            toolButtons[mode].classList.add('active');
+        });
+    });
+
+    let lastSelectedId = null;
+    let lastGizmoMode = null;
+
+    // Update slider in loop
+    Engine.setOnUpdate(() => {
+        if (Engine.isPlaying) {
+            animSlider.value = Engine.animationTime;
+            animTimeLabel.textContent = `${Math.floor(Engine.animationTime)} / ${Engine.maxAnimationTime}`;
+            updateInspectorPanel(); // Update if animating
+        }
+
+        // Sync Gizmo buttons with Engine state (e.g. if changed via keyboard)
+        const currentGizmoMode = Engine.gizmoMode;
+        if (currentGizmoMode !== lastGizmoMode) {
+            Object.keys(toolButtons).forEach(mode => {
+                if (mode === currentGizmoMode) {
+                    toolButtons[mode].classList.add('active');
+                } else {
+                    toolButtons[mode].classList.remove('active');
+                }
+            });
+            lastGizmoMode = currentGizmoMode;
+        }
+
+        const selectedId = Engine.selectedGameObject ? Engine.selectedGameObject.id : null;
+        if (selectedId !== lastSelectedId) {
+            updateHierarchyPanel();
+            updateInspectorPanel();
+            lastSelectedId = selectedId;
+        }
+    });
+}
+
 
 function main() {
     try {
-        // Initialize Visor 3D Panel
         const visorContent = document.querySelector('#visor-panel .panel-content');
         if (!visorContent) throw new Error("Visor panel not found");
         const canvas = document.createElement('canvas');
         visorContent.appendChild(canvas);
 
         if (Engine.initialize(canvas)) {
-            // Create meshes to be used by the GameObjects
-            const cubeMesh = Mesh.createCube(Engine.gl);
-            const planeMesh = Mesh.createPlane(Engine.gl);
-            const sphereMesh = Mesh.createSphere(Engine.gl);
+            initUI();
 
-            // Create a texture
-            const stoneTexture = new Texture(Engine.gl, 'https://upload.wikimedia.org/wikipedia/commons/4/4a/Stone_high_definition_texture.jpg');
-
-            // Create test GameObjects
-            const floor = new GameObject('Floor', planeMesh);
-            vec3.set(floor.transform.position, 0, -1.5, 0);
-            vec3.set(floor.transform.scale, 10, 1, 10);
-            floor.material.texture = stoneTexture;
-            floor.material.shininess = 16.0;
-
-            const cube1 = new GameObject('Cube 1', cubeMesh);
-            vec3.set(cube1.transform.position, -2.0, 0, 0);
-            vec3.set(cube1.material.color, 1.0, 0.5, 0.31); // This color will be overridden by the default blue texture for a moment
-            cube1.material.shininess = 32.0;
-
-            const cube2 = new GameObject('Cube 2', cubeMesh);
-            vec3.set(cube2.transform.position, 0, 0, -2.0);
-            vec3.set(cube2.material.color, 0.2, 0.8, 0.2);
-            cube2.material.shininess = 64.0;
-
-            const cube3 = new GameObject('Cube 3', cubeMesh);
-            vec3.set(cube3.transform.position, 2.0, 0, 0);
-            vec3.set(cube3.material.color, 0.3, 0.5, 1.0);
-            cube3.material.shininess = 128.0;
+            const sphereMesh = Mesh.createSphere(Engine.gl, 1.0, 40, 40);
 
             const sphere = new GameObject('Sphere', sphereMesh);
             vec3.set(sphere.transform.position, 0, 0, 0);
-            vec3.set(sphere.material.color, 1.0, 0.8, 0.0);
-            sphere.material.shininess = 256.0;
-
-            // Add them to the scene
-            Engine.scene.addGameObject(floor);
-            Engine.scene.addGameObject(cube1);
-            Engine.scene.addGameObject(cube2);
-            Engine.scene.addGameObject(cube3);
+            vec3.set(sphere.material.color, 0.8, 0.8, 0.8);
             Engine.scene.addGameObject(sphere);
 
-            // Create and set up the directional light
             const light = new DirectionalLight();
             Engine.scene.directionalLight = light;
 
-            // Create a visual representation for the light source
-            const lightVisualizer = new GameObject('Light Source', sphereMesh);
-            vec3.set(lightVisualizer.transform.scale, 0.2, 0.2, 0.2); // Make it small
-            lightVisualizer.material.color = vec3.fromValues(1.0, 1.0, 0.0); // Bright yellow
-            lightVisualizer.material.isUnlit = true;
-            Engine.scene.addGameObject(lightVisualizer);
-
-            // --- Point Lights ---
-            const pointLight1 = new PointLight(vec3.fromValues(3, 2, 2), vec3.fromValues(1, 0, 0)); // Red light
-            Engine.scene.pointLights.push(pointLight1);
-
-            const pointLight1Viz = new GameObject('Point Light 1');
-            pointLight1Viz.mesh = sphereMesh;
-            pointLight1Viz.material = new Material(pointLight1.color);
-            pointLight1Viz.material.isUnlit = true;
-            vec3.set(pointLight1Viz.transform.scale, 0.15, 0.15, 0.15);
-            pointLight1Viz.transform.position = pointLight1.position;
-            Engine.scene.addGameObject(pointLight1Viz);
-
-            const pointLight2 = new PointLight(vec3.fromValues(-3, 2, 2), vec3.fromValues(0, 0, 1)); // Blue light
-            Engine.scene.pointLights.push(pointLight2);
-
-            const pointLight2Viz = new GameObject('Point Light 2');
-            pointLight2Viz.mesh = sphereMesh;
-            pointLight2Viz.material = new Material(pointLight2.color);
-            pointLight2Viz.material.isUnlit = true;
-            vec3.set(pointLight2Viz.transform.scale, 0.15, 0.15, 0.15);
-            pointLight2Viz.transform.position = pointLight2.position;
-            Engine.scene.addGameObject(pointLight2Viz);
-
-            // --- SpotLight (Flashlight) ---
-            // const spotLight = new SpotLight();
-            // Engine.scene.spotLights.push(spotLight);
-
-
-            // Initial UI update
             updateHierarchyPanel();
             updateInspectorPanel();
 
-
-            // Set the update callback and start the engine's game loop
-            Engine.setOnUpdate(() => {
-                const time = performance.now() * 0.001;
-                // Animate Point Light 1
-                pointLight1.position[0] = Math.sin(time) * 3;
-                pointLight1.position[2] = Math.cos(time) * 3;
-                pointLight1Viz.transform.position = pointLight1.position;
-
-                // Animate Directional Light
-                const light = Engine.scene.directionalLight;
-                light.position[0] = Math.sin(time * 0.5) * 10;
-                light.position[2] = Math.cos(time * 0.5) * 10;
-                vec3.copy(lightVisualizer.transform.position, light.position);
-
-                // Update flashlight to follow camera
-                // vec3.copy(spotLight.position, Engine.camera.position);
-                // vec3.copy(spotLight.direction, Engine.camera.front);
-
-                updateHierarchyPanel();
-            });
             Engine.start();
-        } else {
-            throw new Error("Engine initialization failed");
         }
-
     } catch (error) {
         console.error("An error occurred during initialization:", error);
     }
 }
 
-// Ensure the DOM is fully loaded before running the main script
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', main);
-} else {
-    main();
-}
+main();

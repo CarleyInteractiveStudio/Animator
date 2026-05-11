@@ -3,10 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Animation App</title>
+    <title>Carley World Engine - Mini Blender</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div id="toolbar">
+        <div class="tool-group">
+            <select id="mode-selector">
+                <option value="object">Object Mode</option>
+                <option value="sculpt">Sculpt Mode</option>
+                <option value="animate">Animate Mode</option>
+            </select>
+        </div>
+        <div class="tool-group" id="object-tools">
+            <button id="tool-translate" class="active">Translate (G)</button>
+            <button id="tool-rotate">Rotate (R)</button>
+            <button id="tool-scale">Scale (S)</button>
+        </div>
+        <div class="tool-group" id="sculpt-tools" style="display: none;">
+            <label>Radius: <input type="range" id="sculpt-radius" min="0.1" max="2.0" step="0.1" value="0.5"></label>
+            <label>Strength: <input type="range" id="sculpt-strength" min="0.01" max="0.5" step="0.01" value="0.1"></label>
+        </div>
+    </div>
     <div id="app-container">
         <div id="jerarquia-panel" class="panel">
             <div class="panel-title">Jerarquía</div>
@@ -19,6 +37,15 @@
         <div id="inspector-panel" class="panel">
             <div class="panel-title">Inspector</div>
             <div class="panel-content"></div>
+        </div>
+    </div>
+    <div id="timeline-panel" style="display: none;">
+        <div class="panel-title">Timeline</div>
+        <div id="timeline-controls">
+            <button id="anim-play">Play</button>
+            <button id="anim-record">Record Keyframe</button>
+            <input type="range" id="anim-slider" min="0" max="100" value="0">
+            <span id="anim-time">0 / 100</span>
         </div>
     </div>
     <script type="module" src="main.js"></script>

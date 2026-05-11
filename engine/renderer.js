@@ -408,7 +408,7 @@ function renderScene(gl, programInfo, scene, renderOptions) {
     const { isDepthPass = false, isPickingPass = false } = renderOptions;
 
     for (const gameObject of scene.gameObjects) {
-        if (!gameObject.mesh || !gameObject.isSelectable) continue;
+        if (!gameObject.mesh) continue;
 
         const modelMatrix = gameObject.getModelMatrix();
         gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, modelMatrix);
