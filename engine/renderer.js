@@ -16,8 +16,10 @@ export function initWebGL(canvas) {
     `;
 
     const fragmentShaderSource = `
+        precision mediump float;
+        uniform vec4 u_color;
         void main() {
-            gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0); // White
+            gl_FragColor = u_color;
         }
     `;
 
@@ -60,13 +62,14 @@ export function initWebGL(canvas) {
             projectionMatrix: gl.getUniformLocation(program, 'u_projectionMatrix'),
             viewMatrix: gl.getUniformLocation(program, 'u_viewMatrix'),
             modelMatrix: gl.getUniformLocation(program, 'u_modelMatrix'),
+            color: gl.getUniformLocation(program, 'u_color'),
         },
     };
 
     return { gl, programInfo };
 }
 
-export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix) {
+export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix, selectedGameObject = null) {
     const { gl, programInfo } = webglContext;
 
     if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
@@ -75,7 +78,7 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.viewport(0, 0, canvas.width, canvas.height);
     }
 
-    gl.clearColor(0.13, 0.13, 0.13, 1.0);
+    gl.clearColor(0.12, 0.12, 0.12, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
 
@@ -86,22 +89,24 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
 
     for (const gameObject of scene.gameObjects) {
         if (!gameObject.mesh) {
-            continue; // Skip objects without a mesh
+            continue;
         }
 
-        // Bind the vertex buffer for the current object's mesh
         gl.bindBuffer(gl.ARRAY_BUFFER, gameObject.mesh.vertexBuffer);
         gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
 
-        // Bind the index buffer for the current object's mesh
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gameObject.mesh.indexBuffer);
 
-        // Set the model matrix uniform
         const modelMatrix = gameObject.getModelMatrix();
         gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, modelMatrix);
 
-        // Draw the object using its index buffer
+        if (gameObject === selectedGameObject) {
+            gl.uniform4f(programInfo.uniformLocations.color, 0.9, 0.5, 0.1, 1.0); // Orange highlight for selected
+        } else {
+            gl.uniform4f(programInfo.uniformLocations.color, 0.6, 0.6, 0.65, 1.0); // Light gray
+        }
+
         gl.drawElements(gl.TRIANGLES, gameObject.mesh.vertexCount, gl.UNSIGNED_SHORT, 0);
     }
 }

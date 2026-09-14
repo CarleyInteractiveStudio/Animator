@@ -1,21 +1,27 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Animation App</title>
+    <title>3D Animation App - Carley World Engine</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div id="header">
+        <div class="logo">Carley World Engine</div>
+        <div class="status-bar">Modo Objeto</div>
+    </div>
     <div id="app-container">
         <div id="jerarquia-panel" class="panel">
             <div class="panel-title">Jerarquía</div>
             <div class="panel-content"></div>
         </div>
+        <div class="resizer" id="resizer-left"></div>
         <div id="visor-panel" class="panel">
             <div class="panel-title">Visor 3D</div>
             <div class="panel-content"></div>
         </div>
+        <div class="resizer" id="resizer-right"></div>
         <div id="inspector-panel" class="panel">
             <div class="panel-title">Inspector</div>
             <div class="panel-content"></div>

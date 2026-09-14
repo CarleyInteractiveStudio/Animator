@@ -1,47 +1,54 @@
 const keys = {};
 let mouseDelta = { x: 0, y: 0 };
+let isRightMouseDown = false;
+let lastMousePos = { x: 0, y: 0 };
 
 function onKeyDown(event) {
-    keys[event.key] = true;
+    keys[event.key.toLowerCase()] = true;
 }
 
 function onKeyUp(event) {
-    keys[event.key] = false;
-}
-
-function onMouseMove(event) {
-    mouseDelta.x += event.movementX;
-    mouseDelta.y += event.movementY;
+    keys[event.key.toLowerCase()] = false;
 }
 
 export const Input = {
     initialize: (canvas) => {
-        canvas.addEventListener('click', () => {
-            canvas.requestPointerLock();
+        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keyup', onKeyUp);
+
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 2) { // Right click
+                isRightMouseDown = true;
+                lastMousePos = { x: e.clientX, y: e.clientY };
+            }
         });
 
-        document.addEventListener('pointerlockchange', () => {
-            if (document.pointerLockElement === canvas) {
-                document.addEventListener('keydown', onKeyDown);
-                document.addEventListener('keyup', onKeyUp);
-                document.addEventListener('mousemove', onMouseMove);
-            } else {
-                document.removeEventListener('keydown', onKeyDown);
-                document.removeEventListener('keyup', onKeyUp);
-                document.removeEventListener('mousemove', onMouseMove);
-                // Clear key state when losing focus
-                for (const key in keys) {
-                    keys[key] = false;
-                }
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 2) {
+                isRightMouseDown = false;
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isRightMouseDown) {
+                const dx = e.clientX - lastMousePos.x;
+                const dy = e.clientY - lastMousePos.y;
+                mouseDelta.x += dx;
+                mouseDelta.y += dy;
+                lastMousePos = { x: e.clientX, y: e.clientY };
             }
         });
     },
     isKeyDown: (key) => {
-        return keys[key] || false;
+        return keys[key.toLowerCase()] || false;
+    },
+    isRightMouseDown: () => {
+        return isRightMouseDown;
     },
     getMouseDelta: () => {
         const delta = { ...mouseDelta };
-        // Reset after getting the value
         mouseDelta = { x: 0, y: 0 };
         return delta;
     }
