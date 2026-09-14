@@ -3,6 +3,8 @@ import { GameObject } from './engine/gameObject.js';
 import { Mesh } from './engine/mesh.js';
 import { vec3 } from './engine/math.js';
 
+let cubeCount = 3;
+
 function setupResizers() {
     const resizerLeft = document.getElementById('resizer-left');
     const resizerRight = document.getElementById('resizer-right');
@@ -104,21 +106,81 @@ function updateInspectorPanel() {
                 <input type="number" step="0.1" id="pos-z" value="${selectedObject.transform.position[2].toFixed(2)}">
             </div>
         </div>
+        <div class="inspector-section">
+            <div class="inspector-section-title">Rotación (º)</div>
+            <div class="input-group-row">
+                <label class="label-x">X</label>
+                <input type="number" step="1" id="rot-x" value="${selectedObject.transform.rotationDegrees[0].toFixed(1)}">
+            </div>
+            <div class="input-group-row">
+                <label class="label-y">Y</label>
+                <input type="number" step="1" id="rot-y" value="${selectedObject.transform.rotationDegrees[1].toFixed(1)}">
+            </div>
+            <div class="input-group-row">
+                <label class="label-z">Z</label>
+                <input type="number" step="1" id="rot-z" value="${selectedObject.transform.rotationDegrees[2].toFixed(1)}">
+            </div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-section-title">Escala</div>
+            <div class="input-group-row">
+                <label class="label-x">X</label>
+                <input type="number" step="0.1" id="scale-x" value="${selectedObject.transform.scale[0].toFixed(2)}">
+            </div>
+            <div class="input-group-row">
+                <label class="label-y">Y</label>
+                <input type="number" step="0.1" id="scale-y" value="${selectedObject.transform.scale[1].toFixed(2)}">
+            </div>
+            <div class="input-group-row">
+                <label class="label-z">Z</label>
+                <input type="number" step="0.1" id="scale-z" value="${selectedObject.transform.scale[2].toFixed(2)}">
+            </div>
+        </div>
     `;
 
     const posXInput = inspectorContent.querySelector('#pos-x');
     const posYInput = inspectorContent.querySelector('#pos-y');
     const posZInput = inspectorContent.querySelector('#pos-z');
 
-    const updatePosition = () => {
+    const rotXInput = inspectorContent.querySelector('#rot-x');
+    const rotYInput = inspectorContent.querySelector('#rot-y');
+    const rotZInput = inspectorContent.querySelector('#rot-z');
+
+    const scaleXInput = inspectorContent.querySelector('#scale-x');
+    const scaleYInput = inspectorContent.querySelector('#scale-y');
+    const scaleZInput = inspectorContent.querySelector('#scale-z');
+
+    const updateTransform = () => {
         selectedObject.transform.position[0] = parseFloat(posXInput.value) || 0;
         selectedObject.transform.position[1] = parseFloat(posYInput.value) || 0;
         selectedObject.transform.position[2] = parseFloat(posZInput.value) || 0;
+
+        const rx = parseFloat(rotXInput.value) || 0;
+        const ry = parseFloat(rotYInput.value) || 0;
+        const rz = parseFloat(rotZInput.value) || 0;
+        selectedObject.setRotationDegrees(rx, ry, rz);
+
+        selectedObject.transform.scale[0] = parseFloat(scaleXInput.value) || 1;
+        selectedObject.transform.scale[1] = parseFloat(scaleYInput.value) || 1;
+        selectedObject.transform.scale[2] = parseFloat(scaleZInput.value) || 1;
     };
 
-    posXInput.addEventListener('input', updatePosition);
-    posYInput.addEventListener('input', updatePosition);
-    posZInput.addEventListener('input', updatePosition);
+    [posXInput, posYInput, posZInput, rotXInput, rotYInput, rotZInput, scaleXInput, scaleYInput, scaleZInput].forEach(input => {
+        if (input) input.addEventListener('input', updateTransform);
+    });
+}
+
+function setupMenuEvents(cubeMesh) {
+    const btnAddCube = document.getElementById('btn-add-cube');
+    if (btnAddCube) {
+        btnAddCube.addEventListener('click', () => {
+            cubeCount++;
+            const newCube = new GameObject(`Cubo ${cubeCount}`, cubeMesh);
+            vec3.set(newCube.transform.position, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 4);
+            Engine.scene.addGameObject(newCube);
+            selectObject(newCube);
+        });
+    }
 }
 
 function main() {
@@ -132,6 +194,7 @@ function main() {
 
         if (Engine.initialize(canvas)) {
             const cubeMesh = Mesh.createCube(Engine.gl);
+            setupMenuEvents(cubeMesh);
 
             const cube1 = new GameObject('Cubo 1', cubeMesh);
             vec3.set(cube1.transform.position, -2.0, 0, 0);

@@ -8,7 +8,39 @@
 </head>
 <body>
     <div id="header">
-        <div class="logo">Carley World Engine</div>
+        <div class="menu-bar">
+            <div class="menu-item">
+                <span>Archivo</span>
+                <div class="dropdown-menu">
+                    <div class="dropdown-item disabled">Nuevo</div>
+                    <div class="dropdown-item disabled">Abrir Escena</div>
+                    <div class="dropdown-item disabled">Guardar Escena</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item disabled">Importar Modelo...</div>
+                </div>
+            </div>
+            <div class="menu-item">
+                <span>Editar</span>
+                <div class="dropdown-menu">
+                    <div class="dropdown-item disabled">Deshacer</div>
+                    <div class="dropdown-item disabled">Rehacer</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item disabled">Preferencias</div>
+                </div>
+            </div>
+            <div class="menu-item">
+                <span>Crear</span>
+                <div class="dropdown-menu">
+                    <div class="dropdown-item" id="btn-add-cube">Malla -> Cubo</div>
+                </div>
+            </div>
+            <div class="menu-item">
+                <span>Ventana</span>
+                <div class="dropdown-menu">
+                    <div class="dropdown-item">Restablecer Layout</div>
+                </div>
+            </div>
+        </div>
         <div class="status-bar">Modo Objeto</div>
     </div>
     <div id="app-container">
