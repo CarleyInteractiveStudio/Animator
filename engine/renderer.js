@@ -1,4 +1,4 @@
-import { mat3 } from './math.js';
+import { mat3, mat4 } from './math.js';
 
 export function initWebGL(canvas) {
     const gl = canvas.getContext('webgl');
@@ -123,7 +123,7 @@ export function initWebGL(canvas) {
     return { gl, programInfo };
 }
 
-export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix, selectedGameObject = null, gizmo = null, mode = 'object', tool = 'translate', brushRadius = 0.8) {
+export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix, selectedGameObject = null, gizmo = null, mode = 'object', tool = 'translate', brushRadius = 0.8, grid = null) {
     const { gl, programInfo } = webglContext;
 
     if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
@@ -140,8 +140,29 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
 
     gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
     gl.uniformMatrix4fv(programInfo.uniformLocations.viewMatrix, false, viewMatrix);
-    gl.uniform3f(programInfo.uniformLocations.lightDirection, 0.5, 1.0, 0.7);
 
+    // Get primary light direction if scene has a LightComponent, else default
+    let lightDir = [0.5, 1.0, 0.7];
+    if (scene && scene.gameObjects) {
+        for (const obj of scene.gameObjects) {
+            if (obj.components) {
+                const lightComp = obj.components.find(c => c.type === 'light');
+                if (lightComp && lightComp.enabled) {
+                    lightDir = lightComp.direction || lightDir;
+                    break;
+                }
+            }
+        }
+    }
+    gl.uniform3f(programInfo.uniformLocations.lightDirection, lightDir[0], lightDir[1], lightDir[2]);
+
+    // Render 3D Grid Floor first
+    if (grid) {
+        const identityMatrix = mat4.create();
+        grid.render(gl, programInfo, identityMatrix);
+    }
+
+    // Render GameObjects
     for (const gameObject of scene.gameObjects) {
         if (!gameObject.mesh) {
             continue;
@@ -181,8 +202,8 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.drawElements(gl.TRIANGLES, gameObject.mesh.vertexCount, gl.UNSIGNED_SHORT, 0);
     }
 
+    // Render Gizmo
     if (gizmo && selectedGameObject) {
-        // Gizmos are unlit so colors are vibrant
         gl.uniform1i(programInfo.uniformLocations.isUnlit, 1);
         gl.uniform1i(programInfo.uniformLocations.isSelected, 0);
         gl.uniform4f(programInfo.uniformLocations.materialColor, 1.0, 1.0, 1.0, 1.0);

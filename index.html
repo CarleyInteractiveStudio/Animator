@@ -61,6 +61,18 @@
                     <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
                 </div>
             </div>
+            <div class="menu-item">
+                <span>Ventana</span>
+                <div class="dropdown-menu">
+                    <div class="dropdown-item" id="layout-default">Layout por Defecto</div>
+                    <div class="dropdown-item" id="layout-animation">Layout de Animación</div>
+                    <div class="dropdown-item" id="layout-sculpt">Layout de Escultura</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" id="toggle-timeline">Mostrar / Ocultar Timeline</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" id="layout-reset">Restablecer Ventanas</div>
+                </div>
+            </div>
         </div>
         <div class="status-bar" id="status-mode">
             <span class="status-dot">●</span>
@@ -71,76 +83,118 @@
     <!-- Hidden file input for opening JSON scene -->
     <input type="file" id="file-input-json" accept=".json" style="display: none;" />
 
-    <div id="app-container">
-        <div id="jerarquia-panel" class="panel">
-            <div class="panel-header-actions">
-                <div class="panel-title">Jerarquía</div>
-                <div class="menu-item add-btn">
-                    <span>+ Crear</span>
-                    <div class="dropdown-menu">
-                        <div class="dropdown-item" data-create="cube">Cubo</div>
-                        <div class="dropdown-item" data-create="sphere">Esfera</div>
-                        <div class="dropdown-item" data-create="plane">Plano</div>
-                        <div class="dropdown-item" data-create="cylinder">Cilindro</div>
-                        <div class="dropdown-item" data-create="cone">Cono</div>
-                        <div class="dropdown-item" data-create="pyramid">Pirámide</div>
-                        <div class="dropdown-item" data-create="ramp">Prisma / Rampa</div>
-                        <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
+    <div id="main-layout-wrapper">
+        <div id="app-container">
+            <div id="jerarquia-panel" class="panel">
+                <div class="panel-header-tabs">
+                    <div class="panel-tab active" data-tab="hierarchy">
+                        <span>📋 Jerarquía</span>
                     </div>
                 </div>
+                <div class="panel-header-actions">
+                    <div class="menu-item add-btn">
+                        <span>+ Crear</span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-item" data-create="cube">Cubo</div>
+                            <div class="dropdown-item" data-create="sphere">Esfera</div>
+                            <div class="dropdown-item" data-create="plane">Plano</div>
+                            <div class="dropdown-item" data-create="cylinder">Cilindro</div>
+                            <div class="dropdown-item" data-create="cone">Cono</div>
+                            <div class="dropdown-item" data-create="pyramid">Pirámide</div>
+                            <div class="dropdown-item" data-create="ramp">Prisma / Rampa</div>
+                            <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel-content"></div>
             </div>
-            <div class="panel-content"></div>
+
+            <div class="resizer" id="resizer-left"></div>
+
+            <div id="visor-panel" class="panel">
+                <div class="panel-header-tabs">
+                    <div class="panel-tab active" data-tab="visor">
+                        <span>🌐 Visor 3D</span>
+                    </div>
+                </div>
+                <!-- Overlay Toolbar inside 3D Viewport -->
+                <div id="viewport-toolbar">
+                    <div class="tool-category" id="cat-transform">
+                        <button class="tool-btn active" title="Transformación">
+                            <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13 6v5h5V8.5L22 12l-4 3.5V13h-5v5h2.5L12 22l-3.5-4H11v-5H6v2.5L2 12l4-3.5V11h5V6H8.5L12 2l3.5 4H13z"/></svg>
+                            <span>Transformar</span>
+                        </button>
+                        <div class="tool-submenu">
+                            <div class="submenu-item active" data-tool="translate">Mover (G)</div>
+                            <div class="submenu-item" data-tool="rotate">Rotar (R)</div>
+                            <div class="submenu-item" data-tool="scale">Escalar (S)</div>
+                        </div>
+                    </div>
+
+                    <div class="tool-category" id="cat-sculpt">
+                        <button class="tool-btn" title="Esculpir">
+                            <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                            <span>Esculpir</span>
+                        </button>
+                        <div class="tool-submenu">
+                            <div class="submenu-item" data-tool="deform">Pincel Deformar</div>
+                            <div class="submenu-item" data-tool="inflate">Pincel Inflar</div>
+                            <div class="submenu-item" data-tool="smooth">Pincel Suavizar</div>
+                        </div>
+                    </div>
+
+                    <div class="tool-category" id="cat-paint">
+                        <button class="tool-btn" title="Pintar">
+                            <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61.43.53.63 1.2.53 1.87-.19 1.34-.3 2.14-.3 2.14 0 .39.32.71.71.71h2.24c.59 0 1.15-.22 1.58-.62L11 20.42c.31-.29.72-.45 1.15-.45 4.88 0 8.85-3.9 8.85-8.81 0-4.52-3.66-8.16-9-8.16zM6.5 11.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3-3.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm5 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3 3.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                            <span>Pintar</span>
+                        </button>
+                        <div class="tool-submenu">
+                            <div class="submenu-item" data-tool="brush">Pincel de Color</div>
+                            <div class="submenu-item" data-tool="eraser">Borrador</div>
+                            <div class="submenu-item" data-tool="fill">Relleno Completo</div>
+                        </div>
+                    </div>
+
+                    <div class="tool-category" id="cat-anim">
+                        <button class="tool-btn" id="btn-mode-anim" title="Animación">
+                            <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+                            <span>Animar</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-content"></div>
+            </div>
+
+            <div class="resizer" id="resizer-right"></div>
+
+            <div id="inspector-panel" class="panel">
+                <div class="panel-header-tabs">
+                    <div class="panel-tab active" data-tab="inspector">
+                        <span>⚙️ Inspector</span>
+                    </div>
+                </div>
+                <div class="panel-content"></div>
+            </div>
         </div>
 
-        <div class="resizer" id="resizer-left"></div>
-
-        <div id="visor-panel" class="panel">
-            <!-- Overlay Toolbar inside 3D Viewport -->
-            <div id="viewport-toolbar">
-                <div class="tool-category" id="cat-transform">
-                    <button class="tool-btn active" title="Transformación">
-                        <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13 6v5h5V8.5L22 12l-4 3.5V13h-5v5h2.5L12 22l-3.5-4H11v-5H6v2.5L2 12l4-3.5V11h5V6H8.5L12 2l3.5 4H13z"/></svg>
-                        <span>Transformar</span>
-                    </button>
-                    <div class="tool-submenu">
-                        <div class="submenu-item active" data-tool="translate">Mover (G)</div>
-                        <div class="submenu-item" data-tool="rotate">Rotar (R)</div>
-                        <div class="submenu-item" data-tool="scale">Escalar (S)</div>
-                    </div>
+        <!-- Timeline Bottom Panel -->
+        <div id="timeline-panel" class="panel hidden">
+            <div class="panel-header-tabs">
+                <div class="panel-tab active">
+                    <span>🎬 Línea de Tiempo (Animación)</span>
                 </div>
-
-                <div class="tool-category" id="cat-sculpt">
-                    <button class="tool-btn" title="Esculpir">
-                        <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-                        <span>Esculpir</span>
+                <div class="timeline-controls">
+                    <button class="btn-icon" id="anim-rewind" title="Rebobinar (Frame 0)">⏮</button>
+                    <button class="btn-icon btn-primary" id="anim-play" title="Reproducir / Pausar">▶</button>
+                    <button class="btn-secondary" id="anim-add-keyframe" title="Insertar Keyframe">
+                        <span>🔑 Insertar Keyframe</span>
                     </button>
-                    <div class="tool-submenu">
-                        <div class="submenu-item" data-tool="deform">Pincel Deformar</div>
-                        <div class="submenu-item" data-tool="inflate">Pincel Inflar</div>
-                        <div class="submenu-item" data-tool="smooth">Pincel Suavizar</div>
-                    </div>
-                </div>
-
-                <div class="tool-category" id="cat-paint">
-                    <button class="tool-btn" title="Pintar">
-                        <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61.43.53.63 1.2.53 1.87-.19 1.34-.3 2.14-.3 2.14 0 .39.32.71.71.71h2.24c.59 0 1.15-.22 1.58-.62L11 20.42c.31-.29.72-.45 1.15-.45 4.88 0 8.85-3.9 8.85-8.81 0-4.52-3.66-8.16-9-8.16zM6.5 11.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3-3.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm5 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3 3.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
-                        <span>Pintar</span>
-                    </button>
-                    <div class="tool-submenu">
-                        <div class="submenu-item" data-tool="brush">Pincel de Color</div>
-                        <div class="submenu-item" data-tool="eraser">Borrador</div>
-                        <div class="submenu-item" data-tool="fill">Relleno Completo</div>
-                    </div>
+                    <span class="fps-badge">Frame: <strong id="current-frame-lbl">0</strong> / 100</span>
                 </div>
             </div>
-            <div class="panel-content"></div>
-        </div>
-
-        <div class="resizer" id="resizer-right"></div>
-
-        <div id="inspector-panel" class="panel">
-            <div class="panel-title">Inspector</div>
-            <div class="panel-content"></div>
+            <div class="timeline-slider-container">
+                <input type="range" min="0" max="100" value="0" id="timeline-slider" class="timeline-slider">
+            </div>
         </div>
     </div>
     <script type="module" src="main.js"></script>

@@ -4,6 +4,8 @@ import { Mesh } from './engine/mesh.js';
 import { Sculpt } from './engine/sculpt.js';
 import { Paint } from './engine/paint.js';
 import { vec3 } from './engine/math.js';
+import { AnimationManager } from './engine/animation.js';
+import { LightComponent, AutoRotateComponent } from './engine/components.js';
 
 let objectCounters = {
     cube: 1,
@@ -15,6 +17,8 @@ let objectCounters = {
     ramp: 0,
     torus: 0
 };
+
+export const animationManager = new AnimationManager(Engine);
 
 // --- History / Undo System ---
 export class HistoryManager {
@@ -31,7 +35,7 @@ export class HistoryManager {
         if (this.undoStack.length > this.maxHistory) {
             this.undoStack.shift();
         }
-        this.redoStack = []; // Clear redo on new action
+        this.redoStack = [];
     }
 
     undo() {
@@ -88,8 +92,8 @@ function setupResizers() {
         document.body.style.userSelect = 'none';
     }
 
-    resizerLeft.addEventListener('mousedown', (e) => initResize(e, resizerLeft));
-    resizerRight.addEventListener('mousedown', (e) => initResize(e, resizerRight));
+    if (resizerLeft) resizerLeft.addEventListener('mousedown', (e) => initResize(e, resizerLeft));
+    if (resizerRight) resizerRight.addEventListener('mousedown', (e) => initResize(e, resizerRight));
 
     window.addEventListener('mousemove', (e) => {
         if (!activeResizer) return;
@@ -236,6 +240,34 @@ export function updateInspectorPanel() {
 
     const mat = selectedObject.material || { color: [0.85, 0.85, 0.85, 1.0], shininess: 32.0, isUnlit: false };
 
+    let componentsHTML = '';
+    if (selectedObject.components && selectedObject.components.length > 0) {
+        for (const comp of selectedObject.components) {
+            componentsHTML += `
+                <div class="component-card" data-comp-id="${comp.id}">
+                    <div class="component-header">
+                        <span>🧩 ${comp.name}</span>
+                        <button class="action-icon-btn btn-del-comp" title="Eliminar Componente" data-comp-id="${comp.id}">🗑️</button>
+                    </div>
+                    <div class="component-body">
+                        ${comp.type === 'autoRotate' ? `
+                            <div class="control-group">
+                                <span class="control-label">Velocidad Y (º/s)</span>
+                                <input type="number" class="control-input-text comp-input-speedy" value="${comp.speedY}">
+                            </div>
+                        ` : ''}
+                        ${comp.type === 'light' ? `
+                            <div class="control-group">
+                                <span class="control-label">Intensidad</span>
+                                <input type="range" min="0" max="3" step="0.1" class="control-range comp-input-intensity" value="${comp.intensity}">
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+    }
+
     inspectorContent.innerHTML = `
         <!-- Object General Section -->
         <div class="inspector-section">
@@ -332,6 +364,23 @@ export function updateInspectorPanel() {
             </div>
         </div>
 
+        <!-- Components Section -->
+        <div class="inspector-section">
+            <div class="inspector-section-title">
+                <span>Componentes</span>
+                <div class="menu-item add-btn" id="btn-add-comp-menu">
+                    <span>+ Componente</span>
+                    <div class="dropdown-menu">
+                        <div class="dropdown-item" id="add-comp-autorotate">Rotación Automática</div>
+                        <div class="dropdown-item" id="add-comp-light">Luz Direccional</div>
+                    </div>
+                </div>
+            </div>
+            <div id="components-list">
+                ${componentsHTML}
+            </div>
+        </div>
+
         <!-- Tool / Brush Section -->
         ${Engine.mode === 'sculpt' || Engine.mode === 'paint' ? `
         <div class="inspector-section">
@@ -369,6 +418,52 @@ export function updateInspectorPanel() {
     if (btnDel) {
         btnDel.addEventListener('click', () => deleteObject(selectedObject));
     }
+
+    // Add Component Events
+    const addAutoRotate = inspectorContent.querySelector('#add-comp-autorotate');
+    if (addAutoRotate) {
+        addAutoRotate.addEventListener('click', () => {
+            selectedObject.addComponent(new AutoRotateComponent());
+            updateInspectorPanel();
+        });
+    }
+
+    const addLight = inspectorContent.querySelector('#add-comp-light');
+    if (addLight) {
+        addLight.addEventListener('click', () => {
+            selectedObject.addComponent(new LightComponent());
+            updateInspectorPanel();
+        });
+    }
+
+    // Remove Component Events
+    inspectorContent.querySelectorAll('.btn-del-comp').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const compId = e.currentTarget.getAttribute('data-comp-id');
+            selectedObject.removeComponent(compId);
+            updateInspectorPanel();
+        });
+    });
+
+    // Component Input Bindings
+    inspectorContent.querySelectorAll('.comp-input-speedy').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const card = e.target.closest('.component-card');
+            const compId = card.getAttribute('data-comp-id');
+            const comp = selectedObject.components.find(c => c.id === compId);
+            if (comp) comp.speedY = parseFloat(e.target.value) || 0;
+        });
+    });
+
+    inspectorContent.querySelectorAll('.comp-input-intensity').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const card = e.target.closest('.component-card');
+            const compId = card.getAttribute('data-comp-id');
+            const comp = selectedObject.components.find(c => c.id === compId);
+            if (comp) comp.intensity = parseFloat(e.target.value) || 1.0;
+        });
+    });
 
     const posXInput = inspectorContent.querySelector('#pos-x');
     const posYInput = inspectorContent.querySelector('#pos-y');
@@ -502,6 +597,7 @@ export function serializeScene() {
             shininess: obj.material.shininess,
             isUnlit: obj.material.isUnlit
         },
+        keyframes: obj.keyframes ? [...obj.keyframes] : [],
         mesh: obj.mesh ? {
             vertices: Array.from(obj.mesh.vertices),
             indices: Array.from(obj.mesh.indices),
@@ -543,6 +639,9 @@ export function deserializeScene(jsonString) {
                     shininess: item.material.shininess,
                     isUnlit: item.material.isUnlit
                 };
+            }
+            if (item.keyframes) {
+                obj.keyframes = item.keyframes;
             }
             Engine.scene.addGameObject(obj);
         }
@@ -595,6 +694,96 @@ export function resetScene() {
     updateInspectorPanel();
 }
 
+// --- Layout Presets & Timeline UI ---
+export function setLayout(preset) {
+    const jerarquia = document.getElementById('jerarquia-panel');
+    const inspector = document.getElementById('inspector-panel');
+    const timeline = document.getElementById('timeline-panel');
+    const resizerLeft = document.getElementById('resizer-left');
+    const resizerRight = document.getElementById('resizer-right');
+
+    if (preset === 'default') {
+        if (jerarquia) jerarquia.classList.remove('hidden');
+        if (inspector) inspector.classList.remove('hidden');
+        if (resizerLeft) resizerLeft.classList.remove('hidden');
+        if (resizerRight) resizerRight.classList.remove('hidden');
+        if (timeline) timeline.classList.add('hidden');
+        Engine.mode = 'object';
+    } else if (preset === 'animation') {
+        if (jerarquia) jerarquia.classList.remove('hidden');
+        if (inspector) inspector.classList.remove('hidden');
+        if (resizerLeft) resizerLeft.classList.remove('hidden');
+        if (resizerRight) resizerRight.classList.remove('hidden');
+        if (timeline) timeline.classList.remove('hidden');
+        Engine.mode = 'animation';
+    } else if (preset === 'sculpt') {
+        if (jerarquia) jerarquia.classList.add('hidden');
+        if (inspector) inspector.classList.remove('hidden');
+        if (resizerLeft) resizerLeft.classList.add('hidden');
+        if (resizerRight) resizerRight.classList.remove('hidden');
+        if (timeline) timeline.classList.add('hidden');
+        Engine.mode = 'sculpt';
+    }
+
+    const statusText = document.getElementById('status-mode-text');
+    if (statusText) {
+        statusText.textContent = Engine.mode === 'animation' ? 'Modo Animación' : (Engine.mode === 'sculpt' ? 'Modo Escultura' : 'Modo Objeto');
+    }
+}
+
+function setupTimelineEvents() {
+    const slider = document.getElementById('timeline-slider');
+    const frameLbl = document.getElementById('current-frame-lbl');
+    const btnPlay = document.getElementById('anim-play');
+    const btnRewind = document.getElementById('anim-rewind');
+    const btnAddKeyframe = document.getElementById('anim-add-keyframe');
+
+    if (slider) {
+        slider.addEventListener('input', (e) => {
+            const frame = parseInt(e.target.value);
+            animationManager.setFrame(frame);
+            if (frameLbl) frameLbl.textContent = frame;
+            updateInspectorPanel();
+        });
+    }
+
+    if (btnPlay) {
+        btnPlay.addEventListener('click', () => {
+            if (animationManager.isPlaying) {
+                animationManager.pause();
+                btnPlay.textContent = '▶';
+            } else {
+                btnPlay.textContent = '⏸';
+                animationManager.play((frame) => {
+                    if (slider) slider.value = frame;
+                    if (frameLbl) frameLbl.textContent = frame;
+                    updateInspectorPanel();
+                });
+            }
+        });
+    }
+
+    if (btnRewind) {
+        btnRewind.addEventListener('click', () => {
+            animationManager.rewind((frame) => {
+                if (slider) slider.value = frame;
+                if (frameLbl) frameLbl.textContent = frame;
+                if (btnPlay) btnPlay.textContent = '▶';
+                updateInspectorPanel();
+            });
+        });
+    }
+
+    if (btnAddKeyframe) {
+        btnAddKeyframe.addEventListener('click', () => {
+            if (Engine.selectedGameObject) {
+                animationManager.addKeyframe(Engine.selectedGameObject);
+                history.pushState('Add Keyframe');
+            }
+        });
+    }
+}
+
 function setupCreateMenuEvents() {
     document.querySelectorAll('[data-create]').forEach(el => {
         el.addEventListener('click', (e) => {
@@ -625,6 +814,27 @@ function setupMenuEvents() {
 
     const btnDel = document.getElementById('menu-delete');
     if (btnDel) btnDel.addEventListener('click', () => deleteObject());
+
+    // Ventana Menu items
+    const layoutDef = document.getElementById('layout-default');
+    if (layoutDef) layoutDef.addEventListener('click', () => setLayout('default'));
+
+    const layoutAnim = document.getElementById('layout-animation');
+    if (layoutAnim) layoutAnim.addEventListener('click', () => setLayout('animation'));
+
+    const layoutSculpt = document.getElementById('layout-sculpt');
+    if (layoutSculpt) layoutSculpt.addEventListener('click', () => setLayout('sculpt'));
+
+    const toggleTimeline = document.getElementById('toggle-timeline');
+    if (toggleTimeline) {
+        toggleTimeline.addEventListener('click', () => {
+            const timeline = document.getElementById('timeline-panel');
+            if (timeline) timeline.classList.toggle('hidden');
+        });
+    }
+
+    const layoutReset = document.getElementById('layout-reset');
+    if (layoutReset) layoutReset.addEventListener('click', () => setLayout('default'));
 }
 
 function setupToolbarEvents() {
@@ -659,11 +869,17 @@ function setupToolbarEvents() {
             updateInspectorPanel();
         });
     });
+
+    const btnModeAnim = document.getElementById('btn-mode-anim');
+    if (btnModeAnim) {
+        btnModeAnim.addEventListener('click', () => {
+            setLayout('animation');
+        });
+    }
 }
 
 function setupKeyboardShortcuts() {
     window.addEventListener('keydown', (e) => {
-        // Ignore key shortcuts if focused inside an input field
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
             return;
         }
@@ -734,6 +950,7 @@ function main() {
             setupCreateMenuEvents();
             setupMenuEvents();
             setupToolbarEvents();
+            setupTimelineEvents();
             setupKeyboardShortcuts();
 
             const sphereMesh = Mesh.createSphere(Engine.gl);

@@ -81,7 +81,7 @@ body {
     border: 1px solid #333333;
     border-radius: 6px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-    min-width: 180px;
+    min-width: 190px;
     z-index: 200;
     padding: 6px 0;
 }
@@ -135,11 +135,19 @@ body {
     gap: 6px;
 }
 
+#main-layout-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    width: 100%;
+    height: calc(100vh - 38px);
+    overflow: hidden;
+}
+
 #app-container {
     display: flex;
     flex: 1;
     width: 100%;
-    height: calc(100vh - 38px);
     overflow: hidden;
     position: relative;
     background-color: #121212;
@@ -151,6 +159,10 @@ body {
     flex-direction: column;
     overflow: hidden;
     min-width: 160px;
+}
+
+.panel.hidden {
+    display: none !important;
 }
 
 #jerarquia-panel {
@@ -168,28 +180,46 @@ body {
     width: 290px;
 }
 
-.panel-title {
-    background-color: #222222;
-    padding: 9px 12px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: #888888;
+/* Panel Header Tabs Bar */
+.panel-header-tabs {
+    background-color: #1f1f1f;
     border-bottom: 1px solid #2a2a2a;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+    height: 32px;
+}
+
+.panel-tab {
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #888888;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.panel-tab:hover {
+    color: #dddddd;
+}
+
+.panel-tab.active {
+    color: #ffffff;
+    border-bottom-color: #666666;
+    background-color: #262626;
+    border-radius: 4px 4px 0 0;
 }
 
 .panel-header-actions {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    background-color: #222222;
-    border-bottom: 1px solid #2a2a2a;
-    padding-right: 8px;
-}
-
-.panel-header-actions .panel-title {
-    border-bottom: none;
+    gap: 4px;
+    padding: 4px;
 }
 
 .add-btn {
@@ -213,7 +243,7 @@ body {
 /* 3D Viewport Toolbar Overlay */
 #viewport-toolbar {
     position: absolute;
-    top: 14px;
+    top: 42px;
     left: 14px;
     z-index: 50;
     display: flex;
@@ -577,6 +607,81 @@ body {
     height: 16px;
     accent-color: #444444;
     cursor: pointer;
+}
+
+/* Timeline Bottom Panel */
+#timeline-panel {
+    height: 110px;
+    background-color: #181818;
+    border-top: 1px solid #2a2a2a;
+    display: flex;
+    flex-direction: column;
+}
+
+.timeline-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-icon {
+    background: #2a2a2a;
+    border: 1px solid #383838;
+    color: #ffffff;
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.btn-icon:hover {
+    background: #383838;
+}
+
+.fps-badge {
+    font-size: 10px;
+    color: #888888;
+    background: #141414;
+    padding: 3px 6px;
+    border-radius: 3px;
+    border: 1px solid #282828;
+}
+
+.timeline-slider-container {
+    padding: 14px;
+    display: flex;
+    align-items: center;
+}
+
+.timeline-slider {
+    width: 100%;
+    accent-color: #555555;
+    cursor: pointer;
+}
+
+/* Collapsible Component Cards */
+.component-card {
+    background: #1c1c1c;
+    border: 1px solid #2c2c2c;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.component-header {
+    background: #242424;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #cccccc;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+}
+
+.component-body {
+    padding: 10px;
 }
 
 canvas {
