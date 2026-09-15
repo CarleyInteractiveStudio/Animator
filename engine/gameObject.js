@@ -6,9 +6,20 @@ export class GameObject {
         this.mesh = mesh;
         this.transform = {
             position: vec3.create(),
+            rotationDegrees: vec3.create(), // [xDeg, yDeg, zDeg]
             rotation: quat.create(),
             scale: vec3.fromValues(1, 1, 1),
         };
+    }
+
+    setRotationDegrees(xDeg, yDeg, zDeg) {
+        vec3.set(this.transform.rotationDegrees, xDeg, yDeg, zDeg);
+        quat.fromEuler(
+            this.transform.rotation,
+            xDeg,
+            yDeg,
+            zDeg
+        );
     }
 
     getModelMatrix() {
