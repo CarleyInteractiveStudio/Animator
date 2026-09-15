@@ -9,8 +9,8 @@ export class Gizmo {
 
     initGizmos(gl) {
         // Translation Gizmo: Shaft (cylinder) + Arrow Tip (cone)
-        const arrowShaft = Mesh.createCylinder(gl, 0.02, 1.2, 12);
-        const arrowCone = Mesh.createCone(gl, 0.08, 0.3, 16);
+        const arrowShaft = Mesh.createCylinder(gl, 0.025, 1.2, 16);
+        const arrowCone = Mesh.createCone(gl, 0.1, 0.35, 20);
 
         this.translationMesh = { shaft: arrowShaft, cone: arrowCone };
 
@@ -18,11 +18,11 @@ export class Gizmo {
         const scaleBox = Mesh.createCube(gl);
         this.scaleMesh = { shaft: arrowShaft, box: scaleBox };
 
-        // Rotation Gizmo: Torus rings
-        this.rotationRing = Mesh.createTorus(gl, 1.2, 0.02, 24, 24);
+        // Rotation Gizmo: Torus rings (thicker & smoother)
+        this.rotationRing = Mesh.createTorus(gl, 1.3, 0.035, 32, 24);
 
         // Brush Ring (for Sculpting & Painting)
-        this.brushRing = Mesh.createTorus(gl, 0.8, 0.015, 32, 16);
+        this.brushRing = Mesh.createTorus(gl, 0.8, 0.02, 32, 16);
     }
 
     render(gl, programInfo, targetObject, viewMatrix, projectionMatrix, mode = 'object', tool = 'translate', brushRadius = 0.8) {
@@ -66,12 +66,12 @@ export class Gizmo {
 
         // 6 Directions: +X, -X, +Y, -Y, +Z, -Z
         const directions = [
-            { dir: [1, 0, 0], rot: [0, 0, -Math.PI / 2], color: [1.0, 0.2, 0.2, 1.0] },  // +X Red
-            { dir: [-1, 0, 0], rot: [0, 0, Math.PI / 2], color: [0.8, 0.3, 0.3, 1.0] },  // -X Soft Red
-            { dir: [0, 1, 0], rot: [0, 0, 0], color: [0.2, 1.0, 0.2, 1.0] },             // +Y Green
-            { dir: [0, -1, 0], rot: [Math.PI, 0, 0], color: [0.3, 0.8, 0.3, 1.0] },       // -Y Soft Green
-            { dir: [0, 0, 1], rot: [Math.PI / 2, 0, 0], color: [0.2, 0.5, 1.0, 1.0] },   // +Z Blue
-            { dir: [0, 0, -1], rot: [-Math.PI / 2, 0, 0], color: [0.3, 0.5, 0.8, 1.0] }   // -Z Soft Blue
+            { dir: [1, 0, 0], rot: [0, 0, -90], color: [1.0, 0.25, 0.25, 1.0] },  // +X Bright Red
+            { dir: [-1, 0, 0], rot: [0, 0, 90], color: [0.85, 0.35, 0.35, 1.0] },  // -X Red
+            { dir: [0, 1, 0], rot: [0, 0, 0], color: [0.25, 1.0, 0.25, 1.0] },    // +Y Bright Green
+            { dir: [0, -1, 0], rot: [180, 0, 0], color: [0.35, 0.85, 0.35, 1.0] }, // -Y Green
+            { dir: [0, 0, 1], rot: [90, 0, 0], color: [0.3, 0.6, 1.0, 1.0] },     // +Z Bright Blue
+            { dir: [0, 0, -1], rot: [-90, 0, 0], color: [0.35, 0.5, 0.85, 1.0] }  // -Z Blue
         ];
 
         for (const axis of directions) {
@@ -81,7 +81,7 @@ export class Gizmo {
             const shaftMatrix = mat4.create();
             const shaftPos = [pos[0] + axis.dir[0] * 0.6, pos[1] + axis.dir[1] * 0.6, pos[2] + axis.dir[2] * 0.6];
             const q = quat.create();
-            quat.fromEuler(q, axis.rot[0] * 180 / Math.PI, axis.rot[1] * 180 / Math.PI, axis.rot[2] * 180 / Math.PI);
+            quat.fromEuler(q, axis.rot[0], axis.rot[1], axis.rot[2]);
             mat4.fromRotationTranslationScale(shaftMatrix, q, shaftPos, [1, 1, 1]);
             gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, shaftMatrix);
             this.drawMesh(gl, programInfo, this.translationMesh.shaft);
@@ -99,10 +99,11 @@ export class Gizmo {
         gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
         gl.uniformMatrix4fv(programInfo.uniformLocations.viewMatrix, false, viewMatrix);
 
+        // 3 Rings around X, Y, Z axes
         const rings = [
-            { rot: [0, Math.PI / 2, 0], color: [1.0, 0.2, 0.2, 1.0] }, // X Ring
-            { rot: [Math.PI / 2, 0, 0], color: [0.2, 1.0, 0.2, 1.0] }, // Y Ring
-            { rot: [0, 0, 0], color: [0.2, 0.5, 1.0, 1.0] }            // Z Ring
+            { rot: [0, 90, 0], color: [1.0, 0.25, 0.25, 1.0] }, // X Ring (Red)
+            { rot: [90, 0, 0], color: [0.25, 1.0, 0.25, 1.0] }, // Y Ring (Green)
+            { rot: [0, 0, 0], color: [0.3, 0.6, 1.0, 1.0] }     // Z Ring (Blue)
         ];
 
         for (const ring of rings) {
@@ -110,7 +111,7 @@ export class Gizmo {
 
             const matrix = mat4.create();
             const q = quat.create();
-            quat.fromEuler(q, ring.rot[0] * 180 / Math.PI, ring.rot[1] * 180 / Math.PI, ring.rot[2] * 180 / Math.PI);
+            quat.fromEuler(q, ring.rot[0], ring.rot[1], ring.rot[2]);
             mat4.fromRotationTranslationScale(matrix, q, pos, [1, 1, 1]);
 
             gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, matrix);
@@ -123,12 +124,12 @@ export class Gizmo {
         gl.uniformMatrix4fv(programInfo.uniformLocations.viewMatrix, false, viewMatrix);
 
         const directions = [
-            { dir: [1, 0, 0], rot: [0, 0, -Math.PI / 2], color: [1.0, 0.2, 0.2, 1.0] },
-            { dir: [-1, 0, 0], rot: [0, 0, Math.PI / 2], color: [0.8, 0.3, 0.3, 1.0] },
-            { dir: [0, 1, 0], rot: [0, 0, 0], color: [0.2, 1.0, 0.2, 1.0] },
-            { dir: [0, -1, 0], rot: [Math.PI, 0, 0], color: [0.3, 0.8, 0.3, 1.0] },
-            { dir: [0, 0, 1], rot: [Math.PI / 2, 0, 0], color: [0.2, 0.5, 1.0, 1.0] },
-            { dir: [0, 0, -1], rot: [-Math.PI / 2, 0, 0], color: [0.3, 0.5, 0.8, 1.0] }
+            { dir: [1, 0, 0], rot: [0, 0, -90], color: [1.0, 0.25, 0.25, 1.0] },
+            { dir: [-1, 0, 0], rot: [0, 0, 90], color: [0.85, 0.35, 0.35, 1.0] },
+            { dir: [0, 1, 0], rot: [0, 0, 0], color: [0.25, 1.0, 0.25, 1.0] },
+            { dir: [0, -1, 0], rot: [180, 0, 0], color: [0.35, 0.85, 0.35, 1.0] },
+            { dir: [0, 0, 1], rot: [90, 0, 0], color: [0.3, 0.6, 1.0, 1.0] },
+            { dir: [0, 0, -1], rot: [-90, 0, 0], color: [0.35, 0.5, 0.85, 1.0] }
         ];
 
         for (const axis of directions) {
@@ -138,7 +139,7 @@ export class Gizmo {
             const shaftMatrix = mat4.create();
             const shaftPos = [pos[0] + axis.dir[0] * 0.6, pos[1] + axis.dir[1] * 0.6, pos[2] + axis.dir[2] * 0.6];
             const q = quat.create();
-            quat.fromEuler(q, axis.rot[0] * 180 / Math.PI, axis.rot[1] * 180 / Math.PI, axis.rot[2] * 180 / Math.PI);
+            quat.fromEuler(q, axis.rot[0], axis.rot[1], axis.rot[2]);
             mat4.fromRotationTranslationScale(shaftMatrix, q, shaftPos, [1, 1, 1]);
             gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, shaftMatrix);
             this.drawMesh(gl, programInfo, this.scaleMesh.shaft);
@@ -146,7 +147,7 @@ export class Gizmo {
             // Box Tip
             const boxMatrix = mat4.create();
             const boxPos = [pos[0] + axis.dir[0] * 1.3, pos[1] + axis.dir[1] * 1.3, pos[2] + axis.dir[2] * 1.3];
-            mat4.fromRotationTranslationScale(boxMatrix, q, boxPos, [0.15, 0.15, 0.15]);
+            mat4.fromRotationTranslationScale(boxMatrix, q, boxPos, [0.18, 0.18, 0.18]);
             gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, boxMatrix);
             this.drawMesh(gl, programInfo, this.scaleMesh.box);
         }

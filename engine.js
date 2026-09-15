@@ -38,6 +38,83 @@ const Engine = {
         return true;
     },
 
+    pickGizmoAxis: (clientX, clientY) => {
+        if (!canvas || !camera || !Engine.selectedGameObject) return null;
+
+        const rect = canvas.getBoundingClientRect();
+        const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        const y = -(((clientY - rect.top) / rect.height) * 2 - 1);
+
+        const aspect = canvas.clientWidth / canvas.clientHeight || 1.0;
+        const projectionMatrix = mat4.create();
+        mat4.perspective(projectionMatrix, 45 * Math.PI / 180, aspect, 0.1, 100.0);
+
+        const viewMatrix = camera.getViewMatrix();
+        const invProj = mat4.create();
+        mat4.invert(invProj, projectionMatrix);
+
+        const invView = mat4.create();
+        mat4.invert(invView, viewMatrix);
+
+        const clipRay = [x, y, -1.0, 1.0];
+        const eyeRay = [
+            invProj[0]*clipRay[0] + invProj[4]*clipRay[1] + invProj[8]*clipRay[2] + invProj[12]*clipRay[3],
+            invProj[1]*clipRay[0] + invProj[5]*clipRay[1] + invProj[9]*clipRay[2] + invProj[13]*clipRay[3],
+            invProj[2]*clipRay[0] + invProj[6]*clipRay[1] + invProj[10]*clipRay[2] + invProj[14]*clipRay[3],
+            invProj[3]*clipRay[0] + invProj[7]*clipRay[1] + invProj[11]*clipRay[2] + invProj[15]*clipRay[3]
+        ];
+
+        const rayDirEye = vec3.fromValues(eyeRay[0], eyeRay[1], -1.0);
+        vec3.normalize(rayDirEye, rayDirEye);
+
+        const invView3 = mat3.create();
+        mat3.fromMat4(invView3, invView);
+
+        const rayDirWorld = vec3.create();
+        vec3.transformMat3(rayDirWorld, rayDirEye, invView3);
+        vec3.normalize(rayDirWorld, rayDirWorld);
+
+        const rayOrigin = camera.position;
+        const pos = Engine.selectedGameObject.transform.position;
+
+        const axes = [
+            { name: 'x', dir: [1, 0, 0] },
+            { name: 'x', dir: [-1, 0, 0] },
+            { name: 'y', dir: [0, 1, 0] },
+            { name: 'y', dir: [0, -1, 0] },
+            { name: 'z', dir: [0, 0, 1] },
+            { name: 'z', dir: [0, 0, -1] }
+        ];
+
+        let hitAxis = null;
+        let minDistance = Infinity;
+
+        for (const axis of axes) {
+            const handlePos = [
+                pos[0] + axis.dir[0] * 1.0,
+                pos[1] + axis.dir[1] * 1.0,
+                pos[2] + axis.dir[2] * 1.0
+            ];
+            const radius = 0.45;
+
+            const oc = vec3.create();
+            vec3.subtract(oc, rayOrigin, handlePos);
+            const b = vec3.dot(oc, rayDirWorld);
+            const c = vec3.dot(oc, oc) - radius * radius;
+            const discriminant = b * b - c;
+
+            if (discriminant > 0) {
+                const t = -b - Math.sqrt(discriminant);
+                if (t > 0 && t < minDistance) {
+                    minDistance = t;
+                    hitAxis = axis.name;
+                }
+            }
+        }
+
+        return hitAxis;
+    },
+
     pickObject: (clientX, clientY) => {
         if (!canvas || !camera || !Engine.scene) return null;
 

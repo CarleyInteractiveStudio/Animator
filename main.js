@@ -305,6 +305,9 @@ function main() {
             selectObject(cube1);
 
             let isMouseDown = false;
+            let activeGizmoAxis = null;
+            let lastMouseX = 0;
+            let lastMouseY = 0;
             let clickStartX = 0;
             let clickStartY = 0;
 
@@ -313,8 +316,12 @@ function main() {
                     isMouseDown = true;
                     clickStartX = e.clientX;
                     clickStartY = e.clientY;
+                    lastMouseX = e.clientX;
+                    lastMouseY = e.clientY;
 
-                    if (Engine.mode === 'sculpt' && Engine.selectedGameObject) {
+                    if (Engine.mode === 'object' && Engine.selectedGameObject) {
+                        activeGizmoAxis = Engine.pickGizmoAxis(e.clientX, e.clientY);
+                    } else if (Engine.mode === 'sculpt' && Engine.selectedGameObject) {
                         Sculpt.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool);
                     } else if (Engine.mode === 'paint' && Engine.selectedGameObject) {
                         Paint.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool, Engine.brushColor);
@@ -323,12 +330,41 @@ function main() {
             });
 
             canvas.addEventListener('mousemove', (e) => {
-                if (isMouseDown && Engine.selectedGameObject) {
-                    if (Engine.mode === 'sculpt') {
-                        Sculpt.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool);
-                    } else if (Engine.mode === 'paint') {
-                        Paint.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool, Engine.brushColor);
+                if (!isMouseDown || !Engine.selectedGameObject) return;
+
+                const dx = e.clientX - lastMouseX;
+                const dy = e.clientY - lastMouseY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+
+                if (Engine.mode === 'object' && activeGizmoAxis) {
+                    const sensitivity = 0.03;
+                    const delta = (dx - dy) * sensitivity;
+
+                    const axisMap = { x: 0, y: 1, z: 2 };
+                    const axisIdx = axisMap[activeGizmoAxis];
+
+                    if (axisIdx !== undefined) {
+                        if (Engine.activeTool === 'translate') {
+                            Engine.selectedGameObject.transform.position[axisIdx] += delta;
+                        } else if (Engine.activeTool === 'rotate') {
+                            const deg = Engine.selectedGameObject.transform.rotationDegrees[axisIdx] + delta * 20;
+                            Engine.selectedGameObject.transform.rotationDegrees[axisIdx] = deg;
+                            Engine.selectedGameObject.setRotationDegrees(
+                                Engine.selectedGameObject.transform.rotationDegrees[0],
+                                Engine.selectedGameObject.transform.rotationDegrees[1],
+                                Engine.selectedGameObject.transform.rotationDegrees[2]
+                            );
+                        } else if (Engine.activeTool === 'scale') {
+                            const newScale = Math.max(0.1, Engine.selectedGameObject.transform.scale[axisIdx] + delta);
+                            Engine.selectedGameObject.transform.scale[axisIdx] = newScale;
+                        }
+                        updateInspectorPanel();
                     }
+                } else if (Engine.mode === 'sculpt') {
+                    Sculpt.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool);
+                } else if (Engine.mode === 'paint') {
+                    Paint.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool, Engine.brushColor);
                 }
             });
 
@@ -336,10 +372,12 @@ function main() {
                 if (e.button === 0 && isMouseDown) {
                     isMouseDown = false;
                     const distMoved = Math.hypot(e.clientX - clickStartX, e.clientY - clickStartY);
-                    if (distMoved < 5 && Engine.mode === 'object') {
+
+                    if (distMoved < 5 && Engine.mode === 'object' && !activeGizmoAxis) {
                         const pickedObj = Engine.pickObject(e.clientX, e.clientY);
                         selectObject(pickedObj);
                     }
+                    activeGizmoAxis = null;
                 }
             });
 
