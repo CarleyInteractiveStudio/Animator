@@ -202,6 +202,16 @@ body {
     cursor: pointer;
     transition: all 0.15s;
     outline: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tool-icon {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+    display: inline-block;
 }
 
 .tool-btn:hover {
