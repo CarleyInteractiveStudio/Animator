@@ -95,8 +95,9 @@ body {
 }
 
 .status-bar {
-    color: #888;
+    color: #4db8ff;
     font-size: 12px;
+    font-weight: 600;
     padding-right: 8px;
 }
 
@@ -125,6 +126,7 @@ body {
     flex: 1;
     min-width: 300px;
     background-color: #121212;
+    position: relative;
 }
 
 #inspector-panel {
@@ -140,6 +142,114 @@ body {
     letter-spacing: 0.5px;
     color: #aaa;
     border-bottom: 1px solid #333;
+}
+
+.panel-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: #2b2b2b;
+    border-bottom: 1px solid #333;
+    padding-right: 6px;
+}
+
+.panel-header-actions .panel-title {
+    border-bottom: none;
+}
+
+.add-btn {
+    font-size: 11px;
+    padding: 3px 8px;
+    background-color: #383838;
+    color: #4db8ff;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+.add-btn:hover {
+    background-color: #005999;
+    color: #fff;
+}
+
+/* 3D Viewport Toolbar Overlay */
+#viewport-toolbar {
+    position: absolute;
+    top: 40px;
+    left: 12px;
+    z-index: 50;
+    display: flex;
+    gap: 8px;
+    background-color: rgba(30, 30, 30, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.tool-category {
+    position: relative;
+}
+
+.tool-btn {
+    background: transparent;
+    border: none;
+    color: #ccc;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    outline: none;
+}
+
+.tool-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.tool-btn.active {
+    background-color: #005999;
+    color: #fff;
+}
+
+.tool-submenu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background-color: #282828;
+    border: 1px solid #444;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    min-width: 150px;
+    z-index: 100;
+    padding: 4px 0;
+}
+
+.tool-category:hover .tool-submenu {
+    display: block;
+}
+
+.submenu-item {
+    padding: 6px 12px;
+    font-size: 11px;
+    color: #ccc;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.submenu-item:hover {
+    background-color: #383838;
+    color: #fff;
+}
+
+.submenu-item.active {
+    background-color: #005999;
+    color: #fff;
+    font-weight: 600;
 }
 
 .panel-content {

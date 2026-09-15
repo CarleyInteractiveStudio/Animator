@@ -2,6 +2,7 @@ import { initWebGL, renderWebGL } from './engine/renderer.js';
 import { Camera } from './engine/camera.js';
 import { Input } from './engine/input.js';
 import { Scene } from './engine/scene.js';
+import { Gizmo } from './engine/gizmo.js';
 import { mat4, mat3, vec3 } from './engine/math.js';
 
 let webglContext;
@@ -13,6 +14,11 @@ const Engine = {
     gl: null,
     camera: null,
     selectedGameObject: null,
+    gizmo: null,
+    mode: 'object', // 'object', 'sculpt', 'paint'
+    activeTool: 'translate', // 'translate', 'rotate', 'scale', 'deform', 'inflate', 'smooth', 'brush', 'eraser', 'fill'
+    brushRadius: 0.8,
+    brushColor: [1.0, 0.2, 0.2, 1.0],
 
     initialize: (canvasElement) => {
         canvas = canvasElement;
@@ -27,6 +33,7 @@ const Engine = {
         Engine.camera = camera;
         Input.initialize(canvas);
         Engine.scene = new Scene();
+        Engine.gizmo = new Gizmo(Engine.gl);
 
         return true;
     },
@@ -97,7 +104,7 @@ const Engine = {
 
     start: () => {
         if (!webglContext) {
-            console.error("Engine not initialized. Call Engine.initialize() first.");
+            console.error("Engine initialization failed.");
             return;
         }
 
@@ -117,7 +124,7 @@ const Engine = {
 
             const viewMatrix = camera.getViewMatrix();
 
-            renderWebGL(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix, Engine.selectedGameObject);
+            renderWebGL(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix, Engine.selectedGameObject, Engine.gizmo);
             requestAnimationFrame(gameLoop);
         }
         requestAnimationFrame(gameLoop);

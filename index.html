@@ -29,9 +29,16 @@
                 </div>
             </div>
             <div class="menu-item">
-                <span>Crear</span>
+                <span>Crear Objeto</span>
                 <div class="dropdown-menu">
-                    <div class="dropdown-item" id="btn-add-cube">Malla -> Cubo</div>
+                    <div class="dropdown-item" data-create="cube">Cubo</div>
+                    <div class="dropdown-item" data-create="sphere">Esfera</div>
+                    <div class="dropdown-item" data-create="plane">Plano</div>
+                    <div class="dropdown-item" data-create="cylinder">Cilindro</div>
+                    <div class="dropdown-item" data-create="cone">Cono</div>
+                    <div class="dropdown-item" data-create="pyramid">Pirámide</div>
+                    <div class="dropdown-item" data-create="ramp">Prisma / Rampa</div>
+                    <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
                 </div>
             </div>
             <div class="menu-item">
@@ -41,19 +48,74 @@
                 </div>
             </div>
         </div>
-        <div class="status-bar">Modo Objeto</div>
+        <div class="status-bar" id="status-mode">Modo Objeto</div>
     </div>
+
     <div id="app-container">
         <div id="jerarquia-panel" class="panel">
-            <div class="panel-title">Jerarquía</div>
+            <div class="panel-header-actions">
+                <div class="panel-title">Jerarquía</div>
+                <div class="menu-item add-btn">
+                    <span>+ Crear</span>
+                    <div class="dropdown-menu">
+                        <div class="dropdown-item" data-create="cube">Cubo</div>
+                        <div class="dropdown-item" data-create="sphere">Esfera</div>
+                        <div class="dropdown-item" data-create="plane">Plano</div>
+                        <div class="dropdown-item" data-create="cylinder">Cilindro</div>
+                        <div class="dropdown-item" data-create="cone">Cono</div>
+                        <div class="dropdown-item" data-create="pyramid">Pirámide</div>
+                        <div class="dropdown-item" data-create="ramp">Prisma / Rampa</div>
+                        <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
+                    </div>
+                </div>
+            </div>
             <div class="panel-content"></div>
         </div>
+
         <div class="resizer" id="resizer-left"></div>
+
         <div id="visor-panel" class="panel">
             <div class="panel-title">Visor 3D</div>
+            <!-- Overlay Toolbar inside 3D Viewport -->
+            <div id="viewport-toolbar">
+                <div class="tool-category" id="cat-transform">
+                    <button class="tool-btn active" title="Transformación">
+                        <span>❖ Transformar</span>
+                    </button>
+                    <div class="tool-submenu">
+                        <div class="submenu-item active" data-tool="translate">Mover (Translación)</div>
+                        <div class="submenu-item" data-tool="rotate">Rotar</div>
+                        <div class="submenu-item" data-tool="scale">Escalar</div>
+                    </div>
+                </div>
+
+                <div class="tool-category" id="cat-sculpt">
+                    <button class="tool-btn" title="Esculpir">
+                        <span>✎ Esculpir</span>
+                    </button>
+                    <div class="tool-submenu">
+                        <div class="submenu-item" data-tool="deform">Pincel Deformar</div>
+                        <div class="submenu-item" data-tool="inflate">Pincel Inflar</div>
+                        <div class="submenu-item" data-tool="smooth">Pincel Suavizar</div>
+                    </div>
+                </div>
+
+                <div class="tool-category" id="cat-paint">
+                    <button class="tool-btn" title="Pintar">
+                        <span>🎨 Pintar</span>
+                    </button>
+                    <div class="tool-submenu">
+                        <div class="submenu-item" data-tool="brush">Pincel de Color</div>
+                        <div class="submenu-item" data-tool="eraser">Borrador</div>
+                        <div class="submenu-item" data-tool="fill">Relleno Completo</div>
+                    </div>
+                </div>
+            </div>
             <div class="panel-content"></div>
         </div>
+
         <div class="resizer" id="resizer-right"></div>
+
         <div id="inspector-panel" class="panel">
             <div class="panel-title">Inspector</div>
             <div class="panel-content"></div>

@@ -1,9 +1,20 @@
 import Engine from './engine.js';
 import { GameObject } from './engine/gameObject.js';
 import { Mesh } from './engine/mesh.js';
+import { Sculpt } from './engine/sculpt.js';
+import { Paint } from './engine/paint.js';
 import { vec3 } from './engine/math.js';
 
-let cubeCount = 3;
+let objectCounters = {
+    cube: 1,
+    sphere: 0,
+    plane: 0,
+    cylinder: 0,
+    cone: 0,
+    pyramid: 0,
+    ramp: 0,
+    torus: 0
+};
 
 function setupResizers() {
     const resizerLeft = document.getElementById('resizer-left');
@@ -182,17 +193,88 @@ function updateInspectorPanel() {
     });
 }
 
-function setupMenuEvents(cubeMesh) {
-    const btnAddCube = document.getElementById('btn-add-cube');
-    if (btnAddCube) {
-        btnAddCube.addEventListener('click', () => {
-            cubeCount++;
-            const newCube = new GameObject(`Cubo ${cubeCount}`, cubeMesh);
-            vec3.set(newCube.transform.position, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 4);
-            Engine.scene.addGameObject(newCube);
-            selectObject(newCube);
-        });
+function createPrimitiveMesh(type) {
+    const gl = Engine.gl;
+    switch (type) {
+        case 'sphere': return Mesh.createSphere(gl);
+        case 'plane': return Mesh.createPlane(gl);
+        case 'cylinder': return Mesh.createCylinder(gl);
+        case 'cone': return Mesh.createCone(gl);
+        case 'pyramid': return Mesh.createPyramid(gl);
+        case 'ramp': return Mesh.createRamp(gl);
+        case 'torus': return Mesh.createTorus(gl);
+        case 'cube':
+        default:
+            return Mesh.createCube(gl);
     }
+}
+
+function getPrimitiveName(type) {
+    objectCounters[type] = (objectCounters[type] || 0) + 1;
+    const num = objectCounters[type];
+    switch (type) {
+        case 'sphere': return `Esfera ${num}`;
+        case 'plane': return `Plano ${num}`;
+        case 'cylinder': return `Cilindro ${num}`;
+        case 'cone': return `Cono ${num}`;
+        case 'pyramid': return `Pirámide ${num}`;
+        case 'ramp': return `Prisma ${num}`;
+        case 'torus': return `Torus ${num}`;
+        case 'cube':
+        default:
+            return `Cubo ${num}`;
+    }
+}
+
+function spawnPrimitive(type) {
+    const mesh = createPrimitiveMesh(type);
+    const name = getPrimitiveName(type);
+    const obj = new GameObject(name, mesh);
+
+    vec3.set(obj.transform.position, (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);
+    Engine.scene.addGameObject(obj);
+    selectObject(obj);
+}
+
+function setupCreateMenuEvents() {
+    document.querySelectorAll('[data-create]').forEach(el => {
+        el.addEventListener('click', (e) => {
+            const type = e.currentTarget.getAttribute('data-create');
+            spawnPrimitive(type);
+        });
+    });
+}
+
+function setupToolbarEvents() {
+    const statusMode = document.getElementById('status-mode');
+
+    document.querySelectorAll('.submenu-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            document.querySelectorAll('.submenu-item').forEach(i => i.classList.remove('active'));
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+
+            const selectedTool = e.currentTarget.getAttribute('data-tool');
+            e.currentTarget.classList.add('active');
+
+            const parentCategory = e.currentTarget.closest('.tool-category');
+            if (parentCategory) {
+                parentCategory.querySelector('.tool-btn').classList.add('active');
+            }
+
+            Engine.activeTool = selectedTool;
+
+            if (['translate', 'rotate', 'scale'].includes(selectedTool)) {
+                Engine.mode = 'object';
+                if (statusMode) statusMode.textContent = 'Modo Objeto';
+            } else if (['deform', 'inflate', 'smooth'].includes(selectedTool)) {
+                Engine.mode = 'sculpt';
+                if (statusMode) statusMode.textContent = 'Modo Escultura';
+            } else if (['brush', 'eraser', 'fill'].includes(selectedTool)) {
+                Engine.mode = 'paint';
+                if (statusMode) statusMode.textContent = 'Modo Pintura';
+            }
+        });
+    });
 }
 
 function main() {
@@ -205,41 +287,56 @@ function main() {
         visorContent.appendChild(canvas);
 
         if (Engine.initialize(canvas)) {
+            setupCreateMenuEvents();
+            setupToolbarEvents();
+
+            const sphereMesh = Mesh.createSphere(Engine.gl);
             const cubeMesh = Mesh.createCube(Engine.gl);
-            setupMenuEvents(cubeMesh);
 
             const cube1 = new GameObject('Cubo 1', cubeMesh);
-            vec3.set(cube1.transform.position, -2.0, 0, 0);
+            vec3.set(cube1.transform.position, -1.8, 0, 0);
 
-            const cube2 = new GameObject('Cubo 2', cubeMesh);
-            vec3.set(cube2.transform.position, 0, 0, 0);
-
-            const cube3 = new GameObject('Cubo 3', cubeMesh);
-            vec3.set(cube3.transform.position, 2.0, 0, 0);
+            const sphere1 = new GameObject('Esfera 1', sphereMesh);
+            vec3.set(sphere1.transform.position, 1.8, 0, 0);
 
             Engine.scene.addGameObject(cube1);
-            Engine.scene.addGameObject(cube2);
-            Engine.scene.addGameObject(cube3);
+            Engine.scene.addGameObject(sphere1);
 
             selectObject(cube1);
 
-            let isClickingCanvas = false;
+            let isMouseDown = false;
             let clickStartX = 0;
             let clickStartY = 0;
 
             canvas.addEventListener('mousedown', (e) => {
                 if (e.button === 0) { // Left click
-                    isClickingCanvas = true;
+                    isMouseDown = true;
                     clickStartX = e.clientX;
                     clickStartY = e.clientY;
+
+                    if (Engine.mode === 'sculpt' && Engine.selectedGameObject) {
+                        Sculpt.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool);
+                    } else if (Engine.mode === 'paint' && Engine.selectedGameObject) {
+                        Paint.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool, Engine.brushColor);
+                    }
+                }
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (isMouseDown && Engine.selectedGameObject) {
+                    if (Engine.mode === 'sculpt') {
+                        Sculpt.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool);
+                    } else if (Engine.mode === 'paint') {
+                        Paint.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool, Engine.brushColor);
+                    }
                 }
             });
 
             canvas.addEventListener('mouseup', (e) => {
-                if (e.button === 0 && isClickingCanvas) {
-                    isClickingCanvas = false;
+                if (e.button === 0 && isMouseDown) {
+                    isMouseDown = false;
                     const distMoved = Math.hypot(e.clientX - clickStartX, e.clientY - clickStartY);
-                    if (distMoved < 5) { // Only pick if it was a click, not a drag
+                    if (distMoved < 5 && Engine.mode === 'object') {
                         const pickedObj = Engine.pickObject(e.clientX, e.clientY);
                         selectObject(pickedObj);
                     }
