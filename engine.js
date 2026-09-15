@@ -104,7 +104,7 @@ const Engine = {
 
     start: () => {
         if (!webglContext) {
-            console.error("Engine initialization failed.");
+            console.error("Engine not initialized. Call Engine.initialize() first.");
             return;
         }
 
@@ -124,7 +124,7 @@ const Engine = {
 
             const viewMatrix = camera.getViewMatrix();
 
-            renderWebGL(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix, Engine.selectedGameObject, Engine.gizmo);
+            renderWebGL(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix, Engine.selectedGameObject, Engine.gizmo, Engine.mode, Engine.activeTool, Engine.brushRadius);
             requestAnimationFrame(gameLoop);
         }
         requestAnimationFrame(gameLoop);

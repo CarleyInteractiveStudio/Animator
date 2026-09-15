@@ -99,7 +99,7 @@ export function initWebGL(canvas) {
     return { gl, programInfo };
 }
 
-export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix, selectedGameObject = null, gizmo = null) {
+export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix, selectedGameObject = null, gizmo = null, mode = 'object', tool = 'translate', brushRadius = 0.8) {
     const { gl, programInfo } = webglContext;
 
     if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
@@ -158,6 +158,6 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     }
 
     if (gizmo && selectedGameObject) {
-        gizmo.render(gl, programInfo, selectedGameObject, viewMatrix, projectionMatrix);
+        gizmo.render(gl, programInfo, selectedGameObject, viewMatrix, projectionMatrix, mode, tool, brushRadius);
     }
 }
