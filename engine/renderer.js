@@ -33,23 +33,39 @@ export function initWebGL(canvas) {
         varying vec3 v_normal;
         varying vec4 v_color;
 
-        uniform vec4 u_tintColor;
+        uniform vec4 u_materialColor;
+        uniform float u_shininess;
         uniform vec3 u_lightDirection;
         uniform bool u_isUnlit;
+        uniform bool u_isSelected;
 
         void main() {
+            vec4 baseColor = v_color * u_materialColor;
+
             if (u_isUnlit) {
-                gl_FragColor = v_color * u_tintColor;
+                if (u_isSelected) {
+                    baseColor.rgb += vec3(0.12, 0.12, 0.12);
+                }
+                gl_FragColor = baseColor;
             } else {
                 vec3 normal = normalize(v_normal);
                 vec3 lightDir = normalize(u_lightDirection);
 
                 float diff = max(dot(normal, lightDir), 0.0);
                 float ambient = 0.35;
-                float lighting = ambient + diff * 0.65;
 
-                vec4 finalColor = v_color * u_tintColor;
-                gl_FragColor = vec4(finalColor.rgb * lighting, finalColor.a);
+                vec3 viewDir = vec3(0.0, 0.0, 1.0);
+                vec3 reflectDir = reflect(-lightDir, normal);
+                float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(u_shininess, 1.0));
+
+                float lighting = ambient + diff * 0.65;
+                vec3 finalRgb = baseColor.rgb * lighting + vec3(spec * 0.15);
+
+                if (u_isSelected) {
+                    finalRgb += vec3(0.1, 0.08, 0.05);
+                }
+
+                gl_FragColor = vec4(finalRgb, baseColor.a);
             }
         }
     `;
@@ -96,9 +112,11 @@ export function initWebGL(canvas) {
             viewMatrix: gl.getUniformLocation(program, 'u_viewMatrix'),
             modelMatrix: gl.getUniformLocation(program, 'u_modelMatrix'),
             normalMatrix: gl.getUniformLocation(program, 'u_normalMatrix'),
-            tintColor: gl.getUniformLocation(program, 'u_tintColor'),
+            materialColor: gl.getUniformLocation(program, 'u_materialColor'),
+            shininess: gl.getUniformLocation(program, 'u_shininess'),
             lightDirection: gl.getUniformLocation(program, 'u_lightDirection'),
             isUnlit: gl.getUniformLocation(program, 'u_isUnlit'),
+            isSelected: gl.getUniformLocation(program, 'u_isSelected'),
         },
     };
 
@@ -114,7 +132,7 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.viewport(0, 0, canvas.width, canvas.height);
     }
 
-    gl.clearColor(0.12, 0.12, 0.12, 1.0);
+    gl.clearColor(0.1, 0.1, 0.1, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
 
@@ -123,9 +141,6 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
     gl.uniformMatrix4fv(programInfo.uniformLocations.viewMatrix, false, viewMatrix);
     gl.uniform3f(programInfo.uniformLocations.lightDirection, 0.5, 1.0, 0.7);
-
-    // Objects are lit
-    gl.uniform1i(programInfo.uniformLocations.isUnlit, 0);
 
     for (const gameObject of scene.gameObjects) {
         if (!gameObject.mesh) {
@@ -157,11 +172,11 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         mat3.normalFromMat4(normalMatrix, modelMatrix);
         gl.uniformMatrix3fv(programInfo.uniformLocations.normalMatrix, false, normalMatrix);
 
-        if (gameObject === selectedGameObject) {
-            gl.uniform4f(programInfo.uniformLocations.tintColor, 1.0, 0.7, 0.3, 1.0);
-        } else {
-            gl.uniform4f(programInfo.uniformLocations.tintColor, 0.85, 0.85, 0.85, 1.0);
-        }
+        const mat = gameObject.material || { color: [0.85, 0.85, 0.85, 1.0], shininess: 32.0, isUnlit: false };
+        gl.uniform4fv(programInfo.uniformLocations.materialColor, mat.color);
+        gl.uniform1f(programInfo.uniformLocations.shininess, mat.shininess || 32.0);
+        gl.uniform1i(programInfo.uniformLocations.isUnlit, mat.isUnlit ? 1 : 0);
+        gl.uniform1i(programInfo.uniformLocations.isSelected, gameObject === selectedGameObject ? 1 : 0);
 
         gl.drawElements(gl.TRIANGLES, gameObject.mesh.vertexCount, gl.UNSIGNED_SHORT, 0);
     }
@@ -169,6 +184,8 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     if (gizmo && selectedGameObject) {
         // Gizmos are unlit so colors are vibrant
         gl.uniform1i(programInfo.uniformLocations.isUnlit, 1);
+        gl.uniform1i(programInfo.uniformLocations.isSelected, 0);
+        gl.uniform4f(programInfo.uniformLocations.materialColor, 1.0, 1.0, 1.0, 1.0);
         gizmo.render(gl, programInfo, selectedGameObject, viewMatrix, projectionMatrix, mode, tool, brushRadius);
     }
 }

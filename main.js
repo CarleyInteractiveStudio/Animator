@@ -16,6 +16,63 @@ let objectCounters = {
     torus: 0
 };
 
+// --- History / Undo System ---
+export class HistoryManager {
+    constructor() {
+        this.undoStack = [];
+        this.redoStack = [];
+        this.maxHistory = 30;
+    }
+
+    pushState(actionName) {
+        if (!Engine.scene) return;
+        const snapshot = serializeScene();
+        this.undoStack.push({ actionName, snapshot });
+        if (this.undoStack.length > this.maxHistory) {
+            this.undoStack.shift();
+        }
+        this.redoStack = []; // Clear redo on new action
+    }
+
+    undo() {
+        if (this.undoStack.length === 0) return;
+        const currentState = serializeScene();
+        const stateToRestore = this.undoStack.pop();
+        this.redoStack.push({ actionName: stateToRestore.actionName, snapshot: currentState });
+        deserializeScene(stateToRestore.snapshot);
+    }
+
+    redo() {
+        if (this.redoStack.length === 0) return;
+        const currentState = serializeScene();
+        const stateToRestore = this.redoStack.pop();
+        this.undoStack.push({ actionName: stateToRestore.actionName, snapshot: currentState });
+        deserializeScene(stateToRestore.snapshot);
+    }
+}
+
+export const history = new HistoryManager();
+
+// --- Helper Functions ---
+function rgbToHex(rgb) {
+    if (!rgb) return '#ffffff';
+    const r = Math.round((rgb[0] || 0) * 255).toString(16).padStart(2, '0');
+    const g = Math.round((rgb[1] || 0) * 255).toString(16).padStart(2, '0');
+    const b = Math.round((rgb[2] || 0) * 255).toString(16).padStart(2, '0');
+    return `#${r}${g}${b}`;
+}
+
+function hexToRgb(hex) {
+    const cleanHex = hex.replace('#', '');
+    const num = parseInt(cleanHex, 16);
+    return [
+        ((num >> 16) & 255) / 255,
+        ((num >> 8) & 255) / 255,
+        (num & 255) / 255,
+        1.0
+    ];
+}
+
 function setupResizers() {
     const resizerLeft = document.getElementById('resizer-left');
     const resizerRight = document.getElementById('resizer-right');
@@ -38,10 +95,10 @@ function setupResizers() {
         if (!activeResizer) return;
 
         if (activeResizer === resizerLeft) {
-            const newWidth = Math.max(150, Math.min(e.clientX, window.innerWidth * 0.4));
+            const newWidth = Math.max(160, Math.min(e.clientX, window.innerWidth * 0.4));
             jerarquiaPanel.style.width = `${newWidth}px`;
         } else if (activeResizer === resizerRight) {
-            const newWidth = Math.max(180, Math.min(window.innerWidth - e.clientX, window.innerWidth * 0.4));
+            const newWidth = Math.max(200, Math.min(window.innerWidth - e.clientX, window.innerWidth * 0.4));
             inspectorPanel.style.width = `${newWidth}px`;
         }
     });
@@ -56,7 +113,7 @@ function setupResizers() {
     });
 }
 
-function updateHierarchyPanel() {
+export function updateHierarchyPanel() {
     const jerarquiaContent = document.querySelector('#jerarquia-panel .panel-content');
     if (!jerarquiaContent) return;
     jerarquiaContent.innerHTML = '';
@@ -71,7 +128,36 @@ function updateHierarchyPanel() {
             if (Engine.selectedGameObject === gameObject) {
                 li.classList.add('selected');
             }
-            li.textContent = gameObject.name;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = gameObject.name;
+            li.appendChild(nameSpan);
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'hierarchy-item-actions';
+
+            const dupBtn = document.createElement('button');
+            dupBtn.className = 'action-icon-btn';
+            dupBtn.title = 'Duplicar';
+            dupBtn.innerHTML = '📋';
+            dupBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                duplicateObject(gameObject);
+            });
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'action-icon-btn';
+            delBtn.title = 'Eliminar';
+            delBtn.innerHTML = '🗑️';
+            delBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteObject(gameObject);
+            });
+
+            actionsDiv.appendChild(dupBtn);
+            actionsDiv.appendChild(delBtn);
+            li.appendChild(actionsDiv);
+
             li.addEventListener('click', () => {
                 selectObject(gameObject);
             });
@@ -81,29 +167,98 @@ function updateHierarchyPanel() {
     jerarquiaContent.appendChild(ul);
 }
 
-function selectObject(gameObject) {
+export function selectObject(gameObject) {
     Engine.selectedGameObject = gameObject;
     updateHierarchyPanel();
     updateInspectorPanel();
 }
 
-function updateInspectorPanel() {
+export function deleteObject(gameObject = Engine.selectedGameObject) {
+    if (!gameObject || !Engine.scene) return;
+    history.pushState('Delete Object');
+    Engine.scene.removeGameObject(gameObject);
+    if (Engine.selectedGameObject === gameObject) {
+        Engine.selectedGameObject = Engine.scene.gameObjects.length > 0 ? Engine.scene.gameObjects[Engine.scene.gameObjects.length - 1] : null;
+    }
+    updateHierarchyPanel();
+    updateInspectorPanel();
+}
+
+export function duplicateObject(gameObject = Engine.selectedGameObject) {
+    if (!gameObject || !gameObject.mesh) return;
+    history.pushState('Duplicate Object');
+
+    const gl = Engine.gl;
+    const origMesh = gameObject.mesh;
+
+    const newMesh = new Mesh(
+        gl,
+        Array.from(origMesh.vertices),
+        Array.from(origMesh.indices),
+        Array.from(origMesh.normals),
+        Array.from(origMesh.colors)
+    );
+
+    const dupObj = new GameObject(`${gameObject.name} (Copia)`, newMesh);
+    vec3.copy(dupObj.transform.position, gameObject.transform.position);
+    dupObj.transform.position[0] += 0.5;
+    dupObj.transform.position[2] += 0.5;
+
+    vec3.copy(dupObj.transform.rotationDegrees, gameObject.transform.rotationDegrees);
+    dupObj.setRotationDegrees(
+        gameObject.transform.rotationDegrees[0],
+        gameObject.transform.rotationDegrees[1],
+        gameObject.transform.rotationDegrees[2]
+    );
+
+    vec3.copy(dupObj.transform.scale, gameObject.transform.scale);
+
+    dupObj.material = {
+        color: [...gameObject.material.color],
+        shininess: gameObject.material.shininess,
+        isUnlit: gameObject.material.isUnlit
+    };
+
+    Engine.scene.addGameObject(dupObj);
+    selectObject(dupObj);
+}
+
+export function updateInspectorPanel() {
     const inspectorContent = document.querySelector('#inspector-panel .panel-content');
     if (!inspectorContent) return;
 
     const selectedObject = Engine.selectedGameObject;
 
     if (!selectedObject) {
-        inspectorContent.innerHTML = '<p style="color: #777; text-align: center; margin-top: 20px;">Ningún objeto seleccionado</p>';
+        inspectorContent.innerHTML = '<p style="color: #666; text-align: center; margin-top: 24px; font-size: 12px;">Ningún objeto seleccionado</p>';
         return;
     }
 
+    const mat = selectedObject.material || { color: [0.85, 0.85, 0.85, 1.0], shininess: 32.0, isUnlit: false };
+
     inspectorContent.innerHTML = `
+        <!-- Object General Section -->
         <div class="inspector-section">
-            <div class="inspector-section-title">Objeto: ${selectedObject.name}</div>
+            <div class="inspector-section-title">
+                <span>Objeto</span>
+            </div>
+            <div class="control-group">
+                <span class="control-label">Nombre</span>
+                <input type="text" class="control-input-text" id="obj-name" value="${selectedObject.name}">
+            </div>
+            <div class="btn-group">
+                <button class="btn-secondary" id="btn-duplicate">
+                    <span>📋 Duplicar</span>
+                </button>
+                <button class="btn-danger" id="btn-delete">
+                    <span>🗑️ Eliminar</span>
+                </button>
+            </div>
         </div>
+
+        <!-- Transform Section -->
         <div class="inspector-section">
-            <div class="inspector-section-title">Transform</div>
+            <div class="inspector-section-title">Transformación</div>
 
             <div class="transform-row">
                 <div class="transform-row-label">Posición</div>
@@ -159,7 +314,61 @@ function updateInspectorPanel() {
                 </div>
             </div>
         </div>
+
+        <!-- Material Section -->
+        <div class="inspector-section">
+            <div class="inspector-section-title">Material</div>
+            <div class="control-group">
+                <span class="control-label">Color Base</span>
+                <input type="color" class="control-color-picker" id="mat-color" value="${rgbToHex(mat.color)}">
+            </div>
+            <div class="control-group">
+                <span class="control-label">Brillo (Specular)</span>
+                <input type="range" min="1" max="128" class="control-range" id="mat-shininess" value="${mat.shininess}">
+            </div>
+            <div class="control-group">
+                <span class="control-label">Sin Iluminación (Unlit)</span>
+                <input type="checkbox" class="control-checkbox" id="mat-unlit" ${mat.isUnlit ? 'checked' : ''}>
+            </div>
+        </div>
+
+        <!-- Tool / Brush Section -->
+        ${Engine.mode === 'sculpt' || Engine.mode === 'paint' ? `
+        <div class="inspector-section">
+            <div class="inspector-section-title">Ajustes de Pincel (${Engine.mode === 'sculpt' ? 'Escultura' : 'Pintura'})</div>
+            <div class="control-group">
+                <span class="control-label">Radio Pincel</span>
+                <input type="range" min="0.1" max="3.0" step="0.1" class="control-range" id="brush-radius" value="${Engine.brushRadius}">
+            </div>
+            ${Engine.mode === 'paint' ? `
+            <div class="control-group">
+                <span class="control-label">Color de Pintura</span>
+                <input type="color" class="control-color-picker" id="brush-color" value="${rgbToHex(Engine.brushColor)}">
+            </div>
+            ` : ''}
+        </div>
+        ` : ''}
     `;
+
+    // Connect Events
+    const objNameInput = inspectorContent.querySelector('#obj-name');
+    if (objNameInput) {
+        objNameInput.addEventListener('focus', () => history.pushState('Rename Object'));
+        objNameInput.addEventListener('change', (e) => {
+            selectedObject.name = e.target.value;
+            updateHierarchyPanel();
+        });
+    }
+
+    const btnDup = inspectorContent.querySelector('#btn-duplicate');
+    if (btnDup) {
+        btnDup.addEventListener('click', () => duplicateObject(selectedObject));
+    }
+
+    const btnDel = inspectorContent.querySelector('#btn-delete');
+    if (btnDel) {
+        btnDel.addEventListener('click', () => deleteObject(selectedObject));
+    }
 
     const posXInput = inspectorContent.querySelector('#pos-x');
     const posYInput = inspectorContent.querySelector('#pos-y');
@@ -189,8 +398,49 @@ function updateInspectorPanel() {
     };
 
     [posXInput, posYInput, posZInput, rotXInput, rotYInput, rotZInput, scaleXInput, scaleYInput, scaleZInput].forEach(input => {
-        if (input) input.addEventListener('input', updateTransform);
+        if (input) {
+            input.addEventListener('focus', () => history.pushState('Transform Input'));
+            input.addEventListener('input', updateTransform);
+        }
     });
+
+    const matColorInput = inspectorContent.querySelector('#mat-color');
+    if (matColorInput) {
+        matColorInput.addEventListener('focus', () => history.pushState('Material Color'));
+        matColorInput.addEventListener('input', (e) => {
+            selectedObject.material.color = hexToRgb(e.target.value);
+        });
+    }
+
+    const matShininessInput = inspectorContent.querySelector('#mat-shininess');
+    if (matShininessInput) {
+        matShininessInput.addEventListener('focus', () => history.pushState('Material Shininess'));
+        matShininessInput.addEventListener('input', (e) => {
+            selectedObject.material.shininess = parseFloat(e.target.value);
+        });
+    }
+
+    const matUnlitInput = inspectorContent.querySelector('#mat-unlit');
+    if (matUnlitInput) {
+        matUnlitInput.addEventListener('change', (e) => {
+            history.pushState('Material Unlit');
+            selectedObject.material.isUnlit = e.target.checked;
+        });
+    }
+
+    const brushRadiusInput = inspectorContent.querySelector('#brush-radius');
+    if (brushRadiusInput) {
+        brushRadiusInput.addEventListener('input', (e) => {
+            Engine.brushRadius = parseFloat(e.target.value);
+        });
+    }
+
+    const brushColorInput = inspectorContent.querySelector('#brush-color');
+    if (brushColorInput) {
+        brushColorInput.addEventListener('input', (e) => {
+            Engine.brushColor = hexToRgb(e.target.value);
+        });
+    }
 }
 
 function createPrimitiveMesh(type) {
@@ -226,7 +476,8 @@ function getPrimitiveName(type) {
     }
 }
 
-function spawnPrimitive(type) {
+export function spawnPrimitive(type) {
+    history.pushState(`Create ${type}`);
     const mesh = createPrimitiveMesh(type);
     const name = getPrimitiveName(type);
     const obj = new GameObject(name, mesh);
@@ -234,6 +485,114 @@ function spawnPrimitive(type) {
     vec3.set(obj.transform.position, (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);
     Engine.scene.addGameObject(obj);
     selectObject(obj);
+}
+
+// --- JSON Serialization & Scene Management ---
+export function serializeScene() {
+    if (!Engine.scene) return '{}';
+    const objectsData = Engine.scene.gameObjects.map(obj => ({
+        name: obj.name,
+        transform: {
+            position: Array.from(obj.transform.position),
+            rotationDegrees: Array.from(obj.transform.rotationDegrees),
+            scale: Array.from(obj.transform.scale)
+        },
+        material: {
+            color: [...obj.material.color],
+            shininess: obj.material.shininess,
+            isUnlit: obj.material.isUnlit
+        },
+        mesh: obj.mesh ? {
+            vertices: Array.from(obj.mesh.vertices),
+            indices: Array.from(obj.mesh.indices),
+            normals: Array.from(obj.mesh.normals),
+            colors: Array.from(obj.mesh.colors)
+        } : null
+    }));
+
+    return JSON.stringify({ version: '1.0', gameObjects: objectsData }, null, 2);
+}
+
+export function deserializeScene(jsonString) {
+    try {
+        const data = JSON.parse(jsonString);
+        if (!data || !data.gameObjects) return;
+
+        Engine.scene.gameObjects = [];
+        Engine.selectedGameObject = null;
+
+        for (const item of data.gameObjects) {
+            let mesh = null;
+            if (item.mesh) {
+                mesh = new Mesh(
+                    Engine.gl,
+                    item.mesh.vertices,
+                    item.mesh.indices,
+                    item.mesh.normals,
+                    item.mesh.colors
+                );
+            }
+            const obj = new GameObject(item.name, mesh);
+            vec3.set(obj.transform.position, item.transform.position[0], item.transform.position[1], item.transform.position[2]);
+            obj.setRotationDegrees(item.transform.rotationDegrees[0], item.transform.rotationDegrees[1], item.transform.rotationDegrees[2]);
+            vec3.set(obj.transform.scale, item.transform.scale[0], item.transform.scale[1], item.transform.scale[2]);
+
+            if (item.material) {
+                obj.material = {
+                    color: item.material.color,
+                    shininess: item.material.shininess,
+                    isUnlit: item.material.isUnlit
+                };
+            }
+            Engine.scene.addGameObject(obj);
+        }
+
+        if (Engine.scene.gameObjects.length > 0) {
+            selectObject(Engine.scene.gameObjects[0]);
+        } else {
+            updateHierarchyPanel();
+            updateInspectorPanel();
+        }
+    } catch (err) {
+        console.error('Error deserializing scene:', err);
+    }
+}
+
+export function saveSceneToFile() {
+    const jsonStr = serializeScene();
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'escena_3d.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+export function loadSceneFromFile() {
+    const fileInput = document.getElementById('file-input-json');
+    if (!fileInput) return;
+
+    fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            history.pushState('Load Scene');
+            deserializeScene(evt.target.result);
+            fileInput.value = '';
+        };
+        reader.readAsText(file);
+    };
+    fileInput.click();
+}
+
+export function resetScene() {
+    history.pushState('Reset Scene');
+    Engine.scene.gameObjects = [];
+    Engine.selectedGameObject = null;
+    updateHierarchyPanel();
+    updateInspectorPanel();
 }
 
 function setupCreateMenuEvents() {
@@ -245,8 +604,31 @@ function setupCreateMenuEvents() {
     });
 }
 
+function setupMenuEvents() {
+    const btnNew = document.getElementById('menu-new');
+    if (btnNew) btnNew.addEventListener('click', resetScene);
+
+    const btnOpen = document.getElementById('menu-open');
+    if (btnOpen) btnOpen.addEventListener('click', loadSceneFromFile);
+
+    const btnSave = document.getElementById('menu-save');
+    if (btnSave) btnSave.addEventListener('click', saveSceneToFile);
+
+    const btnUndo = document.getElementById('menu-undo');
+    if (btnUndo) btnUndo.addEventListener('click', () => history.undo());
+
+    const btnRedo = document.getElementById('menu-redo');
+    if (btnRedo) btnRedo.addEventListener('click', () => history.redo());
+
+    const btnDup = document.getElementById('menu-duplicate');
+    if (btnDup) btnDup.addEventListener('click', () => duplicateObject());
+
+    const btnDel = document.getElementById('menu-delete');
+    if (btnDel) btnDel.addEventListener('click', () => deleteObject());
+}
+
 function setupToolbarEvents() {
-    const statusMode = document.getElementById('status-mode');
+    const statusText = document.getElementById('status-mode-text');
 
     document.querySelectorAll('.submenu-item').forEach(item => {
         item.addEventListener('click', (e) => {
@@ -265,16 +647,78 @@ function setupToolbarEvents() {
 
             if (['translate', 'rotate', 'scale'].includes(selectedTool)) {
                 Engine.mode = 'object';
-                if (statusMode) statusMode.textContent = 'Modo Objeto';
+                if (statusText) statusText.textContent = 'Modo Objeto';
             } else if (['deform', 'inflate', 'smooth'].includes(selectedTool)) {
                 Engine.mode = 'sculpt';
-                if (statusMode) statusMode.textContent = 'Modo Escultura';
+                if (statusText) statusText.textContent = 'Modo Escultura';
             } else if (['brush', 'eraser', 'fill'].includes(selectedTool)) {
                 Engine.mode = 'paint';
-                if (statusMode) statusMode.textContent = 'Modo Pintura';
+                if (statusText) statusText.textContent = 'Modo Pintura';
             }
+
+            updateInspectorPanel();
         });
     });
+}
+
+function setupKeyboardShortcuts() {
+    window.addEventListener('keydown', (e) => {
+        // Ignore key shortcuts if focused inside an input field
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+            return;
+        }
+
+        const key = e.key.toLowerCase();
+
+        if (e.ctrlKey || e.metaKey) {
+            if (key === 'z') {
+                e.preventDefault();
+                history.undo();
+            } else if (key === 'y') {
+                e.preventDefault();
+                history.redo();
+            } else if (key === 's') {
+                e.preventDefault();
+                saveSceneToFile();
+            } else if (key === 'o') {
+                e.preventDefault();
+                loadSceneFromFile();
+            } else if (key === 'd') {
+                e.preventDefault();
+                duplicateObject();
+            }
+            return;
+        }
+
+        if (e.altKey) {
+            if (key === 'n') {
+                e.preventDefault();
+                resetScene();
+            }
+            return;
+        }
+
+        if (key === 'escape') {
+            e.preventDefault();
+            selectObject(null);
+        } else if (key === 'delete' || key === 'backspace') {
+            e.preventDefault();
+            deleteObject();
+        } else if (key === 'g') {
+            switchTool('translate');
+        } else if (key === 'r') {
+            switchTool('rotate');
+        } else if (key === 's') {
+            switchTool('scale');
+        }
+    });
+}
+
+function switchTool(toolName) {
+    const submenuItem = document.querySelector(`.submenu-item[data-tool="${toolName}"]`);
+    if (submenuItem) {
+        submenuItem.click();
+    }
 }
 
 function main() {
@@ -288,7 +732,9 @@ function main() {
 
         if (Engine.initialize(canvas)) {
             setupCreateMenuEvents();
+            setupMenuEvents();
             setupToolbarEvents();
+            setupKeyboardShortcuts();
 
             const sphereMesh = Mesh.createSphere(Engine.gl);
             const cubeMesh = Mesh.createCube(Engine.gl);
@@ -321,9 +767,14 @@ function main() {
 
                     if (Engine.mode === 'object' && Engine.selectedGameObject) {
                         activeGizmoAxis = Engine.pickGizmoAxis(e.clientX, e.clientY);
+                        if (activeGizmoAxis) {
+                            history.pushState('Transform Gizmo');
+                        }
                     } else if (Engine.mode === 'sculpt' && Engine.selectedGameObject) {
+                        history.pushState('Sculpt');
                         Sculpt.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool);
                     } else if (Engine.mode === 'paint' && Engine.selectedGameObject) {
+                        history.pushState('Paint');
                         Paint.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool, Engine.brushColor);
                     }
                 }

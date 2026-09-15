@@ -10,6 +10,11 @@ export class GameObject {
             rotation: quat.create(),
             scale: vec3.fromValues(1, 1, 1),
         };
+        this.material = {
+            color: [0.85, 0.85, 0.85, 1.0],
+            shininess: 32.0,
+            isUnlit: false
+        };
     }
 
     setRotationDegrees(xDeg, yDeg, zDeg) {

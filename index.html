@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Animation App - Carley World Engine</title>
+    <title>3D Animation Studio - Blender Style Engine</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,20 +12,40 @@
             <div class="menu-item">
                 <span>Archivo</span>
                 <div class="dropdown-menu">
-                    <div class="dropdown-item disabled">Nuevo</div>
-                    <div class="dropdown-item disabled">Abrir Escena</div>
-                    <div class="dropdown-item disabled">Guardar Escena</div>
-                    <div class="dropdown-divider"></div>
-                    <div class="dropdown-item disabled">Importar Modelo...</div>
+                    <div class="dropdown-item" id="menu-new">
+                        <span>Nuevo Escenario</span>
+                        <span class="shortcut">Alt+N</span>
+                    </div>
+                    <div class="dropdown-item" id="menu-open">
+                        <span>Abrir Escena (JSON)</span>
+                        <span class="shortcut">Ctrl+O</span>
+                    </div>
+                    <div class="dropdown-item" id="menu-save">
+                        <span>Guardar Escena (JSON)</span>
+                        <span class="shortcut">Ctrl+S</span>
+                    </div>
                 </div>
             </div>
             <div class="menu-item">
                 <span>Editar</span>
                 <div class="dropdown-menu">
-                    <div class="dropdown-item disabled">Deshacer</div>
-                    <div class="dropdown-item disabled">Rehacer</div>
+                    <div class="dropdown-item" id="menu-undo">
+                        <span>Deshacer</span>
+                        <span class="shortcut">Ctrl+Z</span>
+                    </div>
+                    <div class="dropdown-item" id="menu-redo">
+                        <span>Rehacer</span>
+                        <span class="shortcut">Ctrl+Y</span>
+                    </div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item disabled">Preferencias</div>
+                    <div class="dropdown-item" id="menu-duplicate">
+                        <span>Duplicar Objeto</span>
+                        <span class="shortcut">Ctrl+D</span>
+                    </div>
+                    <div class="dropdown-item" id="menu-delete">
+                        <span>Eliminar Objeto</span>
+                        <span class="shortcut">Supr</span>
+                    </div>
                 </div>
             </div>
             <div class="menu-item">
@@ -41,15 +61,15 @@
                     <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
                 </div>
             </div>
-            <div class="menu-item">
-                <span>Ventana</span>
-                <div class="dropdown-menu">
-                    <div class="dropdown-item">Restablecer Layout</div>
-                </div>
-            </div>
         </div>
-        <div class="status-bar" id="status-mode">Modo Objeto</div>
+        <div class="status-bar" id="status-mode">
+            <span class="status-dot">●</span>
+            <span id="status-mode-text">Modo Objeto</span>
+        </div>
     </div>
+
+    <!-- Hidden file input for opening JSON scene -->
+    <input type="file" id="file-input-json" accept=".json" style="display: none;" />
 
     <div id="app-container">
         <div id="jerarquia-panel" class="panel">
@@ -75,7 +95,6 @@
         <div class="resizer" id="resizer-left"></div>
 
         <div id="visor-panel" class="panel">
-            <div class="panel-title">Visor 3D</div>
             <!-- Overlay Toolbar inside 3D Viewport -->
             <div id="viewport-toolbar">
                 <div class="tool-category" id="cat-transform">
@@ -84,9 +103,9 @@
                         <span>Transformar</span>
                     </button>
                     <div class="tool-submenu">
-                        <div class="submenu-item active" data-tool="translate">Mover (Translación)</div>
-                        <div class="submenu-item" data-tool="rotate">Rotar</div>
-                        <div class="submenu-item" data-tool="scale">Escalar</div>
+                        <div class="submenu-item active" data-tool="translate">Mover (G)</div>
+                        <div class="submenu-item" data-tool="rotate">Rotar (R)</div>
+                        <div class="submenu-item" data-tool="scale">Escalar (S)</div>
                     </div>
                 </div>
 
