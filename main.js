@@ -92,48 +92,60 @@ function updateInspectorPanel() {
             <div class="inspector-section-title">Objeto: ${selectedObject.name}</div>
         </div>
         <div class="inspector-section">
-            <div class="inspector-section-title">Posición</div>
-            <div class="input-group-row">
-                <label class="label-x">X</label>
-                <input type="number" step="0.1" id="pos-x" value="${selectedObject.transform.position[0].toFixed(2)}">
+            <div class="inspector-section-title">Transform</div>
+
+            <div class="transform-row">
+                <div class="transform-row-label">Posición</div>
+                <div class="transform-inputs">
+                    <div class="axis-input">
+                        <span class="axis-label x">X</span>
+                        <input type="number" step="0.1" id="pos-x" value="${selectedObject.transform.position[0].toFixed(2)}">
+                    </div>
+                    <div class="axis-input">
+                        <span class="axis-label y">Y</span>
+                        <input type="number" step="0.1" id="pos-y" value="${selectedObject.transform.position[1].toFixed(2)}">
+                    </div>
+                    <div class="axis-input">
+                        <span class="axis-label z">Z</span>
+                        <input type="number" step="0.1" id="pos-z" value="${selectedObject.transform.position[2].toFixed(2)}">
+                    </div>
+                </div>
             </div>
-            <div class="input-group-row">
-                <label class="label-y">Y</label>
-                <input type="number" step="0.1" id="pos-y" value="${selectedObject.transform.position[1].toFixed(2)}">
+
+            <div class="transform-row">
+                <div class="transform-row-label">Rotación (º)</div>
+                <div class="transform-inputs">
+                    <div class="axis-input">
+                        <span class="axis-label x">X</span>
+                        <input type="number" step="1" id="rot-x" value="${selectedObject.transform.rotationDegrees[0].toFixed(1)}">
+                    </div>
+                    <div class="axis-input">
+                        <span class="axis-label y">Y</span>
+                        <input type="number" step="1" id="rot-y" value="${selectedObject.transform.rotationDegrees[1].toFixed(1)}">
+                    </div>
+                    <div class="axis-input">
+                        <span class="axis-label z">Z</span>
+                        <input type="number" step="1" id="rot-z" value="${selectedObject.transform.rotationDegrees[2].toFixed(1)}">
+                    </div>
+                </div>
             </div>
-            <div class="input-group-row">
-                <label class="label-z">Z</label>
-                <input type="number" step="0.1" id="pos-z" value="${selectedObject.transform.position[2].toFixed(2)}">
-            </div>
-        </div>
-        <div class="inspector-section">
-            <div class="inspector-section-title">Rotación (º)</div>
-            <div class="input-group-row">
-                <label class="label-x">X</label>
-                <input type="number" step="1" id="rot-x" value="${selectedObject.transform.rotationDegrees[0].toFixed(1)}">
-            </div>
-            <div class="input-group-row">
-                <label class="label-y">Y</label>
-                <input type="number" step="1" id="rot-y" value="${selectedObject.transform.rotationDegrees[1].toFixed(1)}">
-            </div>
-            <div class="input-group-row">
-                <label class="label-z">Z</label>
-                <input type="number" step="1" id="rot-z" value="${selectedObject.transform.rotationDegrees[2].toFixed(1)}">
-            </div>
-        </div>
-        <div class="inspector-section">
-            <div class="inspector-section-title">Escala</div>
-            <div class="input-group-row">
-                <label class="label-x">X</label>
-                <input type="number" step="0.1" id="scale-x" value="${selectedObject.transform.scale[0].toFixed(2)}">
-            </div>
-            <div class="input-group-row">
-                <label class="label-y">Y</label>
-                <input type="number" step="0.1" id="scale-y" value="${selectedObject.transform.scale[1].toFixed(2)}">
-            </div>
-            <div class="input-group-row">
-                <label class="label-z">Z</label>
-                <input type="number" step="0.1" id="scale-z" value="${selectedObject.transform.scale[2].toFixed(2)}">
+
+            <div class="transform-row">
+                <div class="transform-row-label">Escala</div>
+                <div class="transform-inputs">
+                    <div class="axis-input">
+                        <span class="axis-label x">X</span>
+                        <input type="number" step="0.1" id="scale-x" value="${selectedObject.transform.scale[0].toFixed(2)}">
+                    </div>
+                    <div class="axis-input">
+                        <span class="axis-label y">Y</span>
+                        <input type="number" step="0.1" id="scale-y" value="${selectedObject.transform.scale[1].toFixed(2)}">
+                    </div>
+                    <div class="axis-input">
+                        <span class="axis-label z">Z</span>
+                        <input type="number" step="0.1" id="scale-z" value="${selectedObject.transform.scale[2].toFixed(2)}">
+                    </div>
+                </div>
             </div>
         </div>
     `;

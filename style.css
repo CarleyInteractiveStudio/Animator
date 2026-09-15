@@ -206,39 +206,68 @@ body {
     font-size: 12px;
     font-weight: bold;
     color: #4db8ff;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.transform-row {
     margin-bottom: 10px;
+}
+
+.transform-row:last-child {
+    margin-bottom: 0;
+}
+
+.transform-row-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #aaa;
+    margin-bottom: 4px;
     text-transform: uppercase;
 }
 
-.input-group-row {
+.transform-inputs {
+    display: flex;
+    gap: 6px;
+}
+
+.axis-input {
     display: flex;
     align-items: center;
-    margin-bottom: 8px;
-    font-size: 12px;
-}
-
-.input-group-row label {
-    width: 25px;
-    font-weight: bold;
-}
-
-.input-group-row label.label-x { color: #ff5555; }
-.input-group-row label.label-y { color: #55ff55; }
-.input-group-row label.label-z { color: #5588ff; }
-
-.input-group-row input[type="number"] {
     flex: 1;
     background-color: #1a1a1a;
     border: 1px solid #444;
-    color: #fff;
-    padding: 4px 6px;
     border-radius: 3px;
-    font-size: 12px;
-    outline: none;
+    padding: 2px 4px;
+    overflow: hidden;
 }
 
-.input-group-row input[type="number"]:focus {
+.axis-input:focus-within {
     border-color: #4db8ff;
+}
+
+.axis-label {
+    font-size: 10px;
+    font-weight: bold;
+    width: 14px;
+    text-align: center;
+}
+
+.axis-label.x { color: #ff5555; }
+.axis-label.y { color: #55ff55; }
+.axis-label.z { color: #5588ff; }
+
+.axis-input input[type="number"] {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 11px;
+    outline: none;
+    padding: 2px;
 }
 
 canvas {
