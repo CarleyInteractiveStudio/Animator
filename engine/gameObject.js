@@ -10,30 +10,6 @@ export class GameObject {
             rotation: quat.create(),
             scale: vec3.fromValues(1, 1, 1),
         };
-        this.material = {
-            color: [0.85, 0.85, 0.85, 1.0],
-            shininess: 32.0,
-            isUnlit: false
-        };
-        this.keyframes = [];
-        this.components = [];
-    }
-
-    addComponent(comp) {
-        if (!comp) return;
-        this.components.push(comp);
-    }
-
-    removeComponent(compId) {
-        this.components = this.components.filter(c => c.id !== compId);
-    }
-
-    updateComponents(deltaTime) {
-        for (const comp of this.components) {
-            if (comp.enabled && typeof comp.update === 'function') {
-                comp.update(this, deltaTime);
-            }
-        }
     }
 
     setRotationDegrees(xDeg, yDeg, zDeg) {

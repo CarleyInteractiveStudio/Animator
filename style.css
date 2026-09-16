@@ -188,7 +188,7 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 0 4px;
-    height: 32px;
+    height: 34px;
 }
 
 .panel-tab {
@@ -202,6 +202,12 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.panel-tab-icon {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
 }
 
 .panel-tab:hover {
@@ -403,7 +409,7 @@ body {
     border: none;
     color: #888888;
     cursor: pointer;
-    padding: 2px 4px;
+    padding: 3px 5px;
     border-radius: 3px;
     display: flex;
     align-items: center;
@@ -413,6 +419,12 @@ body {
 .action-icon-btn:hover {
     background: #3a3a3a;
     color: #ffffff;
+}
+
+.btn-svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
 }
 
 /* Inspector Controls */
@@ -629,9 +641,12 @@ body {
     border: 1px solid #383838;
     color: #ffffff;
     border-radius: 4px;
-    padding: 3px 8px;
+    padding: 4px 8px;
     cursor: pointer;
     font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-icon:hover {
@@ -677,7 +692,12 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    cursor: pointer;
+}
+
+.comp-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .component-body {

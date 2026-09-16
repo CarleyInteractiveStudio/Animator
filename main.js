@@ -20,6 +20,14 @@ let objectCounters = {
 
 export const animationManager = new AnimationManager(Engine);
 
+const SVG_ICONS = {
+    duplicate: `<svg class="btn-svg" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`,
+    trash: `<svg class="btn-svg" viewBox="0 0 24 24"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5L8.5 4H5v2h14V4z"/></svg>`,
+    component: `<svg class="btn-svg" viewBox="0 0 24 24"><path fill="currentColor" d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.38 0 2.5 1.12 2.5 2.5S4.88 15.8 3.5 15.8H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z"/></svg>`,
+    play: `<svg class="btn-svg" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>`,
+    pause: `<svg class="btn-svg" viewBox="0 0 24 24"><path fill="currentColor" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`
+};
+
 // --- History / Undo System ---
 export class HistoryManager {
     constructor() {
@@ -143,7 +151,7 @@ export function updateHierarchyPanel() {
             const dupBtn = document.createElement('button');
             dupBtn.className = 'action-icon-btn';
             dupBtn.title = 'Duplicar';
-            dupBtn.innerHTML = '📋';
+            dupBtn.innerHTML = SVG_ICONS.duplicate;
             dupBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 duplicateObject(gameObject);
@@ -152,7 +160,7 @@ export function updateHierarchyPanel() {
             const delBtn = document.createElement('button');
             delBtn.className = 'action-icon-btn';
             delBtn.title = 'Eliminar';
-            delBtn.innerHTML = '🗑️';
+            delBtn.innerHTML = SVG_ICONS.trash;
             delBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 deleteObject(gameObject);
@@ -246,8 +254,13 @@ export function updateInspectorPanel() {
             componentsHTML += `
                 <div class="component-card" data-comp-id="${comp.id}">
                     <div class="component-header">
-                        <span>🧩 ${comp.name}</span>
-                        <button class="action-icon-btn btn-del-comp" title="Eliminar Componente" data-comp-id="${comp.id}">🗑️</button>
+                        <div class="comp-title">
+                            ${SVG_ICONS.component}
+                            <span>${comp.name}</span>
+                        </div>
+                        <button class="action-icon-btn btn-del-comp" title="Eliminar Componente" data-comp-id="${comp.id}">
+                            ${SVG_ICONS.trash}
+                        </button>
                     </div>
                     <div class="component-body">
                         ${comp.type === 'autoRotate' ? `
@@ -280,10 +293,12 @@ export function updateInspectorPanel() {
             </div>
             <div class="btn-group">
                 <button class="btn-secondary" id="btn-duplicate">
-                    <span>📋 Duplicar</span>
+                    ${SVG_ICONS.duplicate}
+                    <span>Duplicar</span>
                 </button>
                 <button class="btn-danger" id="btn-delete">
-                    <span>🗑️ Eliminar</span>
+                    ${SVG_ICONS.trash}
+                    <span>Eliminar</span>
                 </button>
             </div>
         </div>
@@ -751,9 +766,9 @@ function setupTimelineEvents() {
         btnPlay.addEventListener('click', () => {
             if (animationManager.isPlaying) {
                 animationManager.pause();
-                btnPlay.textContent = '▶';
+                btnPlay.innerHTML = SVG_ICONS.play;
             } else {
-                btnPlay.textContent = '⏸';
+                btnPlay.innerHTML = SVG_ICONS.pause;
                 animationManager.play((frame) => {
                     if (slider) slider.value = frame;
                     if (frameLbl) frameLbl.textContent = frame;
@@ -768,7 +783,7 @@ function setupTimelineEvents() {
             animationManager.rewind((frame) => {
                 if (slider) slider.value = frame;
                 if (frameLbl) frameLbl.textContent = frame;
-                if (btnPlay) btnPlay.textContent = '▶';
+                if (btnPlay) btnPlay.innerHTML = SVG_ICONS.play;
                 updateInspectorPanel();
             });
         });
