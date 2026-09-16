@@ -138,6 +138,7 @@ export function updateHierarchyPanel() {
         for (const gameObject of Engine.scene.gameObjects) {
             const li = document.createElement('li');
             li.className = 'hierarchy-item';
+            li.dataset.objId = gameObject.id;
             if (Engine.selectedGameObject === gameObject) {
                 li.classList.add('selected');
             }
@@ -888,6 +889,72 @@ function setupCreateMenuEvents() {
             spawnPrimitive(type);
         });
     });
+
+    // Handle tab view switching via '+' button dropdowns
+    document.querySelectorAll('[data-switch-panel]').forEach(item => {
+        item.addEventListener('click', (e) => {
+            const panelType = e.currentTarget.getAttribute('data-switch-panel');
+            if (panelType === 'timeline') {
+                const timeline = document.getElementById('timeline-panel');
+                if (timeline) timeline.classList.remove('hidden');
+            } else {
+                setLayout('default');
+            }
+        });
+    });
+}
+
+function setupHierarchyContextMenu() {
+    const contextMenu = document.getElementById('hierarchy-context-menu');
+    const jerarquiaPanel = document.getElementById('jerarquia-panel');
+    let contextTargetObj = null;
+
+    if (!jerarquiaPanel || !contextMenu) return;
+
+    jerarquiaPanel.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+
+        const itemEl = e.target.closest('.hierarchy-item');
+        const objActionDivider = contextMenu.querySelector('.obj-action-divider');
+        const objActionItems = contextMenu.querySelectorAll('.obj-action-item');
+
+        if (itemEl && Engine.scene) {
+            const objId = parseInt(itemEl.dataset.objId);
+            contextTargetObj = Engine.scene.gameObjects.find(g => g.id === objId);
+            if (contextTargetObj) {
+                selectObject(contextTargetObj);
+            }
+            if (objActionDivider) objActionDivider.style.display = 'block';
+            objActionItems.forEach(el => el.style.display = 'block');
+        } else {
+            contextTargetObj = null;
+            if (objActionDivider) objActionDivider.style.display = 'none';
+            objActionItems.forEach(el => el.style.display = 'none');
+        }
+
+        contextMenu.style.left = `${e.clientX}px`;
+        contextMenu.style.top = `${e.clientY}px`;
+        contextMenu.style.display = 'block';
+    });
+
+    document.addEventListener('click', () => {
+        if (contextMenu) contextMenu.style.display = 'none';
+    });
+
+    contextMenu.querySelectorAll('[data-context-action]').forEach(item => {
+        item.addEventListener('click', (e) => {
+            const action = e.currentTarget.getAttribute('data-context-action');
+            if (action.startsWith('create-')) {
+                const type = action.replace('create-', '');
+                spawnPrimitive(type);
+            } else if (action === 'duplicate-obj') {
+                if (contextTargetObj) duplicateObject(contextTargetObj);
+            } else if (action === 'delete-obj') {
+                if (contextTargetObj) deleteObject(contextTargetObj);
+            }
+            contextMenu.style.display = 'none';
+        });
+    });
 }
 
 function setupMenuEvents() {
@@ -1045,6 +1112,7 @@ function main() {
 
         if (Engine.initialize(canvas)) {
             setupCreateMenuEvents();
+            setupHierarchyContextMenu();
             setupMenuEvents();
             setupToolbarEvents();
             setupTimelineEvents();

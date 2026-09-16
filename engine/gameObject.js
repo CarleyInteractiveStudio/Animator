@@ -2,6 +2,7 @@ import { vec3, quat, mat4 } from './math.js';
 
 export class GameObject {
     constructor(name = 'GameObject', mesh = null) {
+        this.id = nextGameObjectId++;
         this.name = name;
         this.mesh = mesh;
         this.transform = {

@@ -95,23 +95,13 @@
                         <svg class="panel-tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
                         <span>Jerarquía</span>
                     </div>
-                </div>
-                <div class="panel-header-actions">
-                    <div class="menu-item add-btn">
-                        <span>+ Crear</span>
+                    <div class="menu-item panel-tab-add-btn" title="Añadir Pestaña / Cambiar Vista">
+                        <svg class="panel-tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                         <div class="dropdown-menu">
-                            <div class="dropdown-item" data-create="cube">Cubo</div>
-                            <div class="dropdown-item" data-create="sphere">Esfera</div>
-                            <div class="dropdown-item" data-create="plane">Plano</div>
-                            <div class="dropdown-item" data-create="cylinder">Cilindro</div>
-                            <div class="dropdown-item" data-create="cone">Cono</div>
-                            <div class="dropdown-item" data-create="pyramid">Pirámide</div>
-                            <div class="dropdown-item" data-create="ramp">Prisma / Rampa</div>
-                            <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
-                            <div class="dropdown-divider"></div>
-                            <div class="dropdown-item" data-create="light-sun">Luz Sol (Direccional)</div>
-                            <div class="dropdown-item" data-create="light-point">Luz Puntual</div>
-                            <div class="dropdown-item" data-create="light-spot">Luz Focal</div>
+                            <div class="dropdown-item" data-switch-panel="hierarchy">Jerarquía</div>
+                            <div class="dropdown-item" data-switch-panel="visor">Visor 3D</div>
+                            <div class="dropdown-item" data-switch-panel="inspector">Inspector</div>
+                            <div class="dropdown-item" data-switch-panel="timeline">Línea de Tiempo</div>
                         </div>
                     </div>
                 </div>
@@ -125,6 +115,15 @@
                     <div class="panel-tab active" data-tab="visor">
                         <svg class="panel-tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18s-.41-.06-.57-.18l-7.9-4.44A.991.991 0 0 1 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18s.41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9zM12 4.15L6.04 7.5 12 10.85l5.96-3.35L12 4.15zM5 9.07v5.82l6 3.38v-5.83L5 9.07zm14 0l-6 3.37v5.83l6-3.38V9.07z"/></svg>
                         <span>Visor 3D</span>
+                    </div>
+                    <div class="menu-item panel-tab-add-btn" title="Añadir Pestaña / Cambiar Vista">
+                        <svg class="panel-tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-item" data-switch-panel="hierarchy">Jerarquía</div>
+                            <div class="dropdown-item" data-switch-panel="visor">Visor 3D</div>
+                            <div class="dropdown-item" data-switch-panel="inspector">Inspector</div>
+                            <div class="dropdown-item" data-switch-panel="timeline">Línea de Tiempo</div>
+                        </div>
                     </div>
                 </div>
                 <!-- Overlay Toolbar inside 3D Viewport -->
@@ -183,9 +182,37 @@
                         <svg class="panel-tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6-3.6z"/></svg>
                         <span>Inspector</span>
                     </div>
+                    <div class="menu-item panel-tab-add-btn" title="Añadir Pestaña / Cambiar Vista">
+                        <svg class="panel-tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-item" data-switch-panel="hierarchy">Jerarquía</div>
+                            <div class="dropdown-item" data-switch-panel="visor">Visor 3D</div>
+                            <div class="dropdown-item" data-switch-panel="inspector">Inspector</div>
+                            <div class="dropdown-item" data-switch-panel="timeline">Línea de Tiempo</div>
+                        </div>
+                    </div>
                 </div>
                 <div class="panel-content"></div>
             </div>
+        </div>
+
+        <!-- Custom Context Menu for Hierarchy -->
+        <div id="hierarchy-context-menu" class="context-menu">
+            <div class="context-menu-item" data-context-action="create-cube">Crear Cubo</div>
+            <div class="context-menu-item" data-context-action="create-sphere">Crear Esfera</div>
+            <div class="context-menu-item" data-context-action="create-plane">Crear Plano</div>
+            <div class="context-menu-item" data-context-action="create-cylinder">Crear Cilindro</div>
+            <div class="context-menu-item" data-context-action="create-cone">Crear Cono</div>
+            <div class="context-menu-item" data-context-action="create-pyramid">Crear Pirámide</div>
+            <div class="context-menu-item" data-context-action="create-ramp">Crear Prisma</div>
+            <div class="context-menu-item" data-context-action="create-torus">Crear Torus</div>
+            <div class="dropdown-divider"></div>
+            <div class="context-menu-item" data-context-action="create-light-sun">Crear Luz Sol</div>
+            <div class="context-menu-item" data-context-action="create-light-point">Crear Luz Puntual</div>
+            <div class="context-menu-item" data-context-action="create-light-spot">Crear Luz Focal</div>
+            <div class="dropdown-divider obj-action-divider" style="display: none;"></div>
+            <div class="context-menu-item obj-action-item" data-context-action="duplicate-obj" style="display: none;">Duplicar Objeto</div>
+            <div class="context-menu-item obj-action-item" data-context-action="delete-obj" style="display: none;">Eliminar Objeto</div>
         </div>
 
         <!-- Timeline Bottom Panel -->
