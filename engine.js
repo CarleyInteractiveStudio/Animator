@@ -3,6 +3,7 @@ import { Camera } from './engine/camera.js';
 import { Input } from './engine/input.js';
 import { Scene } from './engine/scene.js';
 import { Gizmo } from './engine/gizmo.js';
+import { Grid } from './engine/grid.js';
 import { mat4, mat3, vec3 } from './engine/math.js';
 
 let webglContext;
@@ -15,7 +16,8 @@ const Engine = {
     camera: null,
     selectedGameObject: null,
     gizmo: null,
-    mode: 'object', // 'object', 'sculpt', 'paint'
+    grid: null,
+    mode: 'object', // 'object', 'sculpt', 'paint', 'animation'
     activeTool: 'translate', // 'translate', 'rotate', 'scale', 'deform', 'inflate', 'smooth', 'brush', 'eraser', 'fill'
     brushRadius: 0.8,
     brushColor: [1.0, 0.2, 0.2, 1.0],
@@ -34,6 +36,7 @@ const Engine = {
         Input.initialize(canvas);
         Engine.scene = new Scene();
         Engine.gizmo = new Gizmo(Engine.gl);
+        Engine.grid = new Grid(Engine.gl, 20, 1.0);
 
         return true;
     },
@@ -195,13 +198,21 @@ const Engine = {
 
             updateCamera(deltaTime);
 
+            if (Engine.scene && Engine.scene.gameObjects) {
+                for (const obj of Engine.scene.gameObjects) {
+                    if (obj.updateComponents) {
+                        obj.updateComponents(deltaTime);
+                    }
+                }
+            }
+
             const aspect = canvas.clientWidth / canvas.clientHeight || 1.0;
             const projectionMatrix = mat4.create();
             mat4.perspective(projectionMatrix, 45 * Math.PI / 180, aspect, 0.1, 100.0);
 
             const viewMatrix = camera.getViewMatrix();
 
-            renderWebGL(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix, Engine.selectedGameObject, Engine.gizmo, Engine.mode, Engine.activeTool, Engine.brushRadius);
+            renderWebGL(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix, Engine.selectedGameObject, Engine.gizmo, Engine.mode, Engine.activeTool, Engine.brushRadius, Engine.grid, camera);
             requestAnimationFrame(gameLoop);
         }
         requestAnimationFrame(gameLoop);

@@ -15,7 +15,8 @@ let objectCounters = {
     cone: 0,
     pyramid: 0,
     ramp: 0,
-    torus: 0
+    torus: 0,
+    light: 0
 };
 
 export const animationManager = new AnimationManager(Engine);
@@ -228,8 +229,15 @@ export function duplicateObject(gameObject = Engine.selectedGameObject) {
     dupObj.material = {
         color: [...gameObject.material.color],
         shininess: gameObject.material.shininess,
+        roughness: gameObject.material.roughness,
+        metallic: gameObject.material.metallic,
         isUnlit: gameObject.material.isUnlit
     };
+
+    if (gameObject.isLightObject) {
+        dupObj.isLightObject = true;
+        dupObj.lightData = { ...gameObject.lightData };
+    }
 
     Engine.scene.addGameObject(dupObj);
     selectObject(dupObj);
@@ -246,7 +254,8 @@ export function updateInspectorPanel() {
         return;
     }
 
-    const mat = selectedObject.material || { color: [0.85, 0.85, 0.85, 1.0], shininess: 32.0, isUnlit: false };
+    const mat = selectedObject.material || { color: [0.85, 0.85, 0.85, 1.0], shininess: 32.0, roughness: 0.3, metallic: 0.1, isUnlit: false };
+    const light = selectedObject.lightData || { color: [1.0, 0.98, 0.92], intensity: 1.5 };
 
     let componentsHTML = '';
     if (selectedObject.components && selectedObject.components.length > 0) {
@@ -302,6 +311,21 @@ export function updateInspectorPanel() {
                 </button>
             </div>
         </div>
+
+        <!-- Light Section (if Light Object) -->
+        ${selectedObject.isLightObject ? `
+        <div class="inspector-section">
+            <div class="inspector-section-title">Propiedades de Luz</div>
+            <div class="control-group">
+                <span class="control-label">Color Luz</span>
+                <input type="color" class="control-color-picker" id="light-color" value="${rgbToHex(light.color)}">
+            </div>
+            <div class="control-group">
+                <span class="control-label">Intensidad Sol</span>
+                <input type="range" min="0.1" max="5.0" step="0.1" class="control-range" id="light-intensity" value="${light.intensity}">
+            </div>
+        </div>
+        ` : ''}
 
         <!-- Transform Section -->
         <div class="inspector-section">
@@ -362,16 +386,20 @@ export function updateInspectorPanel() {
             </div>
         </div>
 
-        <!-- Material Section -->
+        <!-- Material PBR Section -->
         <div class="inspector-section">
-            <div class="inspector-section-title">Material</div>
+            <div class="inspector-section-title">Material PBR</div>
             <div class="control-group">
                 <span class="control-label">Color Base</span>
                 <input type="color" class="control-color-picker" id="mat-color" value="${rgbToHex(mat.color)}">
             </div>
             <div class="control-group">
-                <span class="control-label">Brillo (Specular)</span>
-                <input type="range" min="1" max="128" class="control-range" id="mat-shininess" value="${mat.shininess}">
+                <span class="control-label">Rugosidad (Roughness)</span>
+                <input type="range" min="0" max="1" step="0.01" class="control-range" id="mat-roughness" value="${mat.roughness !== undefined ? mat.roughness : 0.3}">
+            </div>
+            <div class="control-group">
+                <span class="control-label">Metálico (Metallic)</span>
+                <input type="range" min="0" max="1" step="0.01" class="control-range" id="mat-metallic" value="${mat.metallic !== undefined ? mat.metallic : 0.1}">
             </div>
             <div class="control-group">
                 <span class="control-label">Sin Iluminación (Unlit)</span>
@@ -432,6 +460,21 @@ export function updateInspectorPanel() {
     const btnDel = inspectorContent.querySelector('#btn-delete');
     if (btnDel) {
         btnDel.addEventListener('click', () => deleteObject(selectedObject));
+    }
+
+    // Light Inputs
+    const lightColorInput = inspectorContent.querySelector('#light-color');
+    if (lightColorInput && selectedObject.lightData) {
+        lightColorInput.addEventListener('input', (e) => {
+            selectedObject.lightData.color = hexToRgb(e.target.value);
+        });
+    }
+
+    const lightIntensityInput = inspectorContent.querySelector('#light-intensity');
+    if (lightIntensityInput && selectedObject.lightData) {
+        lightIntensityInput.addEventListener('input', (e) => {
+            selectedObject.lightData.intensity = parseFloat(e.target.value);
+        });
     }
 
     // Add Component Events
@@ -522,11 +565,17 @@ export function updateInspectorPanel() {
         });
     }
 
-    const matShininessInput = inspectorContent.querySelector('#mat-shininess');
-    if (matShininessInput) {
-        matShininessInput.addEventListener('focus', () => history.pushState('Material Shininess'));
-        matShininessInput.addEventListener('input', (e) => {
-            selectedObject.material.shininess = parseFloat(e.target.value);
+    const matRoughnessInput = inspectorContent.querySelector('#mat-roughness');
+    if (matRoughnessInput) {
+        matRoughnessInput.addEventListener('input', (e) => {
+            selectedObject.material.roughness = parseFloat(e.target.value);
+        });
+    }
+
+    const matMetallicInput = inspectorContent.querySelector('#mat-metallic');
+    if (matMetallicInput) {
+        matMetallicInput.addEventListener('input', (e) => {
+            selectedObject.material.metallic = parseFloat(e.target.value);
         });
     }
 
@@ -563,6 +612,10 @@ function createPrimitiveMesh(type) {
         case 'pyramid': return Mesh.createPyramid(gl);
         case 'ramp': return Mesh.createRamp(gl);
         case 'torus': return Mesh.createTorus(gl);
+        case 'light-sun':
+        case 'light-point':
+        case 'light-spot':
+            return Mesh.createSphere(gl, 0.25, 12, 12);
         case 'cube':
         default:
             return Mesh.createCube(gl);
@@ -570,6 +623,10 @@ function createPrimitiveMesh(type) {
 }
 
 function getPrimitiveName(type) {
+    if (type.startsWith('light-')) {
+        objectCounters.light = (objectCounters.light || 0) + 1;
+        return `Luz Sol ${objectCounters.light}`;
+    }
     objectCounters[type] = (objectCounters[type] || 0) + 1;
     const num = objectCounters[type];
     switch (type) {
@@ -592,34 +649,54 @@ export function spawnPrimitive(type) {
     const name = getPrimitiveName(type);
     const obj = new GameObject(name, mesh);
 
-    vec3.set(obj.transform.position, (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);
+    if (type.startsWith('light-')) {
+        obj.isLightObject = true;
+        obj.lightData = {
+            type: type,
+            color: [1.0, 0.98, 0.92],
+            intensity: 2.0
+        };
+        obj.material.color = [1.0, 0.9, 0.3, 1.0];
+        obj.material.isUnlit = true;
+        vec3.set(obj.transform.position, 2.0, 4.0, 2.0);
+    } else {
+        vec3.set(obj.transform.position, (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);
+    }
+
     Engine.scene.addGameObject(obj);
     selectObject(obj);
 }
 
 // --- JSON Serialization & Scene Management ---
 export function serializeScene() {
-    if (!Engine.scene) return '{}';
-    const objectsData = Engine.scene.gameObjects.map(obj => ({
-        name: obj.name,
-        transform: {
-            position: Array.from(obj.transform.position),
-            rotationDegrees: Array.from(obj.transform.rotationDegrees),
-            scale: Array.from(obj.transform.scale)
-        },
-        material: {
-            color: [...obj.material.color],
-            shininess: obj.material.shininess,
-            isUnlit: obj.material.isUnlit
-        },
-        keyframes: obj.keyframes ? [...obj.keyframes] : [],
-        mesh: obj.mesh ? {
-            vertices: Array.from(obj.mesh.vertices),
-            indices: Array.from(obj.mesh.indices),
-            normals: Array.from(obj.mesh.normals),
-            colors: Array.from(obj.mesh.colors)
-        } : null
-    }));
+    if (!Engine.scene || !Engine.scene.gameObjects) return '{}';
+    const objectsData = Engine.scene.gameObjects.map(obj => {
+        const mat = obj.material || { color: [0.85, 0.85, 0.85, 1.0], shininess: 32.0, roughness: 0.3, metallic: 0.1, isUnlit: false };
+        return {
+            name: obj.name || 'Objeto',
+            isLightObject: !!obj.isLightObject,
+            lightData: obj.lightData ? { ...obj.lightData } : null,
+            transform: {
+                position: Array.from(obj.transform.position),
+                rotationDegrees: Array.from(obj.transform.rotationDegrees),
+                scale: Array.from(obj.transform.scale)
+            },
+            material: {
+                color: [...mat.color],
+                shininess: mat.shininess || 32.0,
+                roughness: mat.roughness !== undefined ? mat.roughness : 0.3,
+                metallic: mat.metallic !== undefined ? mat.metallic : 0.1,
+                isUnlit: !!mat.isUnlit
+            },
+            keyframes: obj.keyframes ? [...obj.keyframes] : [],
+            mesh: obj.mesh ? {
+                vertices: Array.from(obj.mesh.vertices),
+                indices: Array.from(obj.mesh.indices),
+                normals: Array.from(obj.mesh.normals),
+                colors: Array.from(obj.mesh.colors)
+            } : null
+        };
+    });
 
     return JSON.stringify({ version: '1.0', gameObjects: objectsData }, null, 2);
 }
@@ -644,6 +721,9 @@ export function deserializeScene(jsonString) {
                 );
             }
             const obj = new GameObject(item.name, mesh);
+            obj.isLightObject = !!item.isLightObject;
+            obj.lightData = item.lightData ? { ...item.lightData } : null;
+
             vec3.set(obj.transform.position, item.transform.position[0], item.transform.position[1], item.transform.position[2]);
             obj.setRotationDegrees(item.transform.rotationDegrees[0], item.transform.rotationDegrees[1], item.transform.rotationDegrees[2]);
             vec3.set(obj.transform.scale, item.transform.scale[0], item.transform.scale[1], item.transform.scale[2]);
@@ -652,6 +732,8 @@ export function deserializeScene(jsonString) {
                 obj.material = {
                     color: item.material.color,
                     shininess: item.material.shininess,
+                    roughness: item.material.roughness,
+                    metallic: item.material.metallic,
                     isUnlit: item.material.isUnlit
                 };
             }
@@ -979,6 +1061,9 @@ function main() {
 
             Engine.scene.addGameObject(cube1);
             Engine.scene.addGameObject(sphere1);
+
+            // Add default Sun Light
+            spawnPrimitive('light-sun');
 
             selectObject(cube1);
 
