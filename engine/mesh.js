@@ -287,4 +287,64 @@ export class Mesh {
         ];
         return new Mesh(gl, vertices, indices);
     }
+
+    static createExtrudedPolygon(gl, points2D, height = 1.0) {
+        if (!points2D || points2D.length < 3) {
+            // Default triangle if insufficient points
+            points2D = [[-0.5, -0.5], [0.5, -0.5], [0.0, 0.5]];
+        }
+
+        const N = points2D.length;
+        const halfH = height / 2;
+        const vertices = [];
+        const indices = [];
+
+        // Calculate centroid
+        let cx = 0, cz = 0;
+        for (const p of points2D) {
+            cx += p[0];
+            cz += p[1];
+        }
+        cx /= N;
+        cz /= N;
+
+        // Top vertices (0 to N-1)
+        for (let i = 0; i < N; i++) {
+            vertices.push(points2D[i][0], halfH, points2D[i][1]);
+        }
+
+        // Bottom vertices (N to 2N-1)
+        for (let i = 0; i < N; i++) {
+            vertices.push(points2D[i][0], -halfH, points2D[i][1]);
+        }
+
+        // Centroid Top (2N)
+        vertices.push(cx, halfH, cz);
+        // Centroid Bottom (2N + 1)
+        vertices.push(cx, -halfH, cz);
+
+        const topCentroidIdx = 2 * N;
+        const botCentroidIdx = 2 * N + 1;
+
+        for (let i = 0; i < N; i++) {
+            const nextIdx = (i + 1) % N;
+
+            // Side faces
+            const topCurr = i;
+            const topNext = nextIdx;
+            const botCurr = i + N;
+            const botNext = nextIdx + N;
+
+            indices.push(topCurr, botCurr, topNext);
+            indices.push(topNext, botCurr, botNext);
+
+            // Top Cap (Fan from centroid)
+            indices.push(topCentroidIdx, topCurr, topNext);
+
+            // Bottom Cap (Fan from centroid)
+            indices.push(botCentroidIdx, botNext, botCurr);
+        }
+
+        return new Mesh(gl, vertices, indices);
+    }
 }

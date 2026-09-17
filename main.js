@@ -1333,6 +1333,34 @@ function main() {
             let clickStartX = 0;
             let clickStartY = 0;
 
+            // Interactive Modeling Tools State
+            let boxCreateStart = null;
+            let activeCreatingBox = null;
+            let sketchPoints = [];
+
+            // Helper to get ground plane ray intersection (y = 0 plane)
+            function getGroundIntersection(clientX, clientY) {
+                const rect = canvas.getBoundingClientRect();
+                const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+                const y = -(((clientY - rect.top) / rect.height) * 2 - 1);
+
+                const viewMatrix = Engine.camera.getViewMatrix();
+                const aspect = canvas.clientWidth / canvas.clientHeight || 1.0;
+                const projMatrix = Engine.camera.getProjectionMatrix ? Engine.camera.getProjectionMatrix(aspect) : null;
+
+                // Simple ray direction approximation based on camera front & right
+                const camPos = Engine.camera.position;
+                const dirX = x * 2;
+                const dirY = y * 2;
+                const rayWorld = [camPos[0] + dirX + Engine.camera.front[0] * 5, camPos[1] + dirY + Engine.camera.front[1] * 5, camPos[2] + Engine.camera.front[2] * 5];
+
+                // Intersect with y = 0
+                const t = -camPos[1] / (Engine.camera.front[1] || -0.5);
+                const groundX = camPos[0] + Engine.camera.front[0] * t + x * 3;
+                const groundZ = camPos[2] + Engine.camera.front[2] * t - y * 3;
+                return [groundX, 0, groundZ];
+            }
+
             canvas.addEventListener('mousedown', (e) => {
                 if (e.button === 0) { // Left click
                     isMouseDown = true;
@@ -1341,7 +1369,33 @@ function main() {
                     lastMouseX = e.clientX;
                     lastMouseY = e.clientY;
 
-                    if (Engine.mode === 'object' && Engine.selectedGameObject) {
+                    if (Engine.mode === 'model' && Engine.activeTool === 'box-create') {
+                        history.pushState('Create Drag Box');
+                        const groundPos = getGroundIntersection(e.clientX, e.clientY);
+                        boxCreateStart = groundPos;
+
+                        const cubeMesh = Mesh.createCube(Engine.gl);
+                        objectCounters.cube++;
+                        activeCreatingBox = new GameObject(`Bloque ${objectCounters.cube}`, cubeMesh);
+                        vec3.set(activeCreatingBox.transform.position, groundPos[0], 0.5, groundPos[2]);
+                        vec3.set(activeCreatingBox.transform.scale, 0.2, 1.0, 0.2);
+                        Engine.scene.addGameObject(activeCreatingBox);
+                        selectObject(activeCreatingBox);
+                    } else if (Engine.mode === 'model' && Engine.activeTool === 'sketch-draw') {
+                        const pt = getGroundIntersection(e.clientX, e.clientY);
+                        sketchPoints.push([pt[0], pt[2]]);
+                    } else if (Engine.mode === 'model' && Engine.activeTool === 'extrude') {
+                        if (sketchPoints.length >= 3) {
+                            history.pushState('Extrude Drawn Sketch');
+                            const extrudedMesh = Mesh.createExtrudedPolygon(Engine.gl, sketchPoints, 1.5);
+                            objectCounters.cube++;
+                            const extrudedObj = new GameObject(`Extruido ${objectCounters.cube}`, extrudedMesh);
+                            vec3.set(extrudedObj.transform.position, 0, 0.75, 0);
+                            Engine.scene.addGameObject(extrudedObj);
+                            selectObject(extrudedObj);
+                            sketchPoints = []; // Reset sketch points after extrusion
+                        }
+                    } else if (Engine.mode === 'object' && Engine.selectedGameObject) {
                         activeGizmoAxis = Engine.pickGizmoAxis(e.clientX, e.clientY);
                         if (activeGizmoAxis) {
                             history.pushState('Transform Gizmo');
@@ -1357,14 +1411,26 @@ function main() {
             });
 
             canvas.addEventListener('mousemove', (e) => {
-                if (!isMouseDown || !Engine.selectedGameObject) return;
+                if (!isMouseDown) return;
 
                 const dx = e.clientX - lastMouseX;
                 const dy = e.clientY - lastMouseY;
                 lastMouseX = e.clientX;
                 lastMouseY = e.clientY;
 
-                if (Engine.mode === 'object' && activeGizmoAxis) {
+                if (Engine.mode === 'model' && Engine.activeTool === 'box-create' && activeCreatingBox && boxCreateStart) {
+                    const currentGround = getGroundIntersection(e.clientX, e.clientY);
+                    const widthX = Math.max(0.2, Math.abs(currentGround[0] - boxCreateStart[0]));
+                    const depthZ = Math.max(0.2, Math.abs(currentGround[2] - boxCreateStart[2]));
+                    const heightY = Math.max(0.2, Math.abs(dy * 0.05));
+
+                    const centerX = (boxCreateStart[0] + currentGround[0]) / 2;
+                    const centerZ = (boxCreateStart[2] + currentGround[2]) / 2;
+
+                    vec3.set(activeCreatingBox.transform.position, centerX, heightY / 2, centerZ);
+                    vec3.set(activeCreatingBox.transform.scale, widthX, heightY, depthZ);
+                    updateInspectorPanel();
+                } else if (Engine.mode === 'object' && activeGizmoAxis && Engine.selectedGameObject) {
                     const sensitivity = 0.03;
                     const delta = (dx - dy) * sensitivity;
 
@@ -1388,9 +1454,9 @@ function main() {
                         }
                         updateInspectorPanel();
                     }
-                } else if (Engine.mode === 'sculpt') {
+                } else if (Engine.mode === 'sculpt' && Engine.selectedGameObject) {
                     Sculpt.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool);
-                } else if (Engine.mode === 'paint') {
+                } else if (Engine.mode === 'paint' && Engine.selectedGameObject) {
                     Paint.applyBrush(Engine.selectedGameObject, Engine.selectedGameObject.transform.position, Engine.brushRadius, Engine.activeTool, Engine.brushColor);
                 }
             });
@@ -1399,6 +1465,11 @@ function main() {
                 if (e.button === 0 && isMouseDown) {
                     isMouseDown = false;
                     const distMoved = Math.hypot(e.clientX - clickStartX, e.clientY - clickStartY);
+
+                    if (activeCreatingBox) {
+                        activeCreatingBox = null;
+                        boxCreateStart = null;
+                    }
 
                     if (distMoved < 5 && Engine.mode === 'object' && !activeGizmoAxis) {
                         const pickedObj = Engine.pickObject(e.clientX, e.clientY);
