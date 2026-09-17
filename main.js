@@ -661,8 +661,12 @@ export function spawnPrimitive(type) {
             intensity: 2.0
         };
         obj.material.color = [1.0, 0.9, 0.3, 1.0];
-        obj.material.isUnlit = true;
+        obj.material.isUnlit = true; // Unlit light helper visualizer
         vec3.set(obj.transform.position, 2.0, 4.0, 2.0);
+    } else if (type === 'bone') {
+        obj.material.color = [0.2, 0.8, 1.0, 1.0]; // Bright cyan armature color
+        obj.material.isUnlit = true; // Unlit helper bone mesh for rigging gizmos
+        vec3.set(obj.transform.position, (Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 2);
     } else {
         vec3.set(obj.transform.position, (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);
     }
