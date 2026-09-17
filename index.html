@@ -49,20 +49,44 @@
                 </div>
             </div>
             <div class="menu-item">
-                <span>Crear Objeto</span>
+                <span>Agregar</span>
                 <div class="dropdown-menu">
-                    <div class="dropdown-item" data-create="cube">Cubo</div>
-                    <div class="dropdown-item" data-create="sphere">Esfera</div>
-                    <div class="dropdown-item" data-create="plane">Plano</div>
-                    <div class="dropdown-item" data-create="cylinder">Cilindro</div>
-                    <div class="dropdown-item" data-create="cone">Cono</div>
-                    <div class="dropdown-item" data-create="pyramid">Pirámide</div>
-                    <div class="dropdown-item" data-create="ramp">Prisma / Rampa</div>
-                    <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
-                    <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" data-create="light-sun">Luz Sol (Direccional)</div>
-                    <div class="dropdown-item" data-create="light-point">Luz Puntual</div>
-                    <div class="dropdown-item" data-create="light-spot">Luz Focal</div>
+                    <div class="dropdown-submenu-parent">
+                        <div class="dropdown-item">
+                            <span>Malla</span>
+                            <span class="shortcut">▸</span>
+                        </div>
+                        <div class="dropdown-submenu">
+                            <div class="dropdown-item" data-create="cube">Cubo</div>
+                            <div class="dropdown-item" data-create="sphere">Esfera</div>
+                            <div class="dropdown-item" data-create="plane">Plano</div>
+                            <div class="dropdown-item" data-create="cylinder">Cilindro</div>
+                            <div class="dropdown-item" data-create="cone">Cono</div>
+                            <div class="dropdown-item" data-create="pyramid">Pirámide</div>
+                            <div class="dropdown-item" data-create="ramp">Prisma</div>
+                            <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
+                        </div>
+                    </div>
+                    <div class="dropdown-submenu-parent">
+                        <div class="dropdown-item">
+                            <span>Armadura / Huesos</span>
+                            <span class="shortcut">▸</span>
+                        </div>
+                        <div class="dropdown-submenu">
+                            <div class="dropdown-item" data-create="bone">Hueso de Personaje</div>
+                        </div>
+                    </div>
+                    <div class="dropdown-submenu-parent">
+                        <div class="dropdown-item">
+                            <span>Luz</span>
+                            <span class="shortcut">▸</span>
+                        </div>
+                        <div class="dropdown-submenu">
+                            <div class="dropdown-item" data-create="light-sun">Luz Sol (Direccional)</div>
+                            <div class="dropdown-item" data-create="light-point">Luz Puntual</div>
+                            <div class="dropdown-item" data-create="light-spot">Luz Focal</div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="menu-item">
@@ -268,18 +292,20 @@
 
         <!-- Custom Context Menu for Hierarchy -->
         <div id="hierarchy-context-menu" class="context-menu">
-            <div class="context-menu-item" data-context-action="create-cube">Crear Cubo</div>
-            <div class="context-menu-item" data-context-action="create-sphere">Crear Esfera</div>
-            <div class="context-menu-item" data-context-action="create-plane">Crear Plano</div>
-            <div class="context-menu-item" data-context-action="create-cylinder">Crear Cilindro</div>
-            <div class="context-menu-item" data-context-action="create-cone">Crear Cono</div>
-            <div class="context-menu-item" data-context-action="create-pyramid">Crear Pirámide</div>
-            <div class="context-menu-item" data-context-action="create-ramp">Crear Prisma</div>
-            <div class="context-menu-item" data-context-action="create-torus">Crear Torus</div>
+            <div class="context-menu-item" data-context-action="create-cube">Agregar Cubo</div>
+            <div class="context-menu-item" data-context-action="create-sphere">Agregar Esfera</div>
+            <div class="context-menu-item" data-context-action="create-plane">Agregar Plano</div>
+            <div class="context-menu-item" data-context-action="create-cylinder">Agregar Cilindro</div>
+            <div class="context-menu-item" data-context-action="create-cone">Agregar Cono</div>
+            <div class="context-menu-item" data-context-action="create-pyramid">Agregar Pirámide</div>
+            <div class="context-menu-item" data-context-action="create-ramp">Agregar Prisma</div>
+            <div class="context-menu-item" data-context-action="create-torus">Agregar Torus</div>
             <div class="dropdown-divider"></div>
-            <div class="context-menu-item" data-context-action="create-light-sun">Crear Luz Sol</div>
-            <div class="context-menu-item" data-context-action="create-light-point">Crear Luz Puntual</div>
-            <div class="context-menu-item" data-context-action="create-light-spot">Crear Luz Focal</div>
+            <div class="context-menu-item" data-context-action="create-bone">Agregar Hueso (Armadura)</div>
+            <div class="dropdown-divider"></div>
+            <div class="context-menu-item" data-context-action="create-light-sun">Agregar Luz Sol</div>
+            <div class="context-menu-item" data-context-action="create-light-point">Agregar Luz Puntual</div>
+            <div class="context-menu-item" data-context-action="create-light-spot">Agregar Luz Focal</div>
             <div class="dropdown-divider obj-action-divider" style="display: none;"></div>
             <div class="context-menu-item obj-action-item" data-context-action="duplicate-obj" style="display: none;">Duplicar Objeto</div>
             <div class="context-menu-item obj-action-item" data-context-action="delete-obj" style="display: none;">Eliminar Objeto</div>

@@ -16,6 +16,7 @@ let objectCounters = {
     pyramid: 0,
     ramp: 0,
     torus: 0,
+    bone: 0,
     light: 0
 };
 
@@ -613,6 +614,7 @@ function createPrimitiveMesh(type) {
         case 'pyramid': return Mesh.createPyramid(gl);
         case 'ramp': return Mesh.createRamp(gl);
         case 'torus': return Mesh.createTorus(gl);
+        case 'bone': return Mesh.createBone(gl);
         case 'light-sun':
         case 'light-point':
         case 'light-spot':
@@ -626,7 +628,7 @@ function createPrimitiveMesh(type) {
 function getPrimitiveName(type) {
     if (type.startsWith('light-')) {
         objectCounters.light = (objectCounters.light || 0) + 1;
-        return `Luz Sol ${objectCounters.light}`;
+        return `Luz ${objectCounters.light}`;
     }
     objectCounters[type] = (objectCounters[type] || 0) + 1;
     const num = objectCounters[type];
@@ -638,6 +640,7 @@ function getPrimitiveName(type) {
         case 'pyramid': return `Pirámide ${num}`;
         case 'ramp': return `Prisma ${num}`;
         case 'torus': return `Torus ${num}`;
+        case 'bone': return `Hueso ${num}`;
         case 'cube':
         default:
             return `Cubo ${num}`;

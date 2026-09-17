@@ -270,4 +270,21 @@ export class Mesh {
 
         return new Mesh(gl, vertices, indices);
     }
+
+    static createBone(gl, length = 1.0, width = 0.15) {
+        // Octahedral 3D bone mesh (Blender Armature style)
+        const vertices = [
+            0, 0, 0,                      // Root joint (0)
+            -width, length * 0.25,  width, // Corner FL (1)
+             width, length * 0.25,  width, // Corner FR (2)
+             width, length * 0.25, -width, // Corner BR (3)
+            -width, length * 0.25, -width, // Corner BL (4)
+            0, length, 0                  // Tip joint (5)
+        ];
+        const indices = [
+            0, 1, 2,  0, 2, 3,  0, 3, 4,  0, 4, 1, // Bottom pyramid
+            5, 2, 1,  5, 3, 2,  5, 4, 3,  5, 1, 4  // Top pyramid
+        ];
+        return new Mesh(gl, vertices, indices);
+    }
 }
