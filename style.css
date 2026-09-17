@@ -86,7 +86,17 @@ body {
     padding: 6px 0;
 }
 
-.menu-item:hover .dropdown-menu {
+.menu-item::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    height: 8px;
+}
+
+.menu-item:hover .dropdown-menu,
+.dropdown-menu:hover {
     display: block;
 }
 
@@ -367,7 +377,17 @@ body {
     padding: 5px 0;
 }
 
-.tool-category:hover .tool-submenu {
+.tool-category::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    height: 8px;
+}
+
+.tool-category:hover .tool-submenu,
+.tool-submenu:hover {
     display: block;
 }
 

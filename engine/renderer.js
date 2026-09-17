@@ -333,6 +333,17 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
 
     const numLights = lightPositions.length / 3;
 
+    // Pad light arrays to exactly 4 lights (12 floats for vec3, 4 for float/int) to prevent WebGL uniform array bounds error
+    const paddedLightPos = new Float32Array(12);
+    const paddedLightColor = new Float32Array(12);
+    const paddedLightIntensity = new Float32Array(4);
+    const paddedLightType = new Int32Array(4);
+
+    paddedLightPos.set(lightPositions);
+    paddedLightColor.set(lightColors);
+    paddedLightIntensity.set(lightIntensities);
+    paddedLightType.set(lightTypes);
+
     // Light space matrix for shadow map based on primary light
     const lightProjectionMatrix = mat4.create();
     mat4.ortho(lightProjectionMatrix, -10, 10, -10, 10, 0.1, 40.0);
@@ -393,10 +404,10 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     gl.uniformMatrix4fv(programInfo.uniformLocations.lightSpaceMatrix, false, lightSpaceMatrix);
 
     gl.uniform1i(programInfo.uniformLocations.numLights, numLights);
-    gl.uniform3fv(programInfo.uniformLocations.lightPos, new Float32Array(lightPositions));
-    gl.uniform3fv(programInfo.uniformLocations.lightColor, new Float32Array(lightColors));
-    gl.uniform1fv(programInfo.uniformLocations.lightIntensity, new Float32Array(lightIntensities));
-    gl.uniform1iv(programInfo.uniformLocations.lightType, new Int32Array(lightTypes));
+    gl.uniform3fv(programInfo.uniformLocations.lightPos, paddedLightPos);
+    gl.uniform3fv(programInfo.uniformLocations.lightColor, paddedLightColor);
+    gl.uniform1fv(programInfo.uniformLocations.lightIntensity, paddedLightIntensity);
+    gl.uniform1iv(programInfo.uniformLocations.lightType, paddedLightType);
 
     const camPos = camera ? camera.position : [0, 2, 5];
     gl.uniform3f(programInfo.uniformLocations.viewPosition, camPos[0], camPos[1], camPos[2]);

@@ -36,7 +36,7 @@ const Engine = {
         Input.initialize(canvas);
         Engine.scene = new Scene();
         Engine.gizmo = new Gizmo(Engine.gl);
-        Engine.grid = new Grid(Engine.gl, 20, 1.0);
+        Engine.grid = new Grid(Engine.gl, 160, 1.0);
 
         return true;
     },

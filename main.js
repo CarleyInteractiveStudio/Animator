@@ -1160,12 +1160,11 @@ function setupToolbarEvents() {
             Engine.activeTool = selectedTool;
 
             if (['translate', 'rotate', 'scale'].includes(selectedTool)) {
-                Engine.mode = 'object';
-                if (statusText) statusText.textContent = 'Modo Objeto';
+                setLayout('default');
             } else if (['deform', 'inflate', 'smooth'].includes(selectedTool)) {
-                Engine.mode = 'sculpt';
-                if (statusText) statusText.textContent = 'Modo Escultura';
+                setLayout('sculpt');
             } else if (['brush', 'eraser', 'fill'].includes(selectedTool)) {
+                setLayout('default');
                 Engine.mode = 'paint';
                 if (statusText) statusText.textContent = 'Modo Pintura';
             }
@@ -1245,10 +1244,8 @@ function main() {
     try {
         setupResizers();
 
-        const visorContent = document.querySelector('#visor-panel .panel-content');
-        if (!visorContent) throw new Error("Visor panel not found");
-        const canvas = document.createElement('canvas');
-        visorContent.appendChild(canvas);
+        const canvas = document.getElementById('gl-canvas');
+        if (!canvas) throw new Error("GL Canvas not found");
 
         if (Engine.initialize(canvas)) {
             setupCreateMenuEvents();

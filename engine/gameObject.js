@@ -1,5 +1,7 @@
 import { vec3, quat, mat4 } from './math.js';
 
+let nextGameObjectId = 1;
+
 export class GameObject {
     constructor(name = 'GameObject', mesh = null) {
         this.id = nextGameObjectId++;

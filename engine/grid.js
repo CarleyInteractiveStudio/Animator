@@ -1,5 +1,5 @@
 export class Grid {
-    constructor(gl, size = 20, step = 1.0) {
+    constructor(gl, size = 160, step = 1.0) {
         this.gl = gl;
         this.lineCount = 0;
         this.showGrid = true;
@@ -15,10 +15,14 @@ export class Grid {
             positions.push(-half, 0, i,  half, 0, i);
 
             if (i === 0) {
+                // X axis Red, Z axis Blue
                 colors.push(0.9, 0.2, 0.2, 1.0,  0.9, 0.2, 0.2, 1.0);
                 colors.push(0.2, 0.5, 0.9, 1.0,  0.2, 0.5, 0.9, 1.0);
             } else {
-                const c = [0.22, 0.22, 0.22, 1.0];
+                const isMajor = Math.abs(i) % 10 === 0;
+                const alpha = isMajor ? 0.35 : 0.18;
+                const grey = isMajor ? 0.32 : 0.22;
+                const c = [grey, grey, grey, alpha];
                 colors.push(...c, ...c);
                 colors.push(...c, ...c);
             }
