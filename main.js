@@ -800,33 +800,42 @@ export function setLayout(preset) {
     const resizerLeft = document.getElementById('resizer-left');
     const resizerRight = document.getElementById('resizer-right');
 
+    // Keep Hierarchy always visible across all modes
+    if (jerarquia) jerarquia.classList.remove('hidden');
+    if (inspector) inspector.classList.remove('hidden');
+    if (resizerLeft) resizerLeft.classList.remove('hidden');
+    if (resizerRight) resizerRight.classList.remove('hidden');
+
     if (preset === 'default') {
-        if (jerarquia) jerarquia.classList.remove('hidden');
-        if (inspector) inspector.classList.remove('hidden');
-        if (resizerLeft) resizerLeft.classList.remove('hidden');
-        if (resizerRight) resizerRight.classList.remove('hidden');
         if (timeline) timeline.classList.add('hidden');
         Engine.mode = 'object';
     } else if (preset === 'animation') {
-        if (jerarquia) jerarquia.classList.remove('hidden');
-        if (inspector) inspector.classList.remove('hidden');
-        if (resizerLeft) resizerLeft.classList.remove('hidden');
-        if (resizerRight) resizerRight.classList.remove('hidden');
         if (timeline) timeline.classList.remove('hidden');
         Engine.mode = 'animation';
     } else if (preset === 'sculpt') {
-        if (jerarquia) jerarquia.classList.add('hidden');
-        if (inspector) inspector.classList.remove('hidden');
-        if (resizerLeft) resizerLeft.classList.add('hidden');
-        if (resizerRight) resizerRight.classList.remove('hidden');
         if (timeline) timeline.classList.add('hidden');
         Engine.mode = 'sculpt';
+    } else if (preset === 'paint') {
+        if (timeline) timeline.classList.add('hidden');
+        Engine.mode = 'paint';
+    } else if (preset === 'model') {
+        if (timeline) timeline.classList.add('hidden');
+        Engine.mode = 'model';
     }
 
     const statusText = document.getElementById('status-mode-text');
     if (statusText) {
-        statusText.textContent = Engine.mode === 'animation' ? 'Modo Animación' : (Engine.mode === 'sculpt' ? 'Modo Escultura' : 'Modo Objeto');
+        const modeLabels = {
+            object: 'Modo Objeto',
+            sculpt: 'Modo Escultura',
+            paint: 'Modo Pintura',
+            animation: 'Modo Animación',
+            model: 'Modo Modelar'
+        };
+        statusText.textContent = modeLabels[Engine.mode] || 'Modo Objeto';
     }
+
+    updateVerticalToolbar();
 }
 
 function setupTimelineEvents() {
@@ -1141,6 +1150,24 @@ function setupMenuEvents() {
     if (layoutReset) layoutReset.addEventListener('click', () => setLayout('default'));
 }
 
+function updateVerticalToolbar() {
+    document.querySelectorAll('.vtool-group').forEach(grp => grp.classList.add('hidden'));
+
+    const modeMap = {
+        object: 'vtool-object',
+        sculpt: 'vtool-sculpt',
+        paint: 'vtool-paint',
+        model: 'vtool-model',
+        animation: 'vtool-object'
+    };
+
+    const activeGroupId = modeMap[Engine.mode] || 'vtool-object';
+    const activeGroup = document.getElementById(activeGroupId);
+    if (activeGroup) {
+        activeGroup.classList.remove('hidden');
+    }
+}
+
 function setupToolbarEvents() {
     const statusText = document.getElementById('status-mode-text');
 
@@ -1164,14 +1191,33 @@ function setupToolbarEvents() {
             } else if (['deform', 'inflate', 'smooth'].includes(selectedTool)) {
                 setLayout('sculpt');
             } else if (['brush', 'eraser', 'fill'].includes(selectedTool)) {
-                setLayout('default');
-                Engine.mode = 'paint';
-                if (statusText) statusText.textContent = 'Modo Pintura';
+                setLayout('paint');
             }
 
             updateInspectorPanel();
         });
     });
+
+    // Vertical Toolbar Click Handlers
+    document.querySelectorAll('.vtool-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const toolName = e.currentTarget.getAttribute('data-vtool');
+            const parentGroup = e.currentTarget.closest('.vtool-group');
+            if (parentGroup) {
+                parentGroup.querySelectorAll('.vtool-btn').forEach(b => b.classList.remove('active'));
+            }
+            e.currentTarget.classList.add('active');
+            Engine.activeTool = toolName;
+            updateInspectorPanel();
+        });
+    });
+
+    const btnModeModel = document.getElementById('btn-mode-model');
+    if (btnModeModel) {
+        btnModeModel.addEventListener('click', () => {
+            setLayout('model');
+        });
+    }
 
     const btnModeAnim = document.getElementById('btn-mode-anim');
     if (btnModeAnim) {

@@ -1,15 +1,23 @@
 export class LightComponent {
-    constructor() {
+    constructor(lightType = 'light-sun') {
         this.id = 'comp_' + Math.random().toString(36).substr(2, 9);
         this.type = 'light';
-        this.name = 'Luz Direccional';
+        this.name = lightType === 'light-point' ? 'Luz Puntual' : (lightType === 'light-spot' ? 'Luz Focal' : 'Luz Sol (Direccional)');
+        this.lightType = lightType;
         this.enabled = true;
-        this.color = [1.0, 1.0, 0.9];
-        this.intensity = 1.0;
-        this.direction = [0.5, 1.0, 0.7];
+        this.color = [1.0, 0.98, 0.92];
+        this.intensity = 1.5;
     }
 
-    update(gameObject, deltaTime) {}
+    update(gameObject, deltaTime) {
+        if (!gameObject) return;
+        gameObject.isLightObject = true;
+        gameObject.lightData = {
+            type: this.lightType,
+            color: this.color,
+            intensity: this.intensity
+        };
+    }
 }
 
 export class AutoRotateComponent {
