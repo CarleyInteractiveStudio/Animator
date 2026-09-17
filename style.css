@@ -221,6 +221,30 @@ body {
     fill: currentColor;
 }
 
+.tab-close-btn {
+    margin-left: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    color: #888888;
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+
+.tab-close-btn:hover {
+    background-color: #3e2222;
+    color: #ff6666;
+}
+
+.tab-close-icon {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
+}
+
 .panel-tab-add-btn {
     padding: 4px 6px;
     border-radius: 4px;
@@ -650,7 +674,7 @@ body {
 
 /* Timeline Bottom Panel */
 #timeline-panel {
-    height: 110px;
+    height: 130px;
     background-color: #181818;
     border-top: 1px solid #2a2a2a;
     display: flex;
@@ -689,15 +713,17 @@ body {
     border: 1px solid #282828;
 }
 
-.timeline-slider-container {
-    padding: 14px;
-    display: flex;
-    align-items: center;
+.timeline-dope-sheet-container {
+    flex: 1;
+    position: relative;
+    background-color: #141414;
+    overflow: hidden;
 }
 
-.timeline-slider {
+#timeline-canvas {
     width: 100%;
-    accent-color: #555555;
+    height: 100%;
+    display: block;
     cursor: pointer;
 }
 

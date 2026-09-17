@@ -830,20 +830,146 @@ export function setLayout(preset) {
 }
 
 function setupTimelineEvents() {
-    const slider = document.getElementById('timeline-slider');
+    const canvas = document.getElementById('timeline-canvas');
     const frameLbl = document.getElementById('current-frame-lbl');
     const btnPlay = document.getElementById('anim-play');
     const btnRewind = document.getElementById('anim-rewind');
     const btnAddKeyframe = document.getElementById('anim-add-keyframe');
 
-    if (slider) {
-        slider.addEventListener('input', (e) => {
-            const frame = parseInt(e.target.value);
-            animationManager.setFrame(frame);
-            if (frameLbl) frameLbl.textContent = frame;
-            updateInspectorPanel();
-        });
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    function renderTimeline() {
+        const width = canvas.width = canvas.parentElement.clientWidth;
+        const height = canvas.height = canvas.parentElement.clientHeight;
+
+        ctx.fillStyle = '#141414';
+        ctx.fillRect(0, 0, width, height);
+
+        const padding = 40;
+        const totalFrames = 100;
+        const usableWidth = width - padding * 2;
+        const currentFrame = animationManager.currentFrame;
+
+        // Draw ruler background
+        ctx.fillStyle = '#1e1e1e';
+        ctx.fillRect(0, 0, width, 26);
+        ctx.strokeStyle = '#2a2a2a';
+        ctx.beginPath();
+        ctx.moveTo(0, 26);
+        ctx.lineTo(width, 26);
+        ctx.stroke();
+
+        // Draw Frame Ticks & Numbers
+        ctx.fillStyle = '#888888';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+
+        for (let f = 0; f <= totalFrames; f += 5) {
+            const x = padding + (f / totalFrames) * usableWidth;
+            const isMajor = f % 10 === 0;
+
+            ctx.beginPath();
+            ctx.strokeStyle = isMajor ? '#555555' : '#333333';
+            ctx.moveTo(x, isMajor ? 10 : 18);
+            ctx.lineTo(x, 26);
+            ctx.stroke();
+
+            if (isMajor) {
+                ctx.fillText(f.toString(), x, 9);
+            }
+        }
+
+        // Draw Dope Sheet Grid Lines
+        ctx.strokeStyle = '#1d1d1d';
+        ctx.beginPath();
+        for (let f = 0; f <= totalFrames; f += 10) {
+            const x = padding + (f / totalFrames) * usableWidth;
+            ctx.moveTo(x, 26);
+            ctx.lineTo(x, height);
+        }
+        ctx.stroke();
+
+        // Draw Object Keyframe Diamonds (♦)
+        if (Engine.selectedGameObject && Engine.selectedGameObject.keyframes) {
+            for (const kf of Engine.selectedGameObject.keyframes) {
+                const kx = padding + (kf.frame / totalFrames) * usableWidth;
+                const ky = 52;
+                const size = 6;
+
+                ctx.fillStyle = '#e67e22'; // Blender orange diamond keyframe color
+                ctx.beginPath();
+                ctx.moveTo(kx, ky - size);
+                ctx.lineTo(kx + size, ky);
+                ctx.lineTo(kx, ky + size);
+                ctx.lineTo(kx - size, ky);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+
+        // Draw Playhead (Red Vertical Line & Marker)
+        const px = padding + (currentFrame / totalFrames) * usableWidth;
+
+        // Playhead Top Pointer
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.moveTo(px - 6, 0);
+        ctx.lineTo(px + 6, 0);
+        ctx.lineTo(px + 6, 18);
+        ctx.lineTo(px, 26);
+        ctx.lineTo(px - 6, 18);
+        ctx.closePath();
+        ctx.fill();
+
+        // Line
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(px, 26);
+        ctx.lineTo(px, height);
+        ctx.stroke();
+        ctx.lineWidth = 1;
     }
+
+    let isScrubbing = false;
+
+    function setFrameFromMouse(e) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const padding = 40;
+        const totalFrames = 100;
+        const usableWidth = canvas.width - padding * 2;
+
+        const ratio = Math.max(0, Math.min(1, (mouseX - padding) / usableWidth));
+        const frame = Math.round(ratio * totalFrames);
+
+        animationManager.setFrame(frame);
+        if (frameLbl) frameLbl.textContent = frame;
+        updateInspectorPanel();
+        renderTimeline();
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+        isScrubbing = true;
+        setFrameFromMouse(e);
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (isScrubbing) {
+            setFrameFromMouse(e);
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        isScrubbing = false;
+    });
+
+    window.addEventListener('resize', renderTimeline);
+    renderTimeline();
 
     if (btnPlay) {
         btnPlay.addEventListener('click', () => {
@@ -853,9 +979,9 @@ function setupTimelineEvents() {
             } else {
                 btnPlay.innerHTML = SVG_ICONS.pause;
                 animationManager.play((frame) => {
-                    if (slider) slider.value = frame;
                     if (frameLbl) frameLbl.textContent = frame;
                     updateInspectorPanel();
+                    renderTimeline();
                 });
             }
         });
@@ -864,10 +990,10 @@ function setupTimelineEvents() {
     if (btnRewind) {
         btnRewind.addEventListener('click', () => {
             animationManager.rewind((frame) => {
-                if (slider) slider.value = frame;
                 if (frameLbl) frameLbl.textContent = frame;
                 if (btnPlay) btnPlay.innerHTML = SVG_ICONS.play;
                 updateInspectorPanel();
+                renderTimeline();
             });
         });
     }
@@ -877,9 +1003,23 @@ function setupTimelineEvents() {
             if (Engine.selectedGameObject) {
                 animationManager.addKeyframe(Engine.selectedGameObject);
                 history.pushState('Add Keyframe');
+                renderTimeline();
             }
         });
     }
+}
+
+function setupTabCloseEvents() {
+    document.querySelectorAll('.tab-close-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const panelId = e.currentTarget.getAttribute('data-close-panel');
+            const panel = document.getElementById(panelId);
+            if (panel) {
+                panel.classList.add('hidden');
+            }
+        });
+    });
 }
 
 function setupCreateMenuEvents() {
@@ -1113,6 +1253,7 @@ function main() {
         if (Engine.initialize(canvas)) {
             setupCreateMenuEvents();
             setupHierarchyContextMenu();
+            setupTabCloseEvents();
             setupMenuEvents();
             setupToolbarEvents();
             setupTimelineEvents();
