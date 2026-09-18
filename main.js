@@ -1443,24 +1443,61 @@ function main() {
                     vec3.set(activeCreatingBox.transform.scale, widthX, heightY, depthZ);
                     updateInspectorPanel();
                 } else if (Engine.mode === 'object' && activeGizmoAxis && Engine.selectedGameObject) {
-                    // Precise screen-space-to-world projection for 1:1 gizmo handle tracking
-                    const sensitivity = 0.012;
-                    let moveAmount = 0;
+                    const aspect = canvas.clientWidth / canvas.clientHeight || 1.0;
+                    const viewMatrix = Engine.camera.getViewMatrix();
+                    const projMatrix = mat4.create();
+                    mat4.perspective(projMatrix, 45 * Math.PI / 180, aspect, 0.1, 100.0);
 
-                    if (activeGizmoAxis === 'x') {
-                        moveAmount = dx * sensitivity;
-                    } else if (activeGizmoAxis === 'y') {
-                        moveAmount = -dy * sensitivity;
-                    } else if (activeGizmoAxis === 'z') {
-                        moveAmount = (dx + dy) * sensitivity * 0.7;
+                    const vpMatrix = mat4.create();
+                    mat4.multiply(vpMatrix, projMatrix, viewMatrix);
+
+                    const pos = Engine.selectedGameObject.transform.position;
+
+                    // Axis world direction vectors
+                    const axisDirs = {
+                        x: [1, 0, 0],
+                        y: [0, 1, 0],
+                        z: [0, 0, 1]
+                    };
+                    const axisDir = axisDirs[activeGizmoAxis] || [1, 0, 0];
+
+                    // Project object position P0 and P1 = P0 + AxisDir to Screen Space
+                    function worldToScreen(wPos) {
+                        const clip = [
+                            vpMatrix[0]*wPos[0] + vpMatrix[4]*wPos[1] + vpMatrix[8]*wPos[2] + vpMatrix[12],
+                            vpMatrix[1]*wPos[0] + vpMatrix[5]*wPos[1] + vpMatrix[9]*wPos[2] + vpMatrix[13],
+                            vpMatrix[2]*wPos[0] + vpMatrix[6]*wPos[1] + vpMatrix[10]*wPos[2] + vpMatrix[14],
+                            vpMatrix[3]*wPos[0] + vpMatrix[7]*wPos[1] + vpMatrix[11]*wPos[2] + vpMatrix[15]
+                        ];
+                        if (clip[3] === 0) return [0, 0];
+                        const ndcX = clip[0] / clip[3];
+                        const ndcY = clip[1] / clip[3];
+                        return [
+                            (ndcX * 0.5 + 0.5) * canvas.clientWidth,
+                            (1.0 - (ndcY * 0.5 + 0.5)) * canvas.clientHeight
+                        ];
                     }
+
+                    const screenP0 = worldToScreen(pos);
+                    const screenP1 = worldToScreen([pos[0] + axisDir[0], pos[1] + axisDir[1], pos[2] + axisDir[2]]);
+
+                    const axis2D = [screenP1[0] - screenP0[0], screenP1[1] - screenP0[1]];
+                    const axis2DLen = Math.hypot(axis2D[0], axis2D[1]) || 1.0;
+                    const axis2DNorm = [axis2D[0] / axis2DLen, axis2D[1] / axis2DLen];
+
+                    // Mouse movement vector in pixels (dy inverted to match screen Y down)
+                    const mouse2D = [dx, dy];
+                    const dotProduct = mouse2D[0] * axis2DNorm[0] + mouse2D[1] * axis2DNorm[1];
+
+                    // World displacement delta
+                    const worldDelta = dotProduct / axis2DLen;
 
                     const axisMap = { x: 0, y: 1, z: 2 };
                     const axisIdx = axisMap[activeGizmoAxis];
 
                     if (axisIdx !== undefined) {
                         if (Engine.activeTool === 'translate') {
-                            Engine.selectedGameObject.transform.position[axisIdx] += moveAmount;
+                            Engine.selectedGameObject.transform.position[axisIdx] += worldDelta;
                         } else if (Engine.activeTool === 'rotate') {
                             const deg = Engine.selectedGameObject.transform.rotationDegrees[axisIdx] + (dx - dy) * 0.5;
                             Engine.selectedGameObject.transform.rotationDegrees[axisIdx] = deg;
@@ -1470,7 +1507,7 @@ function main() {
                                 Engine.selectedGameObject.transform.rotationDegrees[2]
                             );
                         } else if (Engine.activeTool === 'scale') {
-                            const newScale = Math.max(0.1, Engine.selectedGameObject.transform.scale[axisIdx] + moveAmount);
+                            const newScale = Math.max(0.1, Engine.selectedGameObject.transform.scale[axisIdx] + worldDelta);
                             Engine.selectedGameObject.transform.scale[axisIdx] = newScale;
                         }
                         updateInspectorPanel();
