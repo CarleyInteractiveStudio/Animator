@@ -156,69 +156,43 @@
                         </div>
                     </div>
                 </div>
-                <!-- Overlay Toolbar inside 3D Viewport -->
+                <!-- Top Viewport Mode Selection Bar (Modos Únicamente) -->
                 <div id="viewport-toolbar">
-                    <div class="tool-category" id="cat-transform">
-                        <button class="tool-btn active" title="Transformación">
-                            <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13 6v5h5V8.5L22 12l-4 3.5V13h-5v5h2.5L12 22l-3.5-4H11v-5H6v2.5L2 12l4-3.5V11h5V6H8.5L12 2l3.5 4H13z"/></svg>
-                            <span>Transformar</span>
-                        </button>
-                        <div class="tool-submenu">
-                            <div class="submenu-item active" data-tool="translate">Mover (G)</div>
-                            <div class="submenu-item" data-tool="rotate">Rotar (R)</div>
-                            <div class="submenu-item" data-tool="scale">Escalar (S)</div>
-                        </div>
-                    </div>
-
-                    <div class="tool-category" id="cat-sculpt">
-                        <button class="tool-btn" title="Esculpir">
-                            <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-                            <span>Esculpir</span>
-                        </button>
-                        <div class="tool-submenu">
-                            <div class="submenu-item" data-tool="deform">Pincel Deformar</div>
-                            <div class="submenu-item" data-tool="inflate">Pincel Inflar</div>
-                            <div class="submenu-item" data-tool="smooth">Pincel Suavizar</div>
-                        </div>
-                    </div>
-
-                    <div class="tool-category" id="cat-paint">
-                        <button class="tool-btn" title="Pintar">
-                            <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61.43.53.63 1.2.53 1.87-.19 1.34-.3 2.14-.3 2.14 0 .39.32.71.71.71h2.24c.59 0 1.15-.22 1.58-.62L11 20.42c.31-.29.72-.45 1.15-.45 4.88 0 8.85-3.9 8.85-8.81 0-4.52-3.66-8.16-9-8.16zM6.5 11.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3-3.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm5 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3 3.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
-                            <span>Pintar</span>
-                        </button>
-                        <div class="tool-submenu">
-                            <div class="submenu-item" data-tool="brush">Pincel de Color</div>
-                            <div class="submenu-item" data-tool="eraser">Borrador</div>
-                            <div class="submenu-item" data-tool="fill">Relleno Completo</div>
-                        </div>
-                    </div>
-
-                    <div class="tool-category" id="cat-model">
-                        <button class="tool-btn" id="btn-mode-model" title="Modelar">
-                            <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-                            <span>Modelar</span>
-                        </button>
-                    </div>
-
-                    <div class="tool-category" id="cat-anim">
-                        <button class="tool-btn" id="btn-mode-anim" title="Animación">
-                            <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
-                            <span>Animar</span>
-                        </button>
-                    </div>
+                    <button class="tool-btn active" id="btn-mode-object" title="Modo Objeto">
+                        <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                        <span>Objeto</span>
+                    </button>
+                    <button class="tool-btn" id="btn-mode-sculpt" title="Modo Escultura">
+                        <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                        <span>Esculpir</span>
+                    </button>
+                    <button class="tool-btn" id="btn-mode-paint" title="Modo Pintura">
+                        <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61.43.53.63 1.2.53 1.87-.19 1.34-.3 2.14-.3 2.14 0 .39.32.71.71.71h2.24c.59 0 1.15-.22 1.58-.62L11 20.42c.31-.29.72-.45 1.15-.45 4.88 0 8.85-3.9 8.85-8.81 0-4.52-3.66-8.16-9-8.16z"/></svg>
+                        <span>Pintar</span>
+                    </button>
+                    <button class="tool-btn" id="btn-mode-model" title="Modo Modelar">
+                        <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                        <span>Modelar</span>
+                    </button>
+                    <button class="tool-btn" id="btn-mode-anim" title="Modo Animación">
+                        <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+                        <span>Animar</span>
+                    </button>
                 </div>
 
                 <!-- Left Vertical Floating Gizmo / Tool Palette Bar -->
                 <div id="vertical-toolbar">
                     <div class="vtool-group" id="vtool-object">
-                        <button class="vtool-btn active" data-vtool="translate" title="Mover (G)">
+                        <button class="vtool-btn active" data-vtool="select" title="Seleccionar Flecha (Blender Arrow)">
+                            <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M7 2l12 11.5-5.5 1.5 3.5 7.5-3 1.5-3.5-7.5L6 19V2z"/></svg>
+                        </button>
+                        <button class="vtool-btn" data-vtool="translate" title="Mover Gizmo (G)">
                             <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13 6v5h5V8.5L22 12l-4 3.5V13h-5v5h2.5L12 22l-3.5-4H11v-5H6v2.5L2 12l4-3.5V11h5V6H8.5L12 2l3.5 4H13z"/></svg>
                         </button>
-                        <button class="vtool-btn" data-vtool="rotate" title="Rotar (R)">
+                        <button class="vtool-btn" data-vtool="rotate" title="Rotar Gizmo (R)">
                             <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
                         </button>
-                        <button class="vtool-btn" data-vtool="scale" title="Escalar (S)">
+                        <button class="vtool-btn" data-vtool="scale" title="Escalar Gizmo (S)">
                             <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM9 17h2v-4h4v-2h-4V7H9v4H5v2h4z"/></svg>
                         </button>
                     </div>

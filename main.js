@@ -1175,37 +1175,63 @@ function updateVerticalToolbar() {
     }
 }
 
-function setupToolbarEvents() {
-    const statusText = document.getElementById('status-mode-text');
-
-    document.querySelectorAll('.submenu-item').forEach(item => {
-        item.addEventListener('click', (e) => {
-            document.querySelectorAll('.submenu-item').forEach(i => i.classList.remove('active'));
-            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-
-            const selectedTool = e.currentTarget.getAttribute('data-tool');
-            e.currentTarget.classList.add('active');
-
-            const parentCategory = e.currentTarget.closest('.tool-category');
-            if (parentCategory) {
-                parentCategory.querySelector('.tool-btn').classList.add('active');
+function updateViewportModeButtons(activeModeBtnId) {
+    const ids = ['btn-mode-object', 'btn-mode-sculpt', 'btn-mode-paint', 'btn-mode-model', 'btn-mode-anim'];
+    ids.forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            if (id === activeModeBtnId) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
             }
-
-            Engine.activeTool = selectedTool;
-
-            if (['translate', 'rotate', 'scale'].includes(selectedTool)) {
-                setLayout('default');
-            } else if (['deform', 'inflate', 'smooth'].includes(selectedTool)) {
-                setLayout('sculpt');
-            } else if (['brush', 'eraser', 'fill'].includes(selectedTool)) {
-                setLayout('paint');
-            }
-
-            updateInspectorPanel();
-        });
+        }
     });
+}
 
-    // Vertical Toolbar Click Handlers
+function setupToolbarEvents() {
+    // Mode Selection Buttons inside Top Viewport Toolbar
+    const btnObj = document.getElementById('btn-mode-object');
+    if (btnObj) {
+        btnObj.addEventListener('click', () => {
+            setLayout('default');
+            updateViewportModeButtons('btn-mode-object');
+        });
+    }
+
+    const btnSculpt = document.getElementById('btn-mode-sculpt');
+    if (btnSculpt) {
+        btnSculpt.addEventListener('click', () => {
+            setLayout('sculpt');
+            updateViewportModeButtons('btn-mode-sculpt');
+        });
+    }
+
+    const btnPaint = document.getElementById('btn-mode-paint');
+    if (btnPaint) {
+        btnPaint.addEventListener('click', () => {
+            setLayout('paint');
+            updateViewportModeButtons('btn-mode-paint');
+        });
+    }
+
+    const btnModeModel = document.getElementById('btn-mode-model');
+    if (btnModeModel) {
+        btnModeModel.addEventListener('click', () => {
+            setLayout('model');
+            updateViewportModeButtons('btn-mode-model');
+        });
+    }
+
+    const btnModeAnim = document.getElementById('btn-mode-anim');
+    if (btnModeAnim) {
+        btnModeAnim.addEventListener('click', () => {
+            setLayout('animation');
+            updateViewportModeButtons('btn-mode-anim');
+        });
+    }
+
+    // Left Vertical Floating Toolbar Gizmo & Tool Selection Handlers
     document.querySelectorAll('.vtool-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const toolName = e.currentTarget.getAttribute('data-vtool');
@@ -1218,20 +1244,6 @@ function setupToolbarEvents() {
             updateInspectorPanel();
         });
     });
-
-    const btnModeModel = document.getElementById('btn-mode-model');
-    if (btnModeModel) {
-        btnModeModel.addEventListener('click', () => {
-            setLayout('model');
-        });
-    }
-
-    const btnModeAnim = document.getElementById('btn-mode-anim');
-    if (btnModeAnim) {
-        btnModeAnim.addEventListener('click', () => {
-            setLayout('animation');
-        });
-    }
 }
 
 function setupKeyboardShortcuts() {
@@ -1431,17 +1443,26 @@ function main() {
                     vec3.set(activeCreatingBox.transform.scale, widthX, heightY, depthZ);
                     updateInspectorPanel();
                 } else if (Engine.mode === 'object' && activeGizmoAxis && Engine.selectedGameObject) {
-                    const sensitivity = 0.03;
-                    const delta = (dx - dy) * sensitivity;
+                    // Precise screen-space-to-world projection for 1:1 gizmo handle tracking
+                    const sensitivity = 0.012;
+                    let moveAmount = 0;
+
+                    if (activeGizmoAxis === 'x') {
+                        moveAmount = dx * sensitivity;
+                    } else if (activeGizmoAxis === 'y') {
+                        moveAmount = -dy * sensitivity;
+                    } else if (activeGizmoAxis === 'z') {
+                        moveAmount = (dx + dy) * sensitivity * 0.7;
+                    }
 
                     const axisMap = { x: 0, y: 1, z: 2 };
                     const axisIdx = axisMap[activeGizmoAxis];
 
                     if (axisIdx !== undefined) {
                         if (Engine.activeTool === 'translate') {
-                            Engine.selectedGameObject.transform.position[axisIdx] += delta;
+                            Engine.selectedGameObject.transform.position[axisIdx] += moveAmount;
                         } else if (Engine.activeTool === 'rotate') {
-                            const deg = Engine.selectedGameObject.transform.rotationDegrees[axisIdx] + delta * 20;
+                            const deg = Engine.selectedGameObject.transform.rotationDegrees[axisIdx] + (dx - dy) * 0.5;
                             Engine.selectedGameObject.transform.rotationDegrees[axisIdx] = deg;
                             Engine.selectedGameObject.setRotationDegrees(
                                 Engine.selectedGameObject.transform.rotationDegrees[0],
@@ -1449,7 +1470,7 @@ function main() {
                                 Engine.selectedGameObject.transform.rotationDegrees[2]
                             );
                         } else if (Engine.activeTool === 'scale') {
-                            const newScale = Math.max(0.1, Engine.selectedGameObject.transform.scale[axisIdx] + delta);
+                            const newScale = Math.max(0.1, Engine.selectedGameObject.transform.scale[axisIdx] + moveAmount);
                             Engine.selectedGameObject.transform.scale[axisIdx] = newScale;
                         }
                         updateInspectorPanel();
