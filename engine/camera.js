@@ -2,8 +2,8 @@ import { mat4, vec3, glMatrix } from './math.js';
 
 export class Camera {
     constructor() {
-        this.position = vec3.fromValues(0, 0, 3); // Start 3 units away from the origin
-        this.rotation = { yaw: -90, pitch: 0 }; // Yaw: left/right, Pitch: up/down
+        this.position = vec3.fromValues(0, 3, 7); // Elevator camera position to look down at origin
+        this.rotation = { yaw: -90, pitch: -22 }; // Yaw: left/right, Pitch: up/down
 
         this.front = vec3.fromValues(0, 0, -1);
         this.up = vec3.fromValues(0, 1, 0);
