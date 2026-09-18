@@ -91,22 +91,22 @@ export function initWebGL(canvas) {
             }
 
             float currentDepth = projCoords.z;
-            float bias = 0.003;
+            vec3 normal = normalize(v_normal);
+            vec3 lightDir = normalize(u_lightPos[0]);
+            float bias = max(0.002 * (1.0 - dot(normal, lightDir)), 0.0005);
+
             float shadow = 0.0;
-            vec2 texelSize = vec2(1.0 / 1024.0);
+            vec2 texelSize = vec2(1.0 / 2048.0);
 
-            // Unrolled 3x3 PCF sampling
-            shadow += currentDepth - bias > texture2D(u_shadowMap, projCoords.xy + vec2(-1.0, -1.0) * texelSize).r ? 1.0 : 0.0;
-            shadow += currentDepth - bias > texture2D(u_shadowMap, projCoords.xy + vec2( 0.0, -1.0) * texelSize).r ? 1.0 : 0.0;
-            shadow += currentDepth - bias > texture2D(u_shadowMap, projCoords.xy + vec2( 1.0, -1.0) * texelSize).r ? 1.0 : 0.0;
-            shadow += currentDepth - bias > texture2D(u_shadowMap, projCoords.xy + vec2(-1.0,  0.0) * texelSize).r ? 1.0 : 0.0;
-            shadow += currentDepth - bias > texture2D(u_shadowMap, projCoords.xy + vec2( 0.0,  0.0) * texelSize).r ? 1.0 : 0.0;
-            shadow += currentDepth - bias > texture2D(u_shadowMap, projCoords.xy + vec2( 1.0,  0.0) * texelSize).r ? 1.0 : 0.0;
-            shadow += currentDepth - bias > texture2D(u_shadowMap, projCoords.xy + vec2(-1.0,  1.0) * texelSize).r ? 1.0 : 0.0;
-            shadow += currentDepth - bias > texture2D(u_shadowMap, projCoords.xy + vec2( 0.0,  1.0) * texelSize).r ? 1.0 : 0.0;
-            shadow += currentDepth - bias > texture2D(u_shadowMap, projCoords.xy + vec2( 1.0,  1.0) * texelSize).r ? 1.0 : 0.0;
+            // High-Quality 16-sample 4x4 PCF Soft Shadow Filtering
+            for (float x = -1.5; x <= 1.5; x += 1.0) {
+                for (float y = -1.5; y <= 1.5; y += 1.0) {
+                    float pcfDepth = texture2D(u_shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+                    shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
+                }
+            }
 
-            return shadow / 9.0;
+            return shadow / 16.0;
         }
 
         void main() {
@@ -122,8 +122,13 @@ export function initWebGL(canvas) {
 
             vec3 normal = normalize(v_normal);
             vec3 viewDir = normalize(u_viewPosition - v_position);
-            float specPower = mix(128.0, 4.0, clamp(u_roughness, 0.05, 1.0));
-            vec3 specularColor = mix(vec3(1.0), baseColor.rgb, u_metallic);
+
+            float roughness = clamp(u_roughness, 0.04, 1.0);
+            float metallic = clamp(u_metallic, 0.0, 1.0);
+            float specPower = mix(256.0, 4.0, roughness);
+
+            // Fresnel reflectance at normal incidence (F0)
+            vec3 F0 = mix(vec3(0.04), baseColor.rgb, metallic);
 
             float shadow = calculateShadow(v_shadowPos);
 
@@ -145,29 +150,43 @@ export function initWebGL(canvas) {
                     float dist = length(lightVec);
                     lightDir = normalize(lightVec);
 
-                    // Attenuation formula
-                    attenuation = 1.0 / (1.0 + 0.1 * dist + 0.03 * dist * dist);
+                    // Smooth quadratic distance attenuation
+                    attenuation = 1.0 / (1.0 + 0.09 * dist + 0.032 * dist * dist);
 
                     if (u_lightType[i] == 2) {
-                        // Spot Light cone cutoff (~35 degrees)
+                        // Spot Light smooth cone cutoff
                         float spotCos = dot(-lightDir, vec3(0.0, -1.0, 0.0));
-                        if (spotCos < 0.82) {
-                            attenuation = 0.0;
-                        }
+                        float spotCutoff = 0.82;
+                        float spotOuterCutoff = 0.75;
+                        float spotIntensity = clamp((spotCos - spotOuterCutoff) / (spotCutoff - spotOuterCutoff), 0.0, 1.0);
+                        attenuation *= spotIntensity;
                     }
                 }
 
-                float diff = max(dot(normal, lightDir), 0.0);
+                float NdotL = max(dot(normal, lightDir), 0.0);
                 vec3 halfDir = normalize(lightDir + viewDir);
-                float specFactor = pow(max(dot(normal, halfDir), 0.0), specPower);
+                float NdotH = max(dot(normal, halfDir), 0.0);
+                float HdotV = max(dot(halfDir, viewDir), 0.0);
+
+                // Schlick Fresnel approximation
+                vec3 F = F0 + (1.0 - F0) * pow(clamp(1.0 - HdotV, 0.0, 1.0), 5.0);
+
+                // Blinn-Phong specular distribution with Fresnel
+                float specFactor = pow(NdotH, specPower) * ((specPower + 8.0) / 8.0);
+                vec3 specular = F * specFactor;
+
+                // Energy conservation between diffuse and specular
+                vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+                vec3 diffuse = kD * baseColor.rgb;
 
                 float shadowFactor = (i == 0) ? shadow : 0.0;
+                float lightFactor = NdotL * attenuation * (1.0 - shadowFactor * 0.8);
 
-                totalDiffuse += diff * baseColor.rgb * u_lightColor[i] * u_lightIntensity[i] * attenuation * (1.0 - shadowFactor * 0.75);
-                totalSpecular += specFactor * specularColor * u_lightColor[i] * u_lightIntensity[i] * attenuation * (1.0 - u_roughness * 0.5) * (1.0 - shadowFactor * 0.75);
+                totalDiffuse += diffuse * u_lightColor[i] * u_lightIntensity[i] * lightFactor;
+                totalSpecular += specular * u_lightColor[i] * u_lightIntensity[i] * lightFactor;
             }
 
-            vec3 ambient = 0.25 * baseColor.rgb;
+            vec3 ambient = 0.2 * baseColor.rgb;
             vec3 finalRgb = ambient + totalDiffuse + totalSpecular;
 
             if (u_isSelected) {
@@ -214,7 +233,7 @@ export function initWebGL(canvas) {
         return null;
     }
 
-    const shadowMapSize = 1024;
+    const shadowMapSize = 2048;
     let shadowFramebuffer = null;
     let shadowDepthTexture = null;
 
