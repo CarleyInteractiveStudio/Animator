@@ -113,6 +113,7 @@ export class Mesh {
 
     static createSphere(gl, radius = 0.5, latBands = 16, longBands = 16) {
         const vertices = [];
+        const normals = [];
         const indices = [];
 
         for (let lat = 0; lat <= latBands; lat++) {
@@ -127,6 +128,7 @@ export class Mesh {
                 const z = Math.sin(phi) * sinTheta;
 
                 vertices.push(x * radius, y * radius, z * radius);
+                normals.push(x, y, z);
             }
         }
 
@@ -135,12 +137,13 @@ export class Mesh {
                 const first = lat * (longBands + 1) + lon;
                 const second = first + longBands + 1;
 
-                indices.push(first, second, first + 1);
-                indices.push(second, second + 1, first + 1);
+                // CCW Winding Order for outward front-facing triangles
+                indices.push(first, first + 1, second);
+                indices.push(second, first + 1, second + 1);
             }
         }
 
-        return new Mesh(gl, vertices, indices);
+        return new Mesh(gl, vertices, indices, normals);
     }
 
     static createCylinder(gl, radius = 0.5, height = 1.0, segments = 16) {
@@ -266,83 +269,6 @@ export class Mesh {
                 indices.push(first, second, first + 1);
                 indices.push(second, second + 1, first + 1);
             }
-        }
-
-        return new Mesh(gl, vertices, indices);
-    }
-
-    static createBone(gl, length = 1.0, width = 0.15) {
-        // Octahedral 3D bone mesh (Blender Armature style)
-        const vertices = [
-            0, 0, 0,                      // Root joint (0)
-            -width, length * 0.25,  width, // Corner FL (1)
-             width, length * 0.25,  width, // Corner FR (2)
-             width, length * 0.25, -width, // Corner BR (3)
-            -width, length * 0.25, -width, // Corner BL (4)
-            0, length, 0                  // Tip joint (5)
-        ];
-        const indices = [
-            0, 1, 2,  0, 2, 3,  0, 3, 4,  0, 4, 1, // Bottom pyramid
-            5, 2, 1,  5, 3, 2,  5, 4, 3,  5, 1, 4  // Top pyramid
-        ];
-        return new Mesh(gl, vertices, indices);
-    }
-
-    static createExtrudedPolygon(gl, points2D, height = 1.0) {
-        if (!points2D || points2D.length < 3) {
-            // Default triangle if insufficient points
-            points2D = [[-0.5, -0.5], [0.5, -0.5], [0.0, 0.5]];
-        }
-
-        const N = points2D.length;
-        const halfH = height / 2;
-        const vertices = [];
-        const indices = [];
-
-        // Calculate centroid
-        let cx = 0, cz = 0;
-        for (const p of points2D) {
-            cx += p[0];
-            cz += p[1];
-        }
-        cx /= N;
-        cz /= N;
-
-        // Top vertices (0 to N-1)
-        for (let i = 0; i < N; i++) {
-            vertices.push(points2D[i][0], halfH, points2D[i][1]);
-        }
-
-        // Bottom vertices (N to 2N-1)
-        for (let i = 0; i < N; i++) {
-            vertices.push(points2D[i][0], -halfH, points2D[i][1]);
-        }
-
-        // Centroid Top (2N)
-        vertices.push(cx, halfH, cz);
-        // Centroid Bottom (2N + 1)
-        vertices.push(cx, -halfH, cz);
-
-        const topCentroidIdx = 2 * N;
-        const botCentroidIdx = 2 * N + 1;
-
-        for (let i = 0; i < N; i++) {
-            const nextIdx = (i + 1) % N;
-
-            // Side faces
-            const topCurr = i;
-            const topNext = nextIdx;
-            const botCurr = i + N;
-            const botNext = nextIdx + N;
-
-            indices.push(topCurr, botCurr, topNext);
-            indices.push(topNext, botCurr, botNext);
-
-            // Top Cap (Fan from centroid)
-            indices.push(topCentroidIdx, topCurr, topNext);
-
-            // Bottom Cap (Fan from centroid)
-            indices.push(botCentroidIdx, botNext, botCurr);
         }
 
         return new Mesh(gl, vertices, indices);
