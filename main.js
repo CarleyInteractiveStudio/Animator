@@ -245,6 +245,32 @@ function setupCreateMenuEvents() {
     });
 }
 
+function setupKeyboardShortcuts() {
+    window.addEventListener('keydown', (e) => {
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+            return;
+        }
+
+        const key = e.key.toLowerCase();
+
+        if (key === 'escape') {
+            e.preventDefault();
+            selectObject(null);
+            Engine.selectedSubElement = null;
+        } else if (key === '1') {
+            Engine.subElementMode = 'vertex';
+            Engine.selectedSubElement = null;
+        } else if (key === '3') {
+            Engine.subElementMode = 'face';
+            Engine.selectedSubElement = null;
+        } else if (key === 'e' && Engine.mode === 'model' && Engine.selectedGameObject && Engine.selectedSubElement && Engine.selectedSubElement.type === 'face') {
+            e.preventDefault();
+            Engine.selectedGameObject.mesh.extrudeFace(Engine.selectedSubElement.index, 0.5);
+            Engine.selectedSubElement = null;
+        }
+    });
+}
+
 function setupToolbarEvents() {
     const statusMode = document.getElementById('status-mode');
 
@@ -289,6 +315,7 @@ function main() {
         if (Engine.initialize(canvas)) {
             setupCreateMenuEvents();
             setupToolbarEvents();
+            setupKeyboardShortcuts();
 
             const sphereMesh = Mesh.createSphere(Engine.gl);
             const cubeMesh = Mesh.createCube(Engine.gl);
@@ -345,7 +372,25 @@ function main() {
                     const axisIdx = axisMap[activeGizmoAxis];
 
                     if (axisIdx !== undefined) {
-                        if (Engine.activeTool === 'translate') {
+                        if (Engine.mode === 'model' && Engine.selectedSubElement && Engine.selectedGameObject.mesh) {
+                            const mesh = Engine.selectedGameObject.mesh;
+                            const sub = Engine.selectedSubElement;
+
+                            if (sub.type === 'vertex') {
+                                const vIdx = sub.index * 3 + axisIdx;
+                                mesh.vertices[vIdx] += worldDelta;
+                                mesh.updateVertexBuffer();
+                            } else if (sub.type === 'face') {
+                                const i1 = mesh.indices[sub.index * 3];
+                                const i2 = mesh.indices[sub.index * 3 + 1];
+                                const i3 = mesh.indices[sub.index * 3 + 2];
+
+                                mesh.vertices[i1 * 3 + axisIdx] += worldDelta;
+                                mesh.vertices[i2 * 3 + axisIdx] += worldDelta;
+                                mesh.vertices[i3 * 3 + axisIdx] += worldDelta;
+                                mesh.updateVertexBuffer();
+                            }
+                        } else if (Engine.activeTool === 'translate') {
                             Engine.selectedGameObject.transform.position[axisIdx] += delta;
                         } else if (Engine.activeTool === 'rotate') {
                             const deg = Engine.selectedGameObject.transform.rotationDegrees[axisIdx] + delta * 20;
@@ -373,9 +418,14 @@ function main() {
                     isMouseDown = false;
                     const distMoved = Math.hypot(e.clientX - clickStartX, e.clientY - clickStartY);
 
-                    if (distMoved < 5 && Engine.mode === 'object' && !activeGizmoAxis) {
-                        const pickedObj = Engine.pickObject(e.clientX, e.clientY);
-                        selectObject(pickedObj);
+                    if (distMoved < 5 && !activeGizmoAxis) {
+                        if (Engine.mode === 'model' && Engine.selectedGameObject) {
+                            const subEl = Engine.pickSubElement(e.clientX, e.clientY);
+                            Engine.selectedSubElement = subEl;
+                        } else {
+                            const pickedObj = Engine.pickObject(e.clientX, e.clientY);
+                            selectObject(pickedObj);
+                        }
                     }
                     activeGizmoAxis = null;
                 }

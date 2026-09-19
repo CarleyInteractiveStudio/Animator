@@ -51,6 +51,158 @@ export class Mesh {
         this.gl.bufferSubData(this.gl.ARRAY_BUFFER, 0, this.colors);
     }
 
+    rebuildBuffers() {
+        this.vertexCount = this.indices.length;
+        this.normals = new Float32Array(Mesh.calculateNormals(this.vertices, this.indices));
+
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.vertices, this.gl.DYNAMIC_DRAW);
+
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.colorBuffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.colors, this.gl.DYNAMIC_DRAW);
+
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.normalBuffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.normals, this.gl.DYNAMIC_DRAW);
+
+        this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+        this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, this.indices, this.gl.STATIC_DRAW);
+    }
+
+    getFaceCentroid(faceIdx) {
+        const i1 = this.indices[faceIdx * 3] * 3;
+        const i2 = this.indices[faceIdx * 3 + 1] * 3;
+        const i3 = this.indices[faceIdx * 3 + 2] * 3;
+
+        return [
+            (this.vertices[i1] + this.vertices[i2] + this.vertices[i3]) / 3.0,
+            (this.vertices[i1 + 1] + this.vertices[i2 + 1] + this.vertices[i3 + 1]) / 3.0,
+            (this.vertices[i1 + 2] + this.vertices[i2 + 2] + this.vertices[i3 + 2]) / 3.0
+        ];
+    }
+
+    getFaceNormal(faceIdx) {
+        const i1 = this.indices[faceIdx * 3] * 3;
+        const i2 = this.indices[faceIdx * 3 + 1] * 3;
+        const i3 = this.indices[faceIdx * 3 + 2] * 3;
+
+        const ax = this.vertices[i1], ay = this.vertices[i1 + 1], az = this.vertices[i1 + 2];
+        const bx = this.vertices[i2], by = this.vertices[i2 + 1], bz = this.vertices[i2 + 2];
+        const cx = this.vertices[i3], cy = this.vertices[i3 + 1], cz = this.vertices[i3 + 2];
+
+        const v1x = bx - ax, v1y = by - ay, v1z = bz - az;
+        const v2x = cx - ax, v2y = cy - ay, v2z = cz - az;
+
+        const nx = v1y * v2z - v1z * v2y;
+        const ny = v1z * v2x - v1x * v2z;
+        const nz = v1x * v2y - v1y * v2x;
+
+        const len = Math.hypot(nx, ny, nz) || 1.0;
+        return [nx / len, ny / len, nz / len];
+    }
+
+    extrudeFace(faceIdx, distance = 0.5) {
+        if (faceIdx < 0 || faceIdx * 3 >= this.indices.length) return;
+
+        const i1Idx = this.indices[faceIdx * 3];
+        const i2Idx = this.indices[faceIdx * 3 + 1];
+        const i3Idx = this.indices[faceIdx * 3 + 2];
+
+        const i1 = i1Idx * 3;
+        const i2 = i2Idx * 3;
+        const i3 = i3Idx * 3;
+
+        const normal = this.getFaceNormal(faceIdx);
+
+        const newVerts = Array.from(this.vertices);
+        const newColors = Array.from(this.colors);
+        const newIndices = Array.from(this.indices);
+
+        const newStartIdx = newVerts.length / 3;
+
+        // Duplicate face vertices and move along normal
+        const p1 = [this.vertices[i1] + normal[0] * distance, this.vertices[i1 + 1] + normal[1] * distance, this.vertices[i1 + 2] + normal[2] * distance];
+        const p2 = [this.vertices[i2] + normal[0] * distance, this.vertices[i2 + 1] + normal[1] * distance, this.vertices[i2 + 2] + normal[2] * distance];
+        const p3 = [this.vertices[i3] + normal[0] * distance, this.vertices[i3 + 1] + normal[1] * distance, this.vertices[i3 + 2] + normal[2] * distance];
+
+        newVerts.push(...p1, ...p2, ...p3);
+        newColors.push(1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1);
+
+        const n1 = newStartIdx;
+        const n2 = newStartIdx + 1;
+        const n3 = newStartIdx + 2;
+
+        // Replace original face indices with extruded top face
+        newIndices[faceIdx * 3] = n1;
+        newIndices[faceIdx * 3 + 1] = n2;
+        newIndices[faceIdx * 3 + 2] = n3;
+
+        // Side Quad 1: (i1, i2, n2, n1)
+        newIndices.push(i1Idx, i2Idx, n2);
+        newIndices.push(i1Idx, n2, n1);
+
+        // Side Quad 2: (i2, i3, n3, n2)
+        newIndices.push(i2Idx, i3Idx, n3);
+        newIndices.push(i2Idx, n3, n2);
+
+        // Side Quad 3: (i3, i1, n1, n3)
+        newIndices.push(i3Idx, i1Idx, n1);
+        newIndices.push(i3Idx, n1, n3);
+
+        this.vertices = new Float32Array(newVerts);
+        this.colors = new Float32Array(newColors);
+        this.indices = new Uint16Array(newIndices);
+
+        this.rebuildBuffers();
+    }
+
+    subdivide() {
+        const newVerts = Array.from(this.vertices);
+        const newColors = Array.from(this.colors);
+        const newIndices = [];
+
+        const midPointCache = new Map();
+
+        const getMidPointIndex = (idx1, idx2) => {
+            const key = idx1 < idx2 ? `${idx1}_${idx2}` : `${idx2}_${idx1}`;
+            if (midPointCache.has(key)) {
+                return midPointCache.get(key);
+            }
+
+            const i1 = idx1 * 3, i2 = idx2 * 3;
+            const mx = (this.vertices[i1] + this.vertices[i2]) / 2.0;
+            const my = (this.vertices[i1 + 1] + this.vertices[i2 + 1]) / 2.0;
+            const mz = (this.vertices[i1 + 2] + this.vertices[i2 + 2]) / 2.0;
+
+            const newIdx = newVerts.length / 3;
+            newVerts.push(mx, my, mz);
+            newColors.push(1, 1, 1, 1);
+
+            midPointCache.set(key, newIdx);
+            return newIdx;
+        };
+
+        for (let i = 0; i < this.indices.length; i += 3) {
+            const a = this.indices[i];
+            const b = this.indices[i + 1];
+            const c = this.indices[i + 2];
+
+            const ab = getMidPointIndex(a, b);
+            const bc = getMidPointIndex(b, c);
+            const ca = getMidPointIndex(c, a);
+
+            newIndices.push(a, ab, ca);
+            newIndices.push(b, bc, ab);
+            newIndices.push(c, ca, bc);
+            newIndices.push(ab, bc, ca);
+        }
+
+        this.vertices = new Float32Array(newVerts);
+        this.colors = new Float32Array(newColors);
+        this.indices = new Uint16Array(newIndices);
+
+        this.rebuildBuffers();
+    }
+
     static calculateNormals(vertices, indices) {
         const normals = new Float32Array(vertices.length);
 

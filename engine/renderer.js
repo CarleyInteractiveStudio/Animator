@@ -170,5 +170,9 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         // Gizmos are unlit so colors are vibrant
         gl.uniform1i(programInfo.uniformLocations.isUnlit, 1);
         gizmo.render(gl, programInfo, selectedGameObject, viewMatrix, projectionMatrix, mode, tool, brushRadius);
+
+        if (mode === 'model' && Engine && Engine.selectedSubElement) {
+            gizmo.renderSubElementOverlay(gl, programInfo, selectedGameObject, Engine.selectedSubElement, viewMatrix, projectionMatrix);
+        }
     }
 }
