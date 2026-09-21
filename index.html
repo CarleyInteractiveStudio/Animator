@@ -12,11 +12,9 @@
             <div class="menu-item">
                 <span>Archivo</span>
                 <div class="dropdown-menu">
-                    <div class="dropdown-item disabled">Nuevo</div>
-                    <div class="dropdown-item disabled">Abrir Escena</div>
-                    <div class="dropdown-item disabled">Guardar Escena</div>
-                    <div class="dropdown-divider"></div>
-                    <div class="dropdown-item disabled">Importar Modelo...</div>
+                    <div class="dropdown-item" id="btn-import-obj">Importar Modelo (.obj, .gltf)</div>
+                    <div class="dropdown-item" id="btn-export-obj">Exportar OBJ</div>
+                    <div class="dropdown-item" id="btn-export-gltf">Exportar glTF</div>
                 </div>
             </div>
             <div class="menu-item">
@@ -24,8 +22,6 @@
                 <div class="dropdown-menu">
                     <div class="dropdown-item disabled">Deshacer</div>
                     <div class="dropdown-item disabled">Rehacer</div>
-                    <div class="dropdown-divider"></div>
-                    <div class="dropdown-item disabled">Preferencias</div>
                 </div>
             </div>
             <div class="menu-item">
@@ -39,12 +35,22 @@
                     <div class="dropdown-item" data-create="pyramid">Pirámide</div>
                     <div class="dropdown-item" data-create="ramp">Prisma / Rampa</div>
                     <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" id="btn-add-bone">Armadura / Hueso</div>
                 </div>
             </div>
             <div class="menu-item">
                 <span>Ventana</span>
                 <div class="dropdown-menu">
                     <div class="dropdown-item">Restablecer Layout</div>
+                </div>
+            </div>
+            <div class="menu-item">
+                <span>Entorno / Skybox</span>
+                <div class="dropdown-menu">
+                    <div class="dropdown-item" id="env-dark">Oscuro (Defecto)</div>
+                    <div class="dropdown-item" id="env-sky">Cielo Normal (Gradiente)</div>
+                    <div class="dropdown-item" id="env-custom">Imagen Personalizada...</div>
                 </div>
             </div>
         </div>
@@ -76,7 +82,6 @@
 
         <div id="visor-panel" class="panel">
             <div class="panel-title">Visor 3D</div>
-            <!-- Overlay Toolbar inside 3D Viewport -->
             <div id="viewport-toolbar">
                 <div class="tool-category" id="cat-transform">
                     <button class="tool-btn active" title="Transformación">
@@ -124,6 +129,7 @@
             <div class="panel-content"></div>
         </div>
     </div>
+    <input type="file" id="file-import-input" accept=".obj,.gltf" style="display: none;">
     <script type="module" src="main.js"></script>
 </body>
 </html>

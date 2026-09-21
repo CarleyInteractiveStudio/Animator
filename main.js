@@ -4,6 +4,8 @@ import { Mesh } from './engine/mesh.js';
 import { Sculpt } from './engine/sculpt.js';
 import { Paint } from './engine/paint.js';
 import { vec3 } from './engine/math.js';
+import { OBJLoader, GLTFLoader } from './engine/importer.js';
+import { Armature, Bone } from './engine/bone.js';
 
 let objectCounters = {
     cube: 1,
@@ -98,6 +100,10 @@ function updateInspectorPanel() {
         return;
     }
 
+    if (!selectedObject.material) {
+        selectedObject.material = { textureType: 0, textureScale: 5.0, metallic: 0.2, roughness: 0.5 };
+    }
+
     inspectorContent.innerHTML = `
         <div class="inspector-section">
             <div class="inspector-section-title">Objeto: ${selectedObject.name}</div>
@@ -159,6 +165,33 @@ function updateInspectorPanel() {
                 </div>
             </div>
         </div>
+
+        <div class="inspector-section">
+            <div class="inspector-section-title">Textura y Materiales</div>
+            <div style="margin-bottom: 10px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 4px;">Tipo de Textura Procedimental</label>
+                <select id="mat-texture-type" style="width: 100%; background: #222; color: #eee; border: 1px solid #444; padding: 4px; border-radius: 4px;">
+                    <option value="0" ${selectedObject.material.textureType === 0 ? 'selected' : ''}>Ninguna (Color Sólido)</option>
+                    <option value="1" ${selectedObject.material.textureType === 1 ? 'selected' : ''}>Tablero / Checkerboard</option>
+                    <option value="2" ${selectedObject.material.textureType === 2 ? 'selected' : ''}>Ruido Perlin / Procedimental</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 4px;">Escala de Textura: <span id="val-tex-scale">${selectedObject.material.textureScale.toFixed(1)}</span></label>
+                <input type="range" id="mat-texture-scale" min="1" max="20" step="0.5" value="${selectedObject.material.textureScale}" style="width: 100%;">
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 4px;">Metálico (Metallic): <span id="val-metallic">${selectedObject.material.metallic.toFixed(2)}</span></label>
+                <input type="range" id="mat-metallic" min="0" max="1" step="0.05" value="${selectedObject.material.metallic}" style="width: 100%;">
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 4px;">Rugosidad (Roughness): <span id="val-roughness">${selectedObject.material.roughness.toFixed(2)}</span></label>
+                <input type="range" id="mat-roughness" min="0.05" max="1" step="0.05" value="${selectedObject.material.roughness}" style="width: 100%;">
+            </div>
+        </div>
     `;
 
     const posXInput = inspectorContent.querySelector('#pos-x');
@@ -191,6 +224,38 @@ function updateInspectorPanel() {
     [posXInput, posYInput, posZInput, rotXInput, rotYInput, rotZInput, scaleXInput, scaleYInput, scaleZInput].forEach(input => {
         if (input) input.addEventListener('input', updateTransform);
     });
+
+    const matTexType = inspectorContent.querySelector('#mat-texture-type');
+    const matTexScale = inspectorContent.querySelector('#mat-texture-scale');
+    const matMetallic = inspectorContent.querySelector('#mat-metallic');
+    const matRoughness = inspectorContent.querySelector('#mat-roughness');
+
+    if (matTexType) {
+        matTexType.addEventListener('change', (e) => {
+            selectedObject.material.textureType = parseInt(e.target.value);
+        });
+    }
+
+    if (matTexScale) {
+        matTexScale.addEventListener('input', (e) => {
+            selectedObject.material.textureScale = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-tex-scale').textContent = selectedObject.material.textureScale.toFixed(1);
+        });
+    }
+
+    if (matMetallic) {
+        matMetallic.addEventListener('input', (e) => {
+            selectedObject.material.metallic = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-metallic').textContent = selectedObject.material.metallic.toFixed(2);
+        });
+    }
+
+    if (matRoughness) {
+        matRoughness.addEventListener('input', (e) => {
+            selectedObject.material.roughness = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-roughness').textContent = selectedObject.material.roughness.toFixed(2);
+        });
+    }
 }
 
 function createPrimitiveMesh(type) {
@@ -243,6 +308,123 @@ function setupCreateMenuEvents() {
             spawnPrimitive(type);
         });
     });
+
+    const btnAddBone = document.getElementById('btn-add-bone');
+    if (btnAddBone) {
+        btnAddBone.addEventListener('click', () => {
+            const boneMesh = Bone.createBoneMesh(Engine.gl, 1.2);
+            const boneObj = new GameObject('Hueso 1', boneMesh);
+            boneObj.material = { isUnlit: true, color: [0.9, 0.7, 0.2, 1.0] };
+            vec3.set(boneObj.transform.position, 0, 0, 0);
+            Engine.scene.addGameObject(boneObj);
+            selectObject(boneObj);
+        });
+    }
+}
+
+function setupFileImportExportEvents() {
+    const fileInput = document.getElementById('file-import-input');
+    const btnImport = document.getElementById('btn-import-obj');
+    const btnExportOBJ = document.getElementById('btn-export-obj');
+    const btnExportGLTF = document.getElementById('btn-export-gltf');
+
+    if (btnImport && fileInput) {
+        btnImport.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const text = event.target.result;
+                let mesh = null;
+                if (file.name.endsWith('.obj')) {
+                    mesh = OBJLoader.parseOBJ(Engine.gl, text);
+                } else if (file.name.endsWith('.gltf')) {
+                    try {
+                        const json = JSON.parse(text);
+                        mesh = GLTFLoader.parseGLTF(Engine.gl, json);
+                    } catch (err) {
+                        console.error("Error parsing glTF:", err);
+                    }
+                }
+
+                if (mesh) {
+                    const obj = new GameObject(file.name.split('.')[0], mesh);
+                    Engine.scene.addGameObject(obj);
+                    selectObject(obj);
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    if (btnExportOBJ) {
+        btnExportOBJ.addEventListener('click', () => {
+            if (!Engine.selectedGameObject) return;
+            const objData = OBJLoader.exportOBJ(Engine.selectedGameObject);
+            const blob = new Blob([objData], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${Engine.selectedGameObject.name}.obj`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+    }
+
+    if (btnExportGLTF) {
+        btnExportGLTF.addEventListener('click', () => {
+            if (!Engine.selectedGameObject) return;
+            const gltfData = GLTFLoader.exportGLTF(Engine.selectedGameObject);
+            if (!gltfData) return;
+            const blob = new Blob([gltfData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${Engine.selectedGameObject.name}.gltf`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+    }
+}
+
+function setupEnvironmentMenuEvents() {
+    const envDark = document.getElementById('env-dark');
+    const envSky = document.getElementById('env-sky');
+    const envCustom = document.getElementById('env-custom');
+    const visorPanel = document.getElementById('visor-panel');
+
+    if (envDark) {
+        envDark.addEventListener('click', () => {
+            if (visorPanel) visorPanel.style.background = '#141414';
+        });
+    }
+
+    if (envSky) {
+        envSky.addEventListener('click', () => {
+            if (visorPanel) visorPanel.style.background = 'linear-gradient(to bottom, #1e3c72, #2a5298, #6dd5ed)';
+        });
+    }
+
+    if (envCustom) {
+        envCustom.addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        if (visorPanel) visorPanel.style.background = `url(${evt.target.result}) center/cover no-repeat`;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+            input.click();
+        });
+    }
 }
 
 function setupKeyboardShortcuts() {
@@ -314,6 +496,8 @@ function main() {
 
         if (Engine.initialize(canvas)) {
             setupCreateMenuEvents();
+            setupFileImportExportEvents();
+            setupEnvironmentMenuEvents();
             setupToolbarEvents();
             setupKeyboardShortcuts();
 
@@ -378,16 +562,16 @@ function main() {
 
                             if (sub.type === 'vertex') {
                                 const vIdx = sub.index * 3 + axisIdx;
-                                mesh.vertices[vIdx] += worldDelta;
+                                mesh.vertices[vIdx] += delta;
                                 mesh.updateVertexBuffer();
                             } else if (sub.type === 'face') {
                                 const i1 = mesh.indices[sub.index * 3];
                                 const i2 = mesh.indices[sub.index * 3 + 1];
                                 const i3 = mesh.indices[sub.index * 3 + 2];
 
-                                mesh.vertices[i1 * 3 + axisIdx] += worldDelta;
-                                mesh.vertices[i2 * 3 + axisIdx] += worldDelta;
-                                mesh.vertices[i3 * 3 + axisIdx] += worldDelta;
+                                mesh.vertices[i1 * 3 + axisIdx] += delta;
+                                mesh.vertices[i2 * 3 + axisIdx] += delta;
+                                mesh.vertices[i3 * 3 + axisIdx] += delta;
                                 mesh.updateVertexBuffer();
                             }
                         } else if (Engine.activeTool === 'translate') {
