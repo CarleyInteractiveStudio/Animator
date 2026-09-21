@@ -6,6 +6,7 @@ import { Paint } from './engine/paint.js';
 import { vec3 } from './engine/math.js';
 import { OBJLoader, GLTFLoader } from './engine/importer.js';
 import { Armature, Bone } from './engine/bone.js';
+import { VolumetricLightComponent, DarknessZoneComponent } from './engine/lightEffects.js';
 
 let objectCounters = {
     cube: 1,
@@ -104,6 +105,9 @@ function updateInspectorPanel() {
         selectedObject.material = { textureType: 0, textureScale: 5.0, metallic: 0.2, roughness: 0.5 };
     }
 
+    const hasGodRays = !!selectedObject.volumetricLight;
+    const hasDarkness = !!selectedObject.darknessZone;
+
     inspectorContent.innerHTML = `
         <div class="inspector-section">
             <div class="inspector-section-title">Objeto: ${selectedObject.name}</div>
@@ -192,6 +196,48 @@ function updateInspectorPanel() {
                 <input type="range" id="mat-roughness" min="0.05" max="1" step="0.05" value="${selectedObject.material.roughness}" style="width: 100%;">
             </div>
         </div>
+
+        <div class="inspector-section">
+            <div class="inspector-section-title">Efectos de Luz Volumétrica (God Rays)</div>
+            <div style="margin-bottom: 8px;">
+                <button id="btn-toggle-godrays" style="width: 100%; background: ${hasGodRays ? '#28a745' : '#444'}; color: #fff; border: none; padding: 6px; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                    ${hasGodRays ? '✔ Efecto God Rays Activo (Quitar)' : '+ Añadir Rayos Volumétricos'}
+                </button>
+            </div>
+            ${hasGodRays ? `
+                <div style="margin-bottom: 8px;">
+                    <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Densidad de Rayo: <span id="val-god-density">${selectedObject.volumetricLight.density.toFixed(2)}</span></label>
+                    <input type="range" id="god-density" min="0.1" max="2.0" step="0.05" value="${selectedObject.volumetricLight.density}" style="width: 100%;">
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Exposición / Brillo: <span id="val-god-exposure">${selectedObject.volumetricLight.exposure.toFixed(2)}</span></label>
+                    <input type="range" id="god-exposure" min="0.1" max="2.0" step="0.05" value="${selectedObject.volumetricLight.exposure}" style="width: 100%;">
+                </div>
+            ` : ''}
+        </div>
+
+        <div class="inspector-section">
+            <div class="inspector-section-title">Zona de Oscuridad y Niebla Volumétrica</div>
+            <div style="margin-bottom: 8px;">
+                <button id="btn-toggle-darkness" style="width: 100%; background: ${hasDarkness ? '#dc3545' : '#444'}; color: #fff; border: none; padding: 6px; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                    ${hasDarkness ? '✔ Zona de Oscuridad Activa (Quitar)' : '+ Añadir Volumen de Oscuridad'}
+                </button>
+            </div>
+            ${hasDarkness ? `
+                <div style="margin-bottom: 8px;">
+                    <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Radio de Influencia: <span id="val-dark-radius">${selectedObject.darknessZone.radius.toFixed(1)}</span></label>
+                    <input type="range" id="dark-radius" min="0.5" max="10.0" step="0.5" value="${selectedObject.darknessZone.radius}" style="width: 100%;">
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Cancelación de Luz (Intensidad): <span id="val-dark-intensity">${selectedObject.darknessZone.intensity.toFixed(2)}</span></label>
+                    <input type="range" id="dark-intensity" min="0.0" max="1.0" step="0.05" value="${selectedObject.darknessZone.intensity}" style="width: 100%;">
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Niebla Oscura (Volumétrica): <span id="val-dark-fog">${selectedObject.darknessZone.fogDensity.toFixed(2)}</span></label>
+                    <input type="range" id="dark-fog" min="0.0" max="1.0" step="0.05" value="${selectedObject.darknessZone.fogDensity}" style="width: 100%;">
+                </div>
+            ` : ''}
+        </div>
     `;
 
     const posXInput = inspectorContent.querySelector('#pos-x');
@@ -254,6 +300,74 @@ function updateInspectorPanel() {
         matRoughness.addEventListener('input', (e) => {
             selectedObject.material.roughness = parseFloat(e.target.value);
             inspectorContent.querySelector('#val-roughness').textContent = selectedObject.material.roughness.toFixed(2);
+        });
+    }
+
+    // Toggle God Rays Component
+    const btnToggleGodrays = inspectorContent.querySelector('#btn-toggle-godrays');
+    if (btnToggleGodrays) {
+        btnToggleGodrays.addEventListener('click', () => {
+            if (selectedObject.volumetricLight) {
+                delete selectedObject.volumetricLight;
+            } else {
+                selectedObject.volumetricLight = new VolumetricLightComponent();
+            }
+            updateInspectorPanel();
+        });
+    }
+
+    const godDensity = inspectorContent.querySelector('#god-density');
+    const godExposure = inspectorContent.querySelector('#god-exposure');
+
+    if (godDensity) {
+        godDensity.addEventListener('input', (e) => {
+            selectedObject.volumetricLight.density = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-god-density').textContent = selectedObject.volumetricLight.density.toFixed(2);
+        });
+    }
+
+    if (godExposure) {
+        godExposure.addEventListener('input', (e) => {
+            selectedObject.volumetricLight.exposure = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-god-exposure').textContent = selectedObject.volumetricLight.exposure.toFixed(2);
+        });
+    }
+
+    // Toggle Darkness Component
+    const btnToggleDarkness = inspectorContent.querySelector('#btn-toggle-darkness');
+    if (btnToggleDarkness) {
+        btnToggleDarkness.addEventListener('click', () => {
+            if (selectedObject.darknessZone) {
+                delete selectedObject.darknessZone;
+            } else {
+                selectedObject.darknessZone = new DarknessZoneComponent();
+            }
+            updateInspectorPanel();
+        });
+    }
+
+    const darkRadius = inspectorContent.querySelector('#dark-radius');
+    const darkIntensity = inspectorContent.querySelector('#dark-intensity');
+    const darkFog = inspectorContent.querySelector('#dark-fog');
+
+    if (darkRadius) {
+        darkRadius.addEventListener('input', (e) => {
+            selectedObject.darknessZone.radius = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-dark-radius').textContent = selectedObject.darknessZone.radius.toFixed(1);
+        });
+    }
+
+    if (darkIntensity) {
+        darkIntensity.addEventListener('input', (e) => {
+            selectedObject.darknessZone.intensity = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-dark-intensity').textContent = selectedObject.darknessZone.intensity.toFixed(2);
+        });
+    }
+
+    if (darkFog) {
+        darkFog.addEventListener('input', (e) => {
+            selectedObject.darknessZone.fogDensity = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-dark-fog').textContent = selectedObject.darknessZone.fogDensity.toFixed(2);
         });
     }
 }

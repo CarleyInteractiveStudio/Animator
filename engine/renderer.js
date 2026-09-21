@@ -46,10 +46,23 @@ export function initWebGL(canvas) {
         uniform bool u_isUnlit;
 
         // Texture and Procedural uniforms
-        uniform int u_textureType; // 0: None, 1: Checkerboard, 2: Perlin Noise
+        uniform int u_textureType;
         uniform float u_textureScale;
         uniform float u_metallic;
         uniform float u_roughness;
+
+        // Volumetric God Rays & Light Shafts
+        uniform bool u_godRaysEnabled;
+        uniform float u_godRaysDensity;
+        uniform float u_godRaysExposure;
+        uniform vec3 u_godRaysColor;
+
+        // Darkness Zone & Fog
+        uniform bool u_darknessEnabled;
+        uniform vec3 u_darknessCenter;
+        uniform float u_darknessRadius;
+        uniform float u_darknessIntensity;
+        uniform float u_darknessFog;
 
         // Procedural Checkerboard
         vec4 getCheckerboard(vec2 st, float scale) {
@@ -58,7 +71,7 @@ export function initWebGL(canvas) {
             return mix(vec4(0.1, 0.1, 0.1, 1.0), vec4(0.9, 0.9, 0.9, 1.0), f);
         }
 
-        // Simple Hash & Noise for Procedural Noise
+        // Noise
         float hash(vec2 p) {
             return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
         }
@@ -75,10 +88,10 @@ export function initWebGL(canvas) {
         void main() {
             vec4 baseColor = v_color * u_tintColor;
 
-            if (u_textureType == 1) { // Checkerboard
+            if (u_textureType == 1) {
                 vec2 uv = v_texcoord.x == 0.0 && v_texcoord.y == 0.0 ? v_worldPosition.xz : v_texcoord;
                 baseColor *= getCheckerboard(uv, u_textureScale);
-            } else if (u_textureType == 2) { // Noise
+            } else if (u_textureType == 2) {
                 vec2 uv = v_texcoord.x == 0.0 && v_texcoord.y == 0.0 ? v_worldPosition.xz : v_texcoord;
                 float n = noise(uv * u_textureScale);
                 baseColor *= vec4(vec3(n), 1.0);
@@ -93,7 +106,7 @@ export function initWebGL(canvas) {
                 float diff = max(dot(normal, lightDir), 0.0);
                 float ambient = 0.35;
 
-                // Specular highlight with roughness control
+                // Specular highlight
                 vec3 viewDir = normalize(-v_worldPosition);
                 vec3 halfDir = normalize(lightDir + viewDir);
                 float specAngle = max(dot(normal, halfDir), 0.0);
@@ -101,7 +114,34 @@ export function initWebGL(canvas) {
                 float specular = pow(specAngle, specPow) * u_metallic;
 
                 float lighting = ambient + diff * 0.65;
+
+                // Apply Darkness Zone Light Cancellation
+                if (u_darknessEnabled) {
+                    float distToCenter = length(v_worldPosition - u_darknessCenter);
+                    if (distToCenter < u_darknessRadius) {
+                        float darkFactor = smoothstep(u_darknessRadius, 0.0, distToCenter) * u_darknessIntensity;
+                        lighting *= (1.0 - darkFactor);
+                        specular *= (1.0 - darkFactor);
+                    }
+                }
+
                 vec3 finalRGB = baseColor.rgb * lighting + vec3(specular);
+
+                // Add Volumetric Light Shafts / God Rays Effect
+                if (u_godRaysEnabled) {
+                    float rayDot = max(0.0, dot(normal, lightDir));
+                    vec3 godRayContribution = u_godRaysColor * (rayDot * u_godRaysDensity * u_godRaysExposure);
+                    finalRGB += godRayContribution;
+                }
+
+                // Apply Dark Volumetric Fog
+                if (u_darknessEnabled) {
+                    float distToCenter = length(v_worldPosition - u_darknessCenter);
+                    if (distToCenter < u_darknessRadius) {
+                        float fogAmount = smoothstep(u_darknessRadius, 0.0, distToCenter) * u_darknessFog;
+                        finalRGB = mix(finalRGB, vec3(0.02, 0.02, 0.02), fogAmount);
+                    }
+                }
 
                 gl_FragColor = vec4(finalRGB, baseColor.a);
             }
@@ -158,6 +198,17 @@ export function initWebGL(canvas) {
             textureScale: gl.getUniformLocation(program, 'u_textureScale'),
             metallic: gl.getUniformLocation(program, 'u_metallic'),
             roughness: gl.getUniformLocation(program, 'u_roughness'),
+
+            godRaysEnabled: gl.getUniformLocation(program, 'u_godRaysEnabled'),
+            godRaysDensity: gl.getUniformLocation(program, 'u_godRaysDensity'),
+            godRaysExposure: gl.getUniformLocation(program, 'u_godRaysExposure'),
+            godRaysColor: gl.getUniformLocation(program, 'u_godRaysColor'),
+
+            darknessEnabled: gl.getUniformLocation(program, 'u_darknessEnabled'),
+            darknessCenter: gl.getUniformLocation(program, 'u_darknessCenter'),
+            darknessRadius: gl.getUniformLocation(program, 'u_darknessRadius'),
+            darknessIntensity: gl.getUniformLocation(program, 'u_darknessIntensity'),
+            darknessFog: gl.getUniformLocation(program, 'u_darknessFog'),
         },
     };
 
@@ -173,7 +224,6 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.viewport(0, 0, canvas.width, canvas.height);
     }
 
-    // Allow CSS background (Skybox/Environment image/gradient) to show through canvas
     gl.clearColor(0.0, 0.0, 0.0, 0.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
@@ -217,12 +267,33 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         mat3.normalFromMat4(normalMatrix, modelMatrix);
         gl.uniformMatrix3fv(programInfo.uniformLocations.normalMatrix, false, normalMatrix);
 
-        // Material uniforms
-        const mat = gameObject.material || { textureType: 0, textureScale: 5.0, metallic: 0.2, roughness: 0.5 };
+        // Material & Volumetric / Darkness uniforms
+        const mat = gameObject.material || {};
         gl.uniform1i(programInfo.uniformLocations.textureType, mat.textureType || 0);
         gl.uniform1f(programInfo.uniformLocations.textureScale, mat.textureScale || 5.0);
         gl.uniform1f(programInfo.uniformLocations.metallic, mat.metallic !== undefined ? mat.metallic : 0.2);
         gl.uniform1f(programInfo.uniformLocations.roughness, mat.roughness !== undefined ? mat.roughness : 0.5);
+
+        // God Rays Component Uniforms
+        if (gameObject.volumetricLight) {
+            gl.uniform1i(programInfo.uniformLocations.godRaysEnabled, gameObject.volumetricLight.enabled ? 1 : 0);
+            gl.uniform1f(programInfo.uniformLocations.godRaysDensity, gameObject.volumetricLight.density);
+            gl.uniform1f(programInfo.uniformLocations.godRaysExposure, gameObject.volumetricLight.exposure);
+            gl.uniform3fv(programInfo.uniformLocations.godRaysColor, gameObject.volumetricLight.color);
+        } else {
+            gl.uniform1i(programInfo.uniformLocations.godRaysEnabled, 0);
+        }
+
+        // Darkness Zone Component Uniforms
+        if (gameObject.darknessZone) {
+            gl.uniform1i(programInfo.uniformLocations.darknessEnabled, gameObject.darknessZone.enabled ? 1 : 0);
+            gl.uniform3fv(programInfo.uniformLocations.darknessCenter, gameObject.transform.position);
+            gl.uniform1f(programInfo.uniformLocations.darknessRadius, gameObject.darknessZone.radius);
+            gl.uniform1f(programInfo.uniformLocations.darknessIntensity, gameObject.darknessZone.intensity);
+            gl.uniform1f(programInfo.uniformLocations.darknessFog, gameObject.darknessZone.fogDensity);
+        } else {
+            gl.uniform1i(programInfo.uniformLocations.darknessEnabled, 0);
+        }
 
         if (gameObject === selectedGameObject) {
             gl.uniform4f(programInfo.uniformLocations.tintColor, 1.0, 0.7, 0.3, 1.0);
@@ -236,6 +307,8 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     if (gizmo && selectedGameObject) {
         gl.uniform1i(programInfo.uniformLocations.isUnlit, 1);
         gl.uniform1i(programInfo.uniformLocations.textureType, 0);
+        gl.uniform1i(programInfo.uniformLocations.godRaysEnabled, 0);
+        gl.uniform1i(programInfo.uniformLocations.darknessEnabled, 0);
         gizmo.render(gl, programInfo, selectedGameObject, viewMatrix, projectionMatrix, mode, tool, brushRadius);
 
         if (mode === 'model' && Engine && Engine.selectedSubElement) {
