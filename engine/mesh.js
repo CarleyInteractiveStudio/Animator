@@ -425,4 +425,59 @@ export class Mesh {
 
         return new Mesh(gl, vertices, indices);
     }
+
+    static createCloud(gl) {
+        const vertices = [];
+        const normals = [];
+        const indices = [];
+
+        const puffs = [
+            { pos: [0.0, 0.0, 0.0], r: 0.6 },
+            { pos: [0.45, 0.1, 0.1], r: 0.48 },
+            { pos: [-0.45, 0.05, -0.1], r: 0.48 },
+            { pos: [0.2, 0.28, 0.0], r: 0.42 },
+            { pos: [-0.2, 0.22, 0.1], r: 0.42 },
+            { pos: [0.0, 0.15, -0.25], r: 0.38 },
+            { pos: [-0.65, -0.05, 0.0], r: 0.32 },
+            { pos: [0.65, -0.05, 0.0], r: 0.32 }
+        ];
+
+        const latBands = 10;
+        const longBands = 10;
+
+        for (const puff of puffs) {
+            const startIdx = vertices.length / 3;
+            for (let lat = 0; lat <= latBands; lat++) {
+                const theta = (lat * Math.PI) / latBands;
+                const sinTheta = Math.sin(theta);
+                const cosTheta = Math.cos(theta);
+
+                for (let lon = 0; lon <= longBands; lon++) {
+                    const phi = (lon * 2 * Math.PI) / longBands;
+                    const nx = Math.cos(phi) * sinTheta;
+                    const ny = cosTheta;
+                    const nz = Math.sin(phi) * sinTheta;
+
+                    vertices.push(
+                        puff.pos[0] + nx * puff.r,
+                        puff.pos[1] + ny * puff.r,
+                        puff.pos[2] + nz * puff.r
+                    );
+                    normals.push(nx, ny, nz);
+                }
+            }
+
+            for (let lat = 0; lat < latBands; lat++) {
+                for (let lon = 0; lon < longBands; lon++) {
+                    const first = startIdx + lat * (longBands + 1) + lon;
+                    const second = first + longBands + 1;
+
+                    indices.push(first, first + 1, second);
+                    indices.push(second, first + 1, second + 1);
+                }
+            }
+        }
+
+        return new Mesh(gl, vertices, indices, normals);
+    }
 }

@@ -360,6 +360,8 @@ body {
 
 .modal-body {
     padding: 16px;
+    max-height: 85vh;
+    overflow-y: auto;
 }
 
 .modal-search {

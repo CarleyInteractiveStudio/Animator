@@ -53,6 +53,11 @@ export function initWebGL(canvas) {
         uniform float u_timeOfDay;
         uniform float u_sunIntensity;
         uniform float u_starIntensity;
+        uniform float u_time;
+        uniform float u_cloudCoverage;
+        uniform float u_cloudDensity;
+        uniform float u_cloudAltitude;
+        uniform float u_windSpeed;
         uniform int u_envPreset; // 0 = Studio Dark, 1 = Dynamic 3D Sky, 2 = Custom
 
         uniform sampler2D u_customTexture;
@@ -62,6 +67,30 @@ export function initWebGL(canvas) {
             p = fract(p * vec3(443.897, 441.423, 437.195));
             p += dot(p, p.yzx + 19.19);
             return fract((p.x + p.y) * p.z);
+        }
+
+        float noise3D(vec3 p) {
+            vec3 i = floor(p);
+            vec3 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+
+            return mix(
+                mix(mix(hash31(i + vec3(0,0,0)), hash31(i + vec3(1,0,0)), f.x),
+                    mix(hash31(i + vec3(0,1,0)), hash31(i + vec3(1,1,0)), f.x), f.y),
+                mix(mix(hash31(i + vec3(0,0,1)), hash31(i + vec3(1,0,1)), f.x),
+                    mix(hash31(i + vec3(0,1,1)), hash31(i + vec3(1,1,1)), f.x), f.y), f.z);
+        }
+
+        float fbm3D(vec3 p) {
+            float v = 0.0;
+            float a = 0.5;
+            vec3 shift = vec3(100.0);
+            for (int i = 0; i < 4; ++i) {
+                v += a * noise3D(p);
+                p = p * 2.03 + shift;
+                a *= 0.5;
+            }
+            return v;
         }
 
         void main() {
@@ -145,6 +174,50 @@ export function initWebGL(canvas) {
                 skyColor = mix(horizonColor * 0.85, groundColor, g);
             }
 
+            // Volumetric Ray-Marched Atmospheric Sky Clouds
+            if (dir.y > 0.02 && u_cloudCoverage > 0.01 && u_envPreset == 1) {
+                vec3 cloudLightDir = normalize(u_sunDirection);
+                float sunPhase = max(0.0, dot(dir, cloudLightDir));
+
+                vec3 baseCloudTone = mix(vec3(0.08, 0.1, 0.18), vec3(0.98, 0.98, 1.0), dayFactor);
+                if (sunsetFactor > 0.05) {
+                    baseCloudTone = mix(baseCloudTone, vec3(0.95, 0.45, 0.25), sunsetFactor);
+                }
+
+                vec3 sunHighlight = mix(vec3(1.0, 0.8, 0.5), vec3(1.0, 1.0, 0.95), dayFactor) * (pow(sunPhase, 4.0) * 1.5 + 0.3);
+
+                vec3 windOffset = vec3(u_time * u_windSpeed * 0.8, 0.0, u_time * u_windSpeed * 0.4);
+                float alphaAccum = 1.0;
+                vec3 accumCloudCol = vec3(0.0);
+
+                float layerBottom = 80.0 * u_cloudAltitude;
+                float layerTop = 160.0 * u_cloudAltitude;
+
+                float stepSize = (layerTop - layerBottom) / 6.0;
+                float startDist = layerBottom / dir.y;
+
+                for (int step = 0; step < 6; step++) {
+                    float rayDist = startDist + float(step) * stepSize / dir.y;
+                    vec3 rayPos = dir * rayDist + windOffset;
+                    vec3 samplePos = rayPos * 0.008;
+
+                    float n = fbm3D(samplePos);
+                    float density = smoothstep(1.05 - u_cloudCoverage, 1.0, n) * u_cloudDensity;
+
+                    if (density > 0.01) {
+                        float lightTransmittance = exp(-density * 0.8);
+                        vec3 stepColor = mix(baseCloudTone * 0.4, baseCloudTone * sunHighlight, lightTransmittance);
+
+                        accumCloudCol += stepColor * (1.0 - lightTransmittance) * alphaAccum;
+                        alphaAccum *= lightTransmittance;
+
+                        if (alphaAccum < 0.02) break;
+                    }
+                }
+
+                skyColor = mix(skyColor, accumCloudCol, (1.0 - alphaAccum) * smoothstep(0.02, 0.15, dir.y));
+            }
+
             gl_FragColor = vec4(skyColor, 1.0);
         }
     `;
@@ -165,6 +238,11 @@ export function initWebGL(canvas) {
             timeOfDay: gl.getUniformLocation(skyProgram, 'u_timeOfDay'),
             sunIntensity: gl.getUniformLocation(skyProgram, 'u_sunIntensity'),
             starIntensity: gl.getUniformLocation(skyProgram, 'u_starIntensity'),
+            time: gl.getUniformLocation(skyProgram, 'u_time'),
+            cloudCoverage: gl.getUniformLocation(skyProgram, 'u_cloudCoverage'),
+            cloudDensity: gl.getUniformLocation(skyProgram, 'u_cloudDensity'),
+            cloudAltitude: gl.getUniformLocation(skyProgram, 'u_cloudAltitude'),
+            windSpeed: gl.getUniformLocation(skyProgram, 'u_windSpeed'),
             envPreset: gl.getUniformLocation(skyProgram, 'u_envPreset'),
             customTexture: gl.getUniformLocation(skyProgram, 'u_customTexture'),
             useCustomTexture: gl.getUniformLocation(skyProgram, 'u_useCustomTexture')
@@ -418,6 +496,11 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.uniform1f(skyProgramInfo.uniformLocations.timeOfDay, timeOfDay);
         gl.uniform1f(skyProgramInfo.uniformLocations.sunIntensity, env ? env.sunIntensity : 1.0);
         gl.uniform1f(skyProgramInfo.uniformLocations.starIntensity, env ? env.starIntensity : 1.0);
+        gl.uniform1f(skyProgramInfo.uniformLocations.time, Engine ? Engine.time : 0.0);
+        gl.uniform1f(skyProgramInfo.uniformLocations.cloudCoverage, env ? env.cloudCoverage : 0.55);
+        gl.uniform1f(skyProgramInfo.uniformLocations.cloudDensity, env ? env.cloudDensity : 1.0);
+        gl.uniform1f(skyProgramInfo.uniformLocations.cloudAltitude, env ? env.cloudAltitude : 1.0);
+        gl.uniform1f(skyProgramInfo.uniformLocations.windSpeed, env ? env.windSpeed : 0.5);
 
         let presetCode = 1; // Default: Dynamic 3D Sky
         if (env) {

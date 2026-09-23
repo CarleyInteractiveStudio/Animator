@@ -16,7 +16,8 @@ let objectCounters = {
     cone: 0,
     pyramid: 0,
     ramp: 0,
-    torus: 0
+    torus: 0,
+    cloud: 0
 };
 
 function setupResizers() {
@@ -349,6 +350,11 @@ function setupModals() {
     const sliderAmbientIntensity = document.getElementById('slider-ambient-intensity');
     const sliderStarIntensity = document.getElementById('slider-star-intensity');
 
+    const sliderCloudCoverage = document.getElementById('slider-cloud-coverage');
+    const sliderCloudDensity = document.getElementById('slider-cloud-density');
+    const sliderCloudAltitude = document.getElementById('slider-cloud-altitude');
+    const sliderWindSpeed = document.getElementById('slider-wind-speed');
+
     if (presetDark) {
         presetDark.addEventListener('click', () => {
             document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
@@ -410,6 +416,30 @@ function setupModals() {
         });
     }
 
+    if (sliderCloudCoverage) {
+        sliderCloudCoverage.addEventListener('input', (e) => {
+            Engine.environment.cloudCoverage = parseFloat(e.target.value);
+        });
+    }
+
+    if (sliderCloudDensity) {
+        sliderCloudDensity.addEventListener('input', (e) => {
+            Engine.environment.cloudDensity = parseFloat(e.target.value);
+        });
+    }
+
+    if (sliderCloudAltitude) {
+        sliderCloudAltitude.addEventListener('input', (e) => {
+            Engine.environment.cloudAltitude = parseFloat(e.target.value);
+        });
+    }
+
+    if (sliderWindSpeed) {
+        sliderWindSpeed.addEventListener('input', (e) => {
+            Engine.environment.windSpeed = parseFloat(e.target.value);
+        });
+    }
+
     Engine.onEnvironmentUpdate = (env) => {
         if (sliderTime) sliderTime.value = env.timeOfDay;
         if (timeDisplay) timeDisplay.textContent = formatTimeString(env.timeOfDay);
@@ -458,6 +488,7 @@ function createPrimitiveMesh(type) {
         case 'pyramid': return Mesh.createPyramid(gl);
         case 'ramp': return Mesh.createRamp(gl);
         case 'torus': return Mesh.createTorus(gl);
+        case 'cloud': return Mesh.createCloud(gl);
         case 'cube':
         default:
             return Mesh.createCube(gl);
@@ -475,6 +506,7 @@ function getPrimitiveName(type) {
         case 'pyramid': return `Pirámide ${num}`;
         case 'ramp': return `Prisma ${num}`;
         case 'torus': return `Torus ${num}`;
+        case 'cloud': return `Nube ${num}`;
         case 'cube':
         default:
             return `Cubo ${num}`;

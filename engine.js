@@ -21,6 +21,7 @@ const Engine = {
     selectedSubElement: null, // { type: 'vertex'|'edge'|'face', index: number }
     brushRadius: 0.8,
     brushColor: [1.0, 0.2, 0.2, 1.0],
+    time: 0.0,
 
     environment: {
         preset: 'sky', // 'dark', 'sky', 'custom'
@@ -30,6 +31,10 @@ const Engine = {
         sunIntensity: 1.0,
         ambientIntensity: 0.35,
         starIntensity: 1.0,
+        cloudCoverage: 0.55,
+        cloudDensity: 1.0,
+        cloudAltitude: 1.0,
+        windSpeed: 0.5,
         customGLTexture: null
     },
     onEnvironmentUpdate: null,
@@ -316,6 +321,7 @@ const Engine = {
                 deltaTime = 0.016;
             }
             lastTime = time;
+            Engine.time += deltaTime;
 
             if (Engine.environment && Engine.environment.isCycling) {
                 Engine.environment.timeOfDay = (Engine.environment.timeOfDay + deltaTime * Engine.environment.cycleSpeed * 0.4) % 24.0;
