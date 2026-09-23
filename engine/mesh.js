@@ -428,22 +428,32 @@ export class Mesh {
 
     static createCloud(gl) {
         const vertices = [];
-        const normals = [];
         const indices = [];
 
+        // Densely clustered organic puffs forming a natural cumulus cloud base and billowing top
         const puffs = [
-            { pos: [0.0, 0.0, 0.0], r: 0.6 },
-            { pos: [0.45, 0.1, 0.1], r: 0.48 },
-            { pos: [-0.45, 0.05, -0.1], r: 0.48 },
-            { pos: [0.2, 0.28, 0.0], r: 0.42 },
-            { pos: [-0.2, 0.22, 0.1], r: 0.42 },
-            { pos: [0.0, 0.15, -0.25], r: 0.38 },
-            { pos: [-0.65, -0.05, 0.0], r: 0.32 },
-            { pos: [0.65, -0.05, 0.0], r: 0.32 }
+            { pos: [0.0, 0.1, 0.0], r: 0.65 },
+            { pos: [0.4, 0.12, 0.1], r: 0.52 },
+            { pos: [-0.4, 0.08, -0.05], r: 0.52 },
+            { pos: [0.2, 0.35, -0.05], r: 0.48 },
+            { pos: [-0.2, 0.3, 0.1], r: 0.46 },
+            { pos: [0.65, 0.0, 0.0], r: 0.38 },
+            { pos: [-0.65, 0.02, 0.05], r: 0.38 },
+            { pos: [0.0, 0.22, 0.3], r: 0.42 },
+            { pos: [0.0, 0.18, -0.3], r: 0.4 },
+            { pos: [0.35, 0.25, 0.25], r: 0.35 },
+            { pos: [-0.35, 0.22, -0.25], r: 0.35 }
         ];
 
-        const latBands = 10;
-        const longBands = 10;
+        const latBands = 16;
+        const longBands = 16;
+
+        // Simple multi-frequency organic displacement noise function
+        function organicNoise(x, y, z) {
+            let n = Math.sin(x * 4.2 + y * 3.1) + Math.sin(y * 4.8 + z * 3.5) + Math.sin(z * 3.9 + x * 4.5);
+            n += 0.5 * (Math.sin(x * 8.5 + z * 7.2) + Math.sin(y * 8.1 + x * 7.8));
+            return n * 0.08;
+        }
 
         for (const puff of puffs) {
             const startIdx = vertices.length / 3;
@@ -455,15 +465,25 @@ export class Mesh {
                 for (let lon = 0; lon <= longBands; lon++) {
                     const phi = (lon * 2 * Math.PI) / longBands;
                     const nx = Math.cos(phi) * sinTheta;
-                    const ny = cosTheta;
+                    let ny = cosTheta;
                     const nz = Math.sin(phi) * sinTheta;
 
-                    vertices.push(
-                        puff.pos[0] + nx * puff.r,
-                        puff.pos[1] + ny * puff.r,
-                        puff.pos[2] + nz * puff.r
-                    );
-                    normals.push(nx, ny, nz);
+                    let px = puff.pos[0] + nx * puff.r;
+                    let py = puff.pos[1] + ny * puff.r;
+                    let pz = puff.pos[2] + nz * puff.r;
+
+                    // Organic surface noise perturbation
+                    const noise = organicNoise(px, py, pz);
+                    px += nx * noise;
+                    py += ny * noise;
+                    pz += nz * noise;
+
+                    // Flatten bottom of cumulus cloud for natural flat condensation base
+                    if (py < -0.1) {
+                        py = -0.1 + (py + 0.1) * 0.25;
+                    }
+
+                    vertices.push(px, py, pz);
                 }
             }
 
@@ -478,6 +498,7 @@ export class Mesh {
             }
         }
 
-        return new Mesh(gl, vertices, indices, normals);
+        // Compute recalculated smooth vertex normals for continuous soft cloud lighting
+        return new Mesh(gl, vertices, indices);
     }
 }
