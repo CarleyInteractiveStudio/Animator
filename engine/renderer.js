@@ -51,13 +51,13 @@ export function initWebGL(canvas) {
         uniform float u_metallic;
         uniform float u_roughness;
 
-        // Volumetric God Rays & Light Shafts
+        // Volumetric God Rays & Raymarching Shafts
         uniform bool u_godRaysEnabled;
         uniform float u_godRaysDensity;
         uniform float u_godRaysExposure;
         uniform vec3 u_godRaysColor;
 
-        // Darkness Zone & Fog
+        // Darkness Zone & Extinction Volume
         uniform bool u_darknessEnabled;
         uniform vec3 u_darknessCenter;
         uniform float u_darknessRadius;
@@ -115,7 +115,7 @@ export function initWebGL(canvas) {
 
                 float lighting = ambient + diff * 0.65;
 
-                // Apply Darkness Zone Light Cancellation
+                // Apply Darkness Zone Volumetric Extinction
                 if (u_darknessEnabled) {
                     float distToCenter = length(v_worldPosition - u_darknessCenter);
                     if (distToCenter < u_darknessRadius) {
@@ -127,19 +127,28 @@ export function initWebGL(canvas) {
 
                 vec3 finalRGB = baseColor.rgb * lighting + vec3(specular);
 
-                // Add Volumetric Light Shafts / God Rays Effect
+                // 3D Volumetric Ray-marching Light Shafts / God Rays
                 if (u_godRaysEnabled) {
-                    float rayDot = max(0.0, dot(normal, lightDir));
-                    vec3 godRayContribution = u_godRaysColor * (rayDot * u_godRaysDensity * u_godRaysExposure);
-                    finalRGB += godRayContribution;
+                    vec3 rayStep = lightDir * 0.2;
+                    vec3 currentPos = v_worldPosition;
+                    float accumulatedRay = 0.0;
+
+                    for (int i = 0; i < 8; i++) {
+                        currentPos += rayStep;
+                        float rayDensity = noise(currentPos.xz * 2.0);
+                        accumulatedRay += rayDensity * 0.125;
+                    }
+
+                    float godRayIntensity = accumulatedRay * u_godRaysDensity * u_godRaysExposure;
+                    finalRGB += u_godRaysColor * godRayIntensity;
                 }
 
-                // Apply Dark Volumetric Fog
+                // Dark Volumetric Absorption Fog
                 if (u_darknessEnabled) {
                     float distToCenter = length(v_worldPosition - u_darknessCenter);
                     if (distToCenter < u_darknessRadius) {
                         float fogAmount = smoothstep(u_darknessRadius, 0.0, distToCenter) * u_darknessFog;
-                        finalRGB = mix(finalRGB, vec3(0.02, 0.02, 0.02), fogAmount);
+                        finalRGB = mix(finalRGB, vec3(0.01, 0.01, 0.01), fogAmount);
                     }
                 }
 

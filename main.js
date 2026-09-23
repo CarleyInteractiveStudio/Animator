@@ -170,74 +170,43 @@ function updateInspectorPanel() {
             </div>
         </div>
 
-        <div class="inspector-section">
-            <div class="inspector-section-title">Textura y Materiales</div>
-            <div style="margin-bottom: 10px;">
-                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 4px;">Tipo de Textura Procedimental</label>
-                <select id="mat-texture-type" style="width: 100%; background: #222; color: #eee; border: 1px solid #444; padding: 4px; border-radius: 4px;">
-                    <option value="0" ${selectedObject.material.textureType === 0 ? 'selected' : ''}>Ninguna (Color Sólido)</option>
-                    <option value="1" ${selectedObject.material.textureType === 1 ? 'selected' : ''}>Tablero / Checkerboard</option>
-                    <option value="2" ${selectedObject.material.textureType === 2 ? 'selected' : ''}>Ruido Perlin / Procedimental</option>
-                </select>
-            </div>
-
-            <div style="margin-bottom: 10px;">
-                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 4px;">Escala de Textura: <span id="val-tex-scale">${selectedObject.material.textureScale.toFixed(1)}</span></label>
-                <input type="range" id="mat-texture-scale" min="1" max="20" step="0.5" value="${selectedObject.material.textureScale}" style="width: 100%;">
-            </div>
-
-            <div style="margin-bottom: 10px;">
-                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 4px;">Metálico (Metallic): <span id="val-metallic">${selectedObject.material.metallic.toFixed(2)}</span></label>
-                <input type="range" id="mat-metallic" min="0" max="1" step="0.05" value="${selectedObject.material.metallic}" style="width: 100%;">
-            </div>
-
-            <div style="margin-bottom: 10px;">
-                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 4px;">Rugosidad (Roughness): <span id="val-roughness">${selectedObject.material.roughness.toFixed(2)}</span></label>
-                <input type="range" id="mat-roughness" min="0.05" max="1" step="0.05" value="${selectedObject.material.roughness}" style="width: 100%;">
-            </div>
+        <div class="inspector-section" style="margin-top: 15px;">
+            <button id="btn-open-comp-modal" style="width: 100%; background: #007acc; color: #fff; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">
+                + Añadir Componente
+            </button>
         </div>
 
+        ${hasGodRays ? `
         <div class="inspector-section">
             <div class="inspector-section-title">Efectos de Luz Volumétrica (God Rays)</div>
             <div style="margin-bottom: 8px;">
-                <button id="btn-toggle-godrays" style="width: 100%; background: ${hasGodRays ? '#28a745' : '#444'}; color: #fff; border: none; padding: 6px; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                    ${hasGodRays ? '✔ Efecto God Rays Activo (Quitar)' : '+ Añadir Rayos Volumétricos'}
-                </button>
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Densidad de Rayo: <span id="val-god-density">${selectedObject.volumetricLight.density.toFixed(2)}</span></label>
+                <input type="range" id="god-density" min="0.1" max="2.0" step="0.05" value="${selectedObject.volumetricLight.density}" style="width: 100%;">
             </div>
-            ${hasGodRays ? `
-                <div style="margin-bottom: 8px;">
-                    <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Densidad de Rayo: <span id="val-god-density">${selectedObject.volumetricLight.density.toFixed(2)}</span></label>
-                    <input type="range" id="god-density" min="0.1" max="2.0" step="0.05" value="${selectedObject.volumetricLight.density}" style="width: 100%;">
-                </div>
-                <div style="margin-bottom: 8px;">
-                    <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Exposición / Brillo: <span id="val-god-exposure">${selectedObject.volumetricLight.exposure.toFixed(2)}</span></label>
-                    <input type="range" id="god-exposure" min="0.1" max="2.0" step="0.05" value="${selectedObject.volumetricLight.exposure}" style="width: 100%;">
-                </div>
-            ` : ''}
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Exposición / Brillo: <span id="val-god-exposure">${selectedObject.volumetricLight.exposure.toFixed(2)}</span></label>
+                <input type="range" id="god-exposure" min="0.1" max="2.0" step="0.05" value="${selectedObject.volumetricLight.exposure}" style="width: 100%;">
+            </div>
         </div>
+        ` : ''}
 
+        ${hasDarkness ? `
         <div class="inspector-section">
             <div class="inspector-section-title">Zona de Oscuridad y Niebla Volumétrica</div>
             <div style="margin-bottom: 8px;">
-                <button id="btn-toggle-darkness" style="width: 100%; background: ${hasDarkness ? '#dc3545' : '#444'}; color: #fff; border: none; padding: 6px; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                    ${hasDarkness ? '✔ Zona de Oscuridad Activa (Quitar)' : '+ Añadir Volumen de Oscuridad'}
-                </button>
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Radio de Influencia: <span id="val-dark-radius">${selectedObject.darknessZone.radius.toFixed(1)}</span></label>
+                <input type="range" id="dark-radius" min="0.5" max="10.0" step="0.5" value="${selectedObject.darknessZone.radius}" style="width: 100%;">
             </div>
-            ${hasDarkness ? `
-                <div style="margin-bottom: 8px;">
-                    <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Radio de Influencia: <span id="val-dark-radius">${selectedObject.darknessZone.radius.toFixed(1)}</span></label>
-                    <input type="range" id="dark-radius" min="0.5" max="10.0" step="0.5" value="${selectedObject.darknessZone.radius}" style="width: 100%;">
-                </div>
-                <div style="margin-bottom: 8px;">
-                    <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Cancelación de Luz (Intensidad): <span id="val-dark-intensity">${selectedObject.darknessZone.intensity.toFixed(2)}</span></label>
-                    <input type="range" id="dark-intensity" min="0.0" max="1.0" step="0.05" value="${selectedObject.darknessZone.intensity}" style="width: 100%;">
-                </div>
-                <div style="margin-bottom: 8px;">
-                    <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Niebla Oscura (Volumétrica): <span id="val-dark-fog">${selectedObject.darknessZone.fogDensity.toFixed(2)}</span></label>
-                    <input type="range" id="dark-fog" min="0.0" max="1.0" step="0.05" value="${selectedObject.darknessZone.fogDensity}" style="width: 100%;">
-                </div>
-            ` : ''}
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Cancelación de Luz (Intensidad): <span id="val-dark-intensity">${selectedObject.darknessZone.intensity.toFixed(2)}</span></label>
+                <input type="range" id="dark-intensity" min="0.0" max="1.0" step="0.05" value="${selectedObject.darknessZone.intensity}" style="width: 100%;">
+            </div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Niebla Oscura (Volumétrica): <span id="val-dark-fog">${selectedObject.darknessZone.fogDensity.toFixed(2)}</span></label>
+                <input type="range" id="dark-fog" min="0.0" max="1.0" step="0.05" value="${selectedObject.darknessZone.fogDensity}" style="width: 100%;">
+            </div>
         </div>
+        ` : ''}
     `;
 
     const posXInput = inspectorContent.querySelector('#pos-x');
@@ -271,48 +240,11 @@ function updateInspectorPanel() {
         if (input) input.addEventListener('input', updateTransform);
     });
 
-    const matTexType = inspectorContent.querySelector('#mat-texture-type');
-    const matTexScale = inspectorContent.querySelector('#mat-texture-scale');
-    const matMetallic = inspectorContent.querySelector('#mat-metallic');
-    const matRoughness = inspectorContent.querySelector('#mat-roughness');
-
-    if (matTexType) {
-        matTexType.addEventListener('change', (e) => {
-            selectedObject.material.textureType = parseInt(e.target.value);
-        });
-    }
-
-    if (matTexScale) {
-        matTexScale.addEventListener('input', (e) => {
-            selectedObject.material.textureScale = parseFloat(e.target.value);
-            inspectorContent.querySelector('#val-tex-scale').textContent = selectedObject.material.textureScale.toFixed(1);
-        });
-    }
-
-    if (matMetallic) {
-        matMetallic.addEventListener('input', (e) => {
-            selectedObject.material.metallic = parseFloat(e.target.value);
-            inspectorContent.querySelector('#val-metallic').textContent = selectedObject.material.metallic.toFixed(2);
-        });
-    }
-
-    if (matRoughness) {
-        matRoughness.addEventListener('input', (e) => {
-            selectedObject.material.roughness = parseFloat(e.target.value);
-            inspectorContent.querySelector('#val-roughness').textContent = selectedObject.material.roughness.toFixed(2);
-        });
-    }
-
-    // Toggle God Rays Component
-    const btnToggleGodrays = inspectorContent.querySelector('#btn-toggle-godrays');
-    if (btnToggleGodrays) {
-        btnToggleGodrays.addEventListener('click', () => {
-            if (selectedObject.volumetricLight) {
-                delete selectedObject.volumetricLight;
-            } else {
-                selectedObject.volumetricLight = new VolumetricLightComponent();
-            }
-            updateInspectorPanel();
+    const btnOpenCompModal = inspectorContent.querySelector('#btn-open-comp-modal');
+    if (btnOpenCompModal) {
+        btnOpenCompModal.addEventListener('click', () => {
+            const modal = document.getElementById('modal-component');
+            if (modal) modal.style.display = 'flex';
         });
     }
 
@@ -330,19 +262,6 @@ function updateInspectorPanel() {
         godExposure.addEventListener('input', (e) => {
             selectedObject.volumetricLight.exposure = parseFloat(e.target.value);
             inspectorContent.querySelector('#val-god-exposure').textContent = selectedObject.volumetricLight.exposure.toFixed(2);
-        });
-    }
-
-    // Toggle Darkness Component
-    const btnToggleDarkness = inspectorContent.querySelector('#btn-toggle-darkness');
-    if (btnToggleDarkness) {
-        btnToggleDarkness.addEventListener('click', () => {
-            if (selectedObject.darknessZone) {
-                delete selectedObject.darknessZone;
-            } else {
-                selectedObject.darknessZone = new DarknessZoneComponent();
-            }
-            updateInspectorPanel();
         });
     }
 
@@ -368,6 +287,79 @@ function updateInspectorPanel() {
         darkFog.addEventListener('input', (e) => {
             selectedObject.darknessZone.fogDensity = parseFloat(e.target.value);
             inspectorContent.querySelector('#val-dark-fog').textContent = selectedObject.darknessZone.fogDensity.toFixed(2);
+        });
+    }
+}
+
+function setupModals() {
+    const modalComp = document.getElementById('modal-component');
+    const closeComp = document.getElementById('close-component-modal');
+
+    const modalEnv = document.getElementById('modal-environment');
+    const btnOpenEnv = document.getElementById('btn-open-env-modal');
+    const closeEnv = document.getElementById('close-env-modal');
+
+    if (closeComp && modalComp) {
+        closeComp.addEventListener('click', () => modalComp.style.display = 'none');
+    }
+
+    if (btnOpenEnv && modalEnv) {
+        btnOpenEnv.addEventListener('click', () => modalEnv.style.display = 'flex');
+    }
+
+    if (closeEnv && modalEnv) {
+        closeEnv.addEventListener('click', () => modalEnv.style.display = 'none');
+    }
+
+    document.querySelectorAll('[data-add-comp]').forEach(card => {
+        card.addEventListener('click', (e) => {
+            const compType = e.currentTarget.getAttribute('data-add-comp');
+            if (Engine.selectedGameObject) {
+                if (compType === 'godrays') {
+                    Engine.selectedGameObject.volumetricLight = new VolumetricLightComponent();
+                } else if (compType === 'darkness') {
+                    Engine.selectedGameObject.darknessZone = new DarknessZoneComponent();
+                }
+                updateInspectorPanel();
+            }
+            if (modalComp) modalComp.style.display = 'none';
+        });
+    });
+
+    const visorPanel = document.getElementById('visor-panel');
+    const presetDark = document.getElementById('preset-dark');
+    const presetSky = document.getElementById('preset-sky');
+    const presetCustom = document.getElementById('preset-custom');
+    const envFileInput = document.getElementById('env-file-input');
+
+    if (presetDark) {
+        presetDark.addEventListener('click', () => {
+            document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+            presetDark.classList.add('active');
+            if (visorPanel) visorPanel.style.background = '#141414';
+        });
+    }
+
+    if (presetSky) {
+        presetSky.addEventListener('click', () => {
+            document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+            presetSky.classList.add('active');
+            if (visorPanel) visorPanel.style.background = 'linear-gradient(to bottom, #1e3c72, #2a5298, #6dd5ed)';
+        });
+    }
+
+    if (envFileInput) {
+        envFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file && visorPanel) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+                    if (presetCustom) presetCustom.classList.add('active');
+                    visorPanel.style.background = `url(${evt.target.result}) center/cover no-repeat`;
+                };
+                reader.readAsDataURL(file);
+            }
         });
     }
 }
@@ -503,44 +495,6 @@ function setupFileImportExportEvents() {
     }
 }
 
-function setupEnvironmentMenuEvents() {
-    const envDark = document.getElementById('env-dark');
-    const envSky = document.getElementById('env-sky');
-    const envCustom = document.getElementById('env-custom');
-    const visorPanel = document.getElementById('visor-panel');
-
-    if (envDark) {
-        envDark.addEventListener('click', () => {
-            if (visorPanel) visorPanel.style.background = '#141414';
-        });
-    }
-
-    if (envSky) {
-        envSky.addEventListener('click', () => {
-            if (visorPanel) visorPanel.style.background = 'linear-gradient(to bottom, #1e3c72, #2a5298, #6dd5ed)';
-        });
-    }
-
-    if (envCustom) {
-        envCustom.addEventListener('click', () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.onchange = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (evt) => {
-                        if (visorPanel) visorPanel.style.background = `url(${evt.target.result}) center/cover no-repeat`;
-                    };
-                    reader.readAsDataURL(file);
-                }
-            };
-            input.click();
-        });
-    }
-}
-
 function setupKeyboardShortcuts() {
     window.addEventListener('keydown', (e) => {
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
@@ -611,7 +565,7 @@ function main() {
         if (Engine.initialize(canvas)) {
             setupCreateMenuEvents();
             setupFileImportExportEvents();
-            setupEnvironmentMenuEvents();
+            setupModals();
             setupToolbarEvents();
             setupKeyboardShortcuts();
 

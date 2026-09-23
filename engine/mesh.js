@@ -55,6 +55,14 @@ export class Mesh {
         this.vertexCount = this.indices.length;
         this.normals = new Float32Array(Mesh.calculateNormals(this.vertices, this.indices));
 
+        if (!this.colors || this.colors.length !== (this.vertices.length / 3) * 4) {
+            const cols = [];
+            for (let i = 0; i < this.vertices.length / 3; i++) {
+                cols.push(1.0, 1.0, 1.0, 1.0);
+            }
+            this.colors = new Float32Array(cols);
+        }
+
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
         this.gl.bufferData(this.gl.ARRAY_BUFFER, this.vertices, this.gl.DYNAMIC_DRAW);
 
@@ -114,7 +122,7 @@ export class Mesh {
         const normal = this.getFaceNormal(faceIdx);
 
         const newVerts = Array.from(this.vertices);
-        const newColors = Array.from(this.colors);
+        const newColors = this.colors ? Array.from(this.colors) : new Array((this.vertices.length / 3) * 4).fill(1.0);
         const newIndices = Array.from(this.indices);
 
         const newStartIdx = newVerts.length / 3;
@@ -157,7 +165,7 @@ export class Mesh {
 
     subdivide() {
         const newVerts = Array.from(this.vertices);
-        const newColors = Array.from(this.colors);
+        const newColors = this.colors ? Array.from(this.colors) : new Array((this.vertices.length / 3) * 4).fill(1.0);
         const newIndices = [];
 
         const midPointCache = new Map();
@@ -241,8 +249,8 @@ export class Mesh {
 
     static createCube(gl) {
         const vertices = [
-            -0.5, -0.5,  0.5,   0.5, -0.5,  0.5,   0.5,  0.5,  0.5,  -0.5,  0.5,  0.5, // Front
-            -0.5, -0.5, -0.5,   0.5, -0.5, -0.5,   0.5,  0.5, -0.5,  -0.5,  0.5, -0.5, // Back
+            -0.5, -0.5,  0.5,   0.5, -0.5,  0.5,   0.5,  0.5,  0.5,  -0.5,  0.5,  0.5,
+            -0.5, -0.5, -0.5,   0.5, -0.5, -0.5,   0.5,  0.5, -0.5,  -0.5,  0.5, -0.5,
         ];
         const indices = [
             0, 1, 2, 0, 2, 3,    4, 6, 5, 4, 7, 6,
@@ -289,7 +297,6 @@ export class Mesh {
                 const first = lat * (longBands + 1) + lon;
                 const second = first + longBands + 1;
 
-                // CCW Winding Order for outward front-facing triangles
                 indices.push(first, first + 1, second);
                 indices.push(second, first + 1, second + 1);
             }
@@ -303,17 +310,16 @@ export class Mesh {
         const indices = [];
         const halfH = height / 2;
 
-        // Top center & bottom center
-        vertices.push(0, halfH, 0); // index 0
-        vertices.push(0, -halfH, 0); // index 1
+        vertices.push(0, halfH, 0);
+        vertices.push(0, -halfH, 0);
 
         for (let i = 0; i <= segments; i++) {
             const theta = (i * 2 * Math.PI) / segments;
             const x = Math.cos(theta) * radius;
             const z = Math.sin(theta) * radius;
 
-            vertices.push(x, halfH, z);  // Top rim
-            vertices.push(x, -halfH, z); // Bottom rim
+            vertices.push(x, halfH, z);
+            vertices.push(x, -halfH, z);
         }
 
         for (let i = 0; i < segments; i++) {
@@ -322,14 +328,10 @@ export class Mesh {
             const top2 = top1 + 2;
             const bot2 = bot1 + 2;
 
-            // Side faces
             indices.push(top1, bot1, top2);
             indices.push(bot1, bot2, top2);
 
-            // Top cap
             indices.push(0, top2, top1);
-
-            // Bottom cap
             indices.push(1, bot1, bot2);
         }
 
@@ -340,8 +342,8 @@ export class Mesh {
         const vertices = [];
         const indices = [];
 
-        vertices.push(0, height / 2, 0); // Apex (index 0)
-        vertices.push(0, -height / 2, 0); // Base center (index 1)
+        vertices.push(0, height / 2, 0);
+        vertices.push(0, -height / 2, 0);
 
         for (let i = 0; i <= segments; i++) {
             const theta = (i * 2 * Math.PI) / segments;
@@ -354,9 +356,7 @@ export class Mesh {
             const b1 = 2 + i;
             const b2 = b1 + 1;
 
-            // Side
             indices.push(0, b1, b2);
-            // Base
             indices.push(1, b2, b1);
         }
 
@@ -367,15 +367,15 @@ export class Mesh {
         const h = height / 2;
         const b = baseSize / 2;
         const vertices = [
-             0,  h,  0,   // Apex (0)
-            -b, -h,  b,   // Bottom Front Left (1)
-             b, -h,  b,   // Bottom Front Right (2)
-             b, -h, -b,   // Bottom Back Right (3)
-            -b, -h, -b    // Bottom Back Left (4)
+             0,  h,  0,
+            -b, -h,  b,
+             b, -h,  b,
+             b, -h, -b,
+            -b, -h, -b
         ];
         const indices = [
-            0, 1, 2,  0, 2, 3,  0, 3, 4,  0, 4, 1, // Sides
-            1, 4, 3,  1, 3, 2                       // Base
+            0, 1, 2,  0, 2, 3,  0, 3, 4,  0, 4, 1,
+            1, 4, 3,  1, 3, 2
         ];
         return new Mesh(gl, vertices, indices);
     }
@@ -383,15 +383,15 @@ export class Mesh {
     static createRamp(gl, width = 1.0, height = 1.0, depth = 1.0) {
         const w = width / 2, h = height / 2, d = depth / 2;
         const vertices = [
-            -w, -h,  d,   w, -h,  d,   w,  h, -d,  -w,  h, -d, // Sloped face & back top
-            -w, -h, -d,   w, -h, -d                             // Bottom back
+            -w, -h,  d,   w, -h,  d,   w,  h, -d,  -w,  h, -d,
+            -w, -h, -d,   w, -h, -d
         ];
         const indices = [
-            0, 1, 2,  0, 2, 3, // Sloped face
-            4, 5, 2,  4, 2, 3, // Back face
-            0, 4, 5,  0, 5, 1, // Bottom face
-            0, 3, 4,           // Left side triangle
-            1, 5, 2            // Right side triangle
+            0, 1, 2,  0, 2, 3,
+            4, 5, 2,  4, 2, 3,
+            0, 4, 5,  0, 5, 1,
+            0, 3, 4,
+            1, 5, 2
         ];
         return new Mesh(gl, vertices, indices);
     }
