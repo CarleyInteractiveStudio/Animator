@@ -363,7 +363,15 @@ export function initWebGL(canvas) {
                 // Warm golden scattering glow on edges
                 finalRGB += vec3(1.0, 0.82, 0.45) * sss * 0.5;
 
-                gl_FragColor = vec4(finalRGB, baseColor.a);
+                // 3D Procedural Cloud Noise Density & Edge Semi-Transparency
+                vec3 cloudPos = v_worldPosition * 1.5;
+                float noiseDensity = noise(cloudPos.xz) * 0.35 + noise(cloudPos.xy * 2.0) * 0.15;
+
+                // Edge falloff based on view-normal alignment
+                float edgeAlpha = pow(max(0.0, dot(normal, viewDir)), 0.65);
+                float cloudAlpha = clamp(baseColor.a * (0.65 + noiseDensity) * edgeAlpha, 0.2, 0.95);
+
+                gl_FragColor = vec4(finalRGB, cloudAlpha);
                 return;
             }
 
@@ -558,6 +566,8 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
 
     // --- 2. RENDER SCENE OBJECTS ---
     gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(programInfo.program);
 
     gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
@@ -643,9 +653,9 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         }
 
         if (gameObject === selectedGameObject) {
-            gl.uniform4f(programInfo.uniformLocations.tintColor, 1.0, 0.7, 0.3, 1.0);
+            gl.uniform4f(programInfo.uniformLocations.tintColor, 0.6, 0.6, 0.7, 1.0);
         } else {
-            gl.uniform4f(programInfo.uniformLocations.tintColor, 0.85, 0.85, 0.85, 1.0);
+            gl.uniform4f(programInfo.uniformLocations.tintColor, 1.0, 1.0, 1.0, 1.0);
         }
 
         gl.drawElements(gl.TRIANGLES, gameObject.mesh.vertexCount, gl.UNSIGNED_SHORT, 0);

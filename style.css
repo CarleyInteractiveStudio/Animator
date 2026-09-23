@@ -102,14 +102,20 @@ body {
     overflow: hidden;
 }
 
+.panel-header-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #252525;
+    border-bottom: 1px solid #2d2d2d;
+}
+
 .panel-title {
     font-size: 11px;
     font-weight: 600;
     color: #aaa;
     text-transform: uppercase;
     padding: 6px 10px;
-    background-color: #252525;
-    border-bottom: 1px solid #2d2d2d;
 }
 
 .panel-content {
