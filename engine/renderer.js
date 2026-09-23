@@ -317,6 +317,11 @@ export function initWebGL(canvas) {
         uniform float u_darknessIntensity;
         uniform float u_darknessFog;
 
+        // Cloud Material Translucency
+        uniform bool u_isCloud;
+        uniform float u_cloudTranslucency;
+        uniform vec3 u_cloudTint;
+
         // Procedural Checkerboard
         vec4 getCheckerboard(vec2 st, float scale) {
             vec2 chk = floor(st * scale);
@@ -340,6 +345,27 @@ export function initWebGL(canvas) {
 
         void main() {
             vec4 baseColor = v_color * u_tintColor;
+
+            if (u_isCloud) {
+                vec3 normal = normalize(v_normal);
+                vec3 lightDir = normalize(u_lightDirection);
+                vec3 viewDir = normalize(-v_worldPosition);
+
+                float diff = max(dot(normal, lightDir), 0.0);
+
+                // Subsurface Forward Light Scattering (Light transmitting through cloud body)
+                float forwardScatter = max(0.0, dot(-viewDir, lightDir));
+                float sss = pow(forwardScatter, 2.5) * u_cloudTranslucency;
+
+                float lighting = u_ambientIntensity + diff * 0.55 + sss * 0.7;
+                vec3 finalRGB = baseColor.rgb * u_cloudTint * lighting;
+
+                // Warm golden scattering glow on edges
+                finalRGB += vec3(1.0, 0.82, 0.45) * sss * 0.5;
+
+                gl_FragColor = vec4(finalRGB, baseColor.a);
+                return;
+            }
 
             if (u_textureType == 1) {
                 vec2 uv = v_texcoord.x == 0.0 && v_texcoord.y == 0.0 ? v_worldPosition.xz : v_texcoord;
@@ -447,6 +473,10 @@ export function initWebGL(canvas) {
             darknessRadius: gl.getUniformLocation(program, 'u_darknessRadius'),
             darknessIntensity: gl.getUniformLocation(program, 'u_darknessIntensity'),
             darknessFog: gl.getUniformLocation(program, 'u_darknessFog'),
+
+            isCloud: gl.getUniformLocation(program, 'u_isCloud'),
+            cloudTranslucency: gl.getUniformLocation(program, 'u_cloudTranslucency'),
+            cloudTint: gl.getUniformLocation(program, 'u_cloudTint'),
         },
     };
 
@@ -574,6 +604,15 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         const normalMatrix = mat3.create();
         mat3.normalFromMat4(normalMatrix, modelMatrix);
         gl.uniformMatrix3fv(programInfo.uniformLocations.normalMatrix, false, normalMatrix);
+
+        // Cloud Specific Properties
+        if (gameObject.cloudProps) {
+            gl.uniform1i(programInfo.uniformLocations.isCloud, 1);
+            gl.uniform1f(programInfo.uniformLocations.cloudTranslucency, gameObject.cloudProps.translucency !== undefined ? gameObject.cloudProps.translucency : 0.6);
+            gl.uniform3fv(programInfo.uniformLocations.cloudTint, gameObject.cloudProps.tint || [1.0, 1.0, 1.0]);
+        } else {
+            gl.uniform1i(programInfo.uniformLocations.isCloud, 0);
+        }
 
         // Material & Volumetric / Darkness uniforms
         const mat = gameObject.material || {};

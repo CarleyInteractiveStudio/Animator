@@ -426,79 +426,91 @@ export class Mesh {
         return new Mesh(gl, vertices, indices);
     }
 
-    static createCloud(gl) {
+    static createCloud(gl, seed = 1) {
+        return Mesh.createProceduralCloud(gl, seed);
+    }
+
+    static createProceduralCloud(gl, seed = 1) {
         const vertices = [];
         const indices = [];
 
-        // Densely clustered organic puffs forming a natural cumulus cloud base and billowing top
-        const puffs = [
-            { pos: [0.0, 0.1, 0.0], r: 0.65 },
-            { pos: [0.4, 0.12, 0.1], r: 0.52 },
-            { pos: [-0.4, 0.08, -0.05], r: 0.52 },
-            { pos: [0.2, 0.35, -0.05], r: 0.48 },
-            { pos: [-0.2, 0.3, 0.1], r: 0.46 },
-            { pos: [0.65, 0.0, 0.0], r: 0.38 },
-            { pos: [-0.65, 0.02, 0.05], r: 0.38 },
-            { pos: [0.0, 0.22, 0.3], r: 0.42 },
-            { pos: [0.0, 0.18, -0.3], r: 0.4 },
-            { pos: [0.35, 0.25, 0.25], r: 0.35 },
-            { pos: [-0.35, 0.22, -0.25], r: 0.35 }
-        ];
-
-        const latBands = 16;
-        const longBands = 16;
-
-        // Simple multi-frequency organic displacement noise function
-        function organicNoise(x, y, z) {
-            let n = Math.sin(x * 4.2 + y * 3.1) + Math.sin(y * 4.8 + z * 3.5) + Math.sin(z * 3.9 + x * 4.5);
-            n += 0.5 * (Math.sin(x * 8.5 + z * 7.2) + Math.sin(y * 8.1 + x * 7.8));
-            return n * 0.08;
+        // Pseudo-random generator based on seed
+        function rnd(s) {
+            const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
+            return x - Math.floor(x);
         }
 
-        for (const puff of puffs) {
-            const startIdx = vertices.length / 3;
-            for (let lat = 0; lat <= latBands; lat++) {
-                const theta = (lat * Math.PI) / latBands;
-                const sinTheta = Math.sin(theta);
-                const cosTheta = Math.cos(theta);
+        // Randomized shape parameters from seed
+        const stretchX = 1.2 + rnd(seed * 1.1) * 1.6;
+        const stretchY = 0.5 + rnd(seed * 2.3) * 0.7;
+        const stretchZ = 0.8 + rnd(seed * 3.7) * 0.9;
+        const noiseScale = 1.8 + rnd(seed * 4.9) * 2.2;
+        const noiseBumpiness = 0.35 + rnd(seed * 5.2) * 0.45;
 
-                for (let lon = 0; lon <= longBands; lon++) {
-                    const phi = (lon * 2 * Math.PI) / longBands;
-                    const nx = Math.cos(phi) * sinTheta;
-                    let ny = cosTheta;
-                    const nz = Math.sin(phi) * sinTheta;
+        // Smooth 3D organic sinusoidal FBM displacement noise
+        function fbm3D(x, y, z) {
+            let val = 0.0;
+            let freq = 1.2;
+            let amp = 0.22;
 
-                    let px = puff.pos[0] + nx * puff.r;
-                    let py = puff.pos[1] + ny * puff.r;
-                    let pz = puff.pos[2] + nz * puff.r;
+            for (let i = 0; i < 3; i++) {
+                const sx = x * freq + (seed % 100) * 1.7;
+                const sy = y * freq + (seed % 100) * 2.3;
+                const sz = z * freq + (seed % 100) * 3.1;
 
-                    // Organic surface noise perturbation
-                    const noise = organicNoise(px, py, pz);
-                    px += nx * noise;
-                    py += ny * noise;
-                    pz += nz * noise;
-
-                    // Flatten bottom of cumulus cloud for natural flat condensation base
-                    if (py < -0.1) {
-                        py = -0.1 + (py + 0.1) * 0.25;
-                    }
-
-                    vertices.push(px, py, pz);
-                }
+                const n = 0.5 * (Math.sin(sx) + Math.sin(sy + sz) + Math.cos(sz + sx));
+                val += n * amp;
+                freq *= 1.8;
+                amp *= 0.45;
             }
+            return val;
+        }
 
-            for (let lat = 0; lat < latBands; lat++) {
-                for (let lon = 0; lon < longBands; lon++) {
-                    const first = startIdx + lat * (longBands + 1) + lon;
-                    const second = first + longBands + 1;
+        const latBands = 36;
+        const longBands = 36;
 
-                    indices.push(first, first + 1, second);
-                    indices.push(second, first + 1, second + 1);
+        for (let lat = 0; lat <= latBands; lat++) {
+            const theta = (lat * Math.PI) / latBands;
+            const sinTheta = Math.sin(theta);
+            const cosTheta = Math.cos(theta);
+
+            for (let lon = 0; lon <= longBands; lon++) {
+                const phi = (lon * 2 * Math.PI) / longBands;
+                const nx = Math.cos(phi) * sinTheta;
+                const ny = cosTheta;
+                const nz = Math.sin(phi) * sinTheta;
+
+                // Base ellipsoid coordinates
+                let px = nx * stretchX;
+                let py = ny * stretchY;
+                let pz = nz * stretchZ;
+
+                // Continuous FBM volumetric displacement along normal vector
+                const displacement = fbm3D(px, py, pz);
+                px += nx * displacement;
+                py += ny * displacement * 1.2; // Extra billowing on top
+                pz += nz * displacement;
+
+                // Flatten flat condensation cloud base at bottom
+                if (py < -0.1) {
+                    py = -0.1 + (py + 0.1) * 0.2;
                 }
+
+                vertices.push(px, py, pz);
             }
         }
 
-        // Compute recalculated smooth vertex normals for continuous soft cloud lighting
+        for (let lat = 0; lat < latBands; lat++) {
+            for (let lon = 0; lon < longBands; lon++) {
+                const first = lat * (longBands + 1) + lon;
+                const second = first + longBands + 1;
+
+                indices.push(first, first + 1, second);
+                indices.push(second, second + 1, first + 1);
+            }
+        }
+
+        // Return unified single continuous mesh with smooth auto-recalculated normals
         return new Mesh(gl, vertices, indices);
     }
 }

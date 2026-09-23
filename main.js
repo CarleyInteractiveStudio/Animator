@@ -108,6 +108,7 @@ function updateInspectorPanel() {
 
     const hasGodRays = !!selectedObject.volumetricLight;
     const hasDarkness = !!selectedObject.darknessZone;
+    const isCloud = !!selectedObject.cloudProps;
 
     inspectorContent.innerHTML = `
         <div class="inspector-section">
@@ -208,6 +209,36 @@ function updateInspectorPanel() {
             </div>
         </div>
         ` : ''}
+
+        ${isCloud ? `
+        <div class="inspector-section">
+            <div class="inspector-section-title">Propiedades de Nube 3D</div>
+
+            <div style="margin-bottom: 10px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 4px;">Tipo / Preset de Nube:</label>
+                <select id="cloud-preset-select" style="width: 100%; background: #262626; color: #eee; border: 1px solid #444; padding: 5px; border-radius: 4px; font-size: 11px;">
+                    <option value="white" ${selectedObject.cloudProps.preset === 'white' ? 'selected' : ''}>Nube Blanca Cúmulo</option>
+                    <option value="rain" ${selectedObject.cloudProps.preset === 'rain' ? 'selected' : ''}>Nube de Lluvia / Tormenta</option>
+                    <option value="sunset" ${selectedObject.cloudProps.preset === 'sunset' ? 'selected' : ''}>Nube de Atardecer / Cálida</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 4px;">Forma Orgánica (Semilla):</label>
+                <div style="display: flex; gap: 6px;">
+                    <input type="number" id="cloud-seed-input" value="${selectedObject.cloudProps.seed}" style="flex: 1; background: #262626; color: #eee; border: 1px solid #444; padding: 4px 6px; border-radius: 4px; font-size: 11px;">
+                    <button id="btn-random-cloud-shape" style="background: #333; color: #3b82f6; border: 1px solid #444; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">
+                        Variar Forma
+                    </button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Translucidez / Paso de Luz: <span id="val-cloud-translucency">${selectedObject.cloudProps.translucency.toFixed(2)}</span></label>
+                <input type="range" id="slider-cloud-translucency" min="0.0" max="1.0" step="0.05" value="${selectedObject.cloudProps.translucency}" style="width: 100%;">
+            </div>
+        </div>
+        ` : ''}
     `;
 
     const posXInput = inspectorContent.querySelector('#pos-x');
@@ -288,6 +319,56 @@ function updateInspectorPanel() {
         darkFog.addEventListener('input', (e) => {
             selectedObject.darknessZone.fogDensity = parseFloat(e.target.value);
             inspectorContent.querySelector('#val-dark-fog').textContent = selectedObject.darknessZone.fogDensity.toFixed(2);
+        });
+    }
+
+    const cloudPresetSelect = inspectorContent.querySelector('#cloud-preset-select');
+    const cloudSeedInput = inspectorContent.querySelector('#cloud-seed-input');
+    const btnRandomCloudShape = inspectorContent.querySelector('#btn-random-cloud-shape');
+    const sliderCloudTranslucency = inspectorContent.querySelector('#slider-cloud-translucency');
+
+    if (cloudPresetSelect) {
+        cloudPresetSelect.addEventListener('change', (e) => {
+            const val = e.target.value;
+            selectedObject.cloudProps.preset = val;
+            if (val === 'white') {
+                selectedObject.cloudProps.tint = [1.0, 1.0, 1.0];
+                selectedObject.cloudProps.translucency = 0.6;
+            } else if (val === 'rain') {
+                selectedObject.cloudProps.tint = [0.35, 0.4, 0.5];
+                selectedObject.cloudProps.translucency = 0.25;
+            } else if (val === 'sunset') {
+                selectedObject.cloudProps.tint = [1.0, 0.7, 0.45];
+                selectedObject.cloudProps.translucency = 0.85;
+            }
+            updateInspectorPanel();
+        });
+    }
+
+    if (btnRandomCloudShape && cloudSeedInput) {
+        const updateCloudMesh = (newSeed) => {
+            selectedObject.cloudProps.seed = newSeed;
+            cloudSeedInput.value = newSeed;
+            selectedObject.mesh = Mesh.createProceduralCloud(Engine.gl, newSeed);
+        };
+
+        btnRandomCloudShape.addEventListener('click', () => {
+            const newSeed = Math.floor(Math.random() * 9999) + 1;
+            updateCloudMesh(newSeed);
+        });
+
+        cloudSeedInput.addEventListener('change', (e) => {
+            const newSeed = parseInt(e.target.value) || 1;
+            updateCloudMesh(newSeed);
+        });
+    }
+
+    if (sliderCloudTranslucency) {
+        sliderCloudTranslucency.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            selectedObject.cloudProps.translucency = val;
+            const valLabel = inspectorContent.querySelector('#val-cloud-translucency');
+            if (valLabel) valLabel.textContent = val.toFixed(2);
         });
     }
 }
@@ -514,9 +595,19 @@ function getPrimitiveName(type) {
 }
 
 function spawnPrimitive(type) {
-    const mesh = createPrimitiveMesh(type);
+    const seed = Math.floor(Math.random() * 9999) + 1;
+    const mesh = type === 'cloud' ? Mesh.createProceduralCloud(Engine.gl, seed) : createPrimitiveMesh(type);
     const name = getPrimitiveName(type);
     const obj = new GameObject(name, mesh);
+
+    if (type === 'cloud') {
+        obj.cloudProps = {
+            seed: seed,
+            preset: 'white',
+            translucency: 0.6,
+            tint: [1.0, 1.0, 1.0]
+        };
+    }
 
     vec3.set(obj.transform.position, (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);
     Engine.scene.addGameObject(obj);
