@@ -1,4 +1,5 @@
-import { mat3 } from './math.js';
+import { mat3, mat4, vec3 } from './math.js';
+import Engine from '../engine.js';
 
 export function initWebGL(canvas) {
     const gl = canvas.getContext('webgl');
@@ -7,6 +8,179 @@ export function initWebGL(canvas) {
         return null;
     }
 
+    function createShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+            gl.deleteShader(shader);
+            return null;
+        }
+        return shader;
+    }
+
+    function createProgram(gl, vertexShader, fragmentShader) {
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error('Program link error:', gl.getProgramInfoLog(program));
+            gl.deleteProgram(program);
+            return null;
+        }
+        return program;
+    }
+
+    // 1. Procedural 3D Skybox Shader Program
+    const skyVertexShaderSource = `
+        attribute vec2 a_position;
+        varying vec2 v_uv;
+        void main() {
+            v_uv = a_position;
+            gl_Position = vec4(a_position, 0.9999, 1.0);
+        }
+    `;
+
+    const skyFragmentShaderSource = `
+        precision mediump float;
+        varying vec2 v_uv;
+
+        uniform mat4 u_invProjViewRotation;
+        uniform vec3 u_sunDirection;
+        uniform vec3 u_moonDirection;
+        uniform float u_timeOfDay;
+        uniform float u_sunIntensity;
+        uniform float u_starIntensity;
+        uniform int u_envPreset; // 0 = Studio Dark, 1 = Dynamic 3D Sky, 2 = Custom
+
+        uniform sampler2D u_customTexture;
+        uniform bool u_useCustomTexture;
+
+        float hash31(vec3 p) {
+            p = fract(p * vec3(443.897, 441.423, 437.195));
+            p += dot(p, p.yzx + 19.19);
+            return fract((p.x + p.y) * p.z);
+        }
+
+        void main() {
+            if (u_envPreset == 0) {
+                vec2 centerUV = v_uv * 0.5;
+                float rad = length(centerUV);
+                vec3 darkBg = mix(vec3(0.12, 0.12, 0.15), vec3(0.04, 0.04, 0.05), rad);
+                gl_FragColor = vec4(darkBg, 1.0);
+                return;
+            }
+
+            vec4 farPoint = u_invProjViewRotation * vec4(v_uv, 1.0, 1.0);
+            vec3 dir = normalize(farPoint.xyz / farPoint.w);
+
+            if (u_envPreset == 2 && u_useCustomTexture) {
+                float u = 0.5 + atan(dir.z, dir.x) / (2.0 * 3.14159265);
+                float v = 0.5 - asin(dir.y) / 3.14159265;
+                gl_FragColor = texture2D(u_customTexture, vec2(u, v));
+                return;
+            }
+
+            float sunY = u_sunDirection.y;
+
+            float dayFactor = smoothstep(-0.2, 0.25, sunY);
+            float sunsetFactor = smoothstep(0.35, -0.1, abs(sunY - 0.05));
+
+            vec3 dayZenith = vec3(0.15, 0.45, 0.88);
+            vec3 dayHorizon = vec3(0.68, 0.84, 0.98);
+
+            vec3 sunsetZenith = vec3(0.18, 0.12, 0.38);
+            vec3 sunsetHorizon = vec3(0.96, 0.48, 0.18);
+
+            vec3 nightZenith = vec3(0.02, 0.03, 0.09);
+            vec3 nightHorizon = vec3(0.06, 0.09, 0.18);
+
+            vec3 groundColor = vec3(0.05, 0.06, 0.08);
+
+            vec3 zenithColor = mix(nightZenith, mix(sunsetZenith, dayZenith, dayFactor), dayFactor);
+            vec3 horizonColor = mix(nightHorizon, mix(sunsetHorizon, dayHorizon, dayFactor), dayFactor);
+
+            if (sunsetFactor > 0.01 && dayFactor < 0.85) {
+                zenithColor = mix(zenithColor, sunsetZenith, sunsetFactor * 0.65);
+                horizonColor = mix(horizonColor, sunsetHorizon, sunsetFactor);
+            }
+
+            vec3 skyColor;
+            if (dir.y >= 0.0) {
+                float h = pow(dir.y, 0.55);
+                skyColor = mix(horizonColor, zenithColor, h);
+
+                if (sunY < 0.15) {
+                    float nightVisibility = smoothstep(0.15, -0.2, sunY);
+                    vec3 starDir = floor(dir * 180.0);
+                    float starHash = hash31(starDir);
+                    if (starHash > 0.987) {
+                        float starBrightness = pow((starHash - 0.987) / (1.0 - 0.987), 2.0) * nightVisibility * u_starIntensity;
+                        skyColor += vec3(starBrightness);
+                    }
+                }
+
+                // Sun Disk & Glow
+                float cosSun = dot(dir, normalize(u_sunDirection));
+                if (cosSun > 0.0) {
+                    float sunDisk = smoothstep(0.998, 0.9995, cosSun);
+                    float sunGlow = pow(max(0.0, cosSun), 14.0) * 0.6;
+                    vec3 sunColor = mix(vec3(1.0, 0.5, 0.2), vec3(1.0, 0.98, 0.85), clamp(sunY * 2.0, 0.0, 1.0));
+                    skyColor += (sunDisk * 2.2 + sunGlow) * sunColor * u_sunIntensity * max(0.1, dayFactor + sunsetFactor);
+                }
+
+                // Moon Disk & Glow
+                float cosMoon = dot(dir, normalize(u_moonDirection));
+                if (cosMoon > 0.0) {
+                    float moonDisk = smoothstep(0.9982, 0.9995, cosMoon);
+                    float moonGlow = pow(max(0.0, cosMoon), 18.0) * 0.35;
+                    vec3 moonColor = vec3(0.85, 0.92, 1.0);
+                    float moonVisibility = smoothstep(0.1, -0.2, sunY);
+                    skyColor += (moonDisk * 1.6 + moonGlow) * moonColor * moonVisibility;
+                }
+            } else {
+                float g = clamp(-dir.y * 3.5, 0.0, 1.0);
+                skyColor = mix(horizonColor * 0.85, groundColor, g);
+            }
+
+            gl_FragColor = vec4(skyColor, 1.0);
+        }
+    `;
+
+    const skyVS = createShader(gl, gl.VERTEX_SHADER, skyVertexShaderSource);
+    const skyFS = createShader(gl, gl.FRAGMENT_SHADER, skyFragmentShaderSource);
+    const skyProgram = createProgram(gl, skyVS, skyFS);
+
+    const skyProgramInfo = {
+        program: skyProgram,
+        attribLocations: {
+            position: gl.getAttribLocation(skyProgram, 'a_position')
+        },
+        uniformLocations: {
+            invProjViewRotation: gl.getUniformLocation(skyProgram, 'u_invProjViewRotation'),
+            sunDirection: gl.getUniformLocation(skyProgram, 'u_sunDirection'),
+            moonDirection: gl.getUniformLocation(skyProgram, 'u_moonDirection'),
+            timeOfDay: gl.getUniformLocation(skyProgram, 'u_timeOfDay'),
+            sunIntensity: gl.getUniformLocation(skyProgram, 'u_sunIntensity'),
+            starIntensity: gl.getUniformLocation(skyProgram, 'u_starIntensity'),
+            envPreset: gl.getUniformLocation(skyProgram, 'u_envPreset'),
+            customTexture: gl.getUniformLocation(skyProgram, 'u_customTexture'),
+            useCustomTexture: gl.getUniformLocation(skyProgram, 'u_useCustomTexture')
+        }
+    };
+
+    const quadBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1,
+         1, -1,
+        -1,  1,
+         1,  1,
+    ]), gl.STATIC_DRAW);
+
+    // 2. Main Mesh Shader Program
     const vertexShaderSource = `
         attribute vec4 a_position;
         attribute vec3 a_normal;
@@ -43,6 +217,7 @@ export function initWebGL(canvas) {
 
         uniform vec4 u_tintColor;
         uniform vec3 u_lightDirection;
+        uniform float u_ambientIntensity;
         uniform bool u_isUnlit;
 
         // Texture and Procedural uniforms
@@ -104,7 +279,7 @@ export function initWebGL(canvas) {
                 vec3 lightDir = normalize(u_lightDirection);
 
                 float diff = max(dot(normal, lightDir), 0.0);
-                float ambient = 0.35;
+                float ambient = u_ambientIntensity;
 
                 // Specular highlight
                 vec3 viewDir = normalize(-v_worldPosition);
@@ -157,33 +332,8 @@ export function initWebGL(canvas) {
         }
     `;
 
-    function createShader(gl, type, source) {
-        const shader = gl.createShader(type);
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            console.error('Shader compile error:', gl.getShaderInfoLog(shader));
-            gl.deleteShader(shader);
-            return null;
-        }
-        return shader;
-    }
-
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-
-    function createProgram(gl, vertexShader, fragmentShader) {
-        const program = gl.createProgram();
-        gl.attachShader(program, vertexShader);
-        gl.attachShader(program, fragmentShader);
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            console.error('Program link error:', gl.getProgramInfoLog(program));
-            gl.deleteProgram(program);
-            return null;
-        }
-        return program;
-    }
 
     const program = createProgram(gl, vertexShader, fragmentShader);
 
@@ -202,6 +352,7 @@ export function initWebGL(canvas) {
             normalMatrix: gl.getUniformLocation(program, 'u_normalMatrix'),
             tintColor: gl.getUniformLocation(program, 'u_tintColor'),
             lightDirection: gl.getUniformLocation(program, 'u_lightDirection'),
+            ambientIntensity: gl.getUniformLocation(program, 'u_ambientIntensity'),
             isUnlit: gl.getUniformLocation(program, 'u_isUnlit'),
             textureType: gl.getUniformLocation(program, 'u_textureType'),
             textureScale: gl.getUniformLocation(program, 'u_textureScale'),
@@ -221,11 +372,11 @@ export function initWebGL(canvas) {
         },
     };
 
-    return { gl, programInfo };
+    return { gl, programInfo, skyProgramInfo, quadBuffer };
 }
 
 export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewMatrix, selectedGameObject = null, gizmo = null, mode = 'object', tool = 'translate', brushRadius = 0.8) {
-    const { gl, programInfo } = webglContext;
+    const { gl, programInfo, skyProgramInfo, quadBuffer } = webglContext;
 
     if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
         canvas.width = canvas.clientWidth;
@@ -233,15 +384,80 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.viewport(0, 0, canvas.width, canvas.height);
     }
 
-    gl.clearColor(0.0, 0.0, 0.0, 0.0);
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.enable(gl.DEPTH_TEST);
 
+    // --- 1. RENDER 3D SKYBOX ---
+    const env = Engine ? Engine.environment : null;
+    const timeOfDay = env ? env.timeOfDay : 12.0;
+
+    // Calculate celestial Sun & Moon positions based on Time of Day
+    const angle = ((timeOfDay - 6.0) / 24.0) * Math.PI * 2.0;
+    const sunDir = vec3.fromValues(Math.cos(angle), Math.sin(angle), 0.3);
+    vec3.normalize(sunDir, sunDir);
+
+    const moonDir = vec3.fromValues(-sunDir[0], -sunDir[1], -sunDir[2]);
+
+    if (skyProgramInfo && quadBuffer) {
+        gl.useProgram(skyProgramInfo.program);
+        gl.depthMask(false);
+
+        // Inverse View-Rotation * Projection Matrix for full 3D viewport camera tracking
+        const viewRot = mat4.clone(viewMatrix);
+        viewRot[12] = 0; viewRot[13] = 0; viewRot[14] = 0; // strip camera position translation
+
+        const projViewRot = mat4.create();
+        mat4.multiply(projViewRot, projectionMatrix, viewRot);
+
+        const invProjViewRot = mat4.create();
+        mat4.invert(invProjViewRot, projViewRot);
+
+        gl.uniformMatrix4fv(skyProgramInfo.uniformLocations.invProjViewRotation, false, invProjViewRot);
+        gl.uniform3fv(skyProgramInfo.uniformLocations.sunDirection, sunDir);
+        gl.uniform3fv(skyProgramInfo.uniformLocations.moonDirection, moonDir);
+        gl.uniform1f(skyProgramInfo.uniformLocations.timeOfDay, timeOfDay);
+        gl.uniform1f(skyProgramInfo.uniformLocations.sunIntensity, env ? env.sunIntensity : 1.0);
+        gl.uniform1f(skyProgramInfo.uniformLocations.starIntensity, env ? env.starIntensity : 1.0);
+
+        let presetCode = 1; // Default: Dynamic 3D Sky
+        if (env) {
+            if (env.preset === 'dark') presetCode = 0;
+            else if (env.preset === 'custom') presetCode = 2;
+        }
+        gl.uniform1i(skyProgramInfo.uniformLocations.envPreset, presetCode);
+
+        if (env && env.customGLTexture) {
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, env.customGLTexture);
+            gl.uniform1i(skyProgramInfo.uniformLocations.customTexture, 0);
+            gl.uniform1i(skyProgramInfo.uniformLocations.useCustomTexture, 1);
+        } else {
+            gl.uniform1i(skyProgramInfo.uniformLocations.useCustomTexture, 0);
+        }
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+        gl.vertexAttribPointer(skyProgramInfo.attribLocations.position, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(skyProgramInfo.attribLocations.position);
+
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        gl.depthMask(true);
+    }
+
+    // --- 2. RENDER SCENE OBJECTS ---
+    gl.enable(gl.DEPTH_TEST);
     gl.useProgram(programInfo.program);
 
     gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
     gl.uniformMatrix4fv(programInfo.uniformLocations.viewMatrix, false, viewMatrix);
-    gl.uniform3f(programInfo.uniformLocations.lightDirection, 0.5, 1.0, 0.7);
+
+    // Active light source direction (Sun during day, Moon during night)
+    let activeLightDir = sunDir;
+    if (sunDir[1] < -0.05) {
+        activeLightDir = moonDir;
+    }
+
+    gl.uniform3fv(programInfo.uniformLocations.lightDirection, activeLightDir);
+    gl.uniform1f(programInfo.uniformLocations.ambientIntensity, env ? env.ambientIntensity : 0.35);
 
     // Objects are lit by default
     gl.uniform1i(programInfo.uniformLocations.isUnlit, 0);

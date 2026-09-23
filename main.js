@@ -291,6 +291,14 @@ function updateInspectorPanel() {
     }
 }
 
+function formatTimeString(timeVal) {
+    const hours = Math.floor(timeVal);
+    const minutes = Math.floor((timeVal - hours) * 60);
+    const hh = String(hours % 24).padStart(2, '0');
+    const mm = String(minutes).padStart(2, '0');
+    return `${hh}:${mm}`;
+}
+
 function setupModals() {
     const modalComp = document.getElementById('modal-component');
     const closeComp = document.getElementById('close-component-modal');
@@ -326,17 +334,26 @@ function setupModals() {
         });
     });
 
-    const visorPanel = document.getElementById('visor-panel');
     const presetDark = document.getElementById('preset-dark');
     const presetSky = document.getElementById('preset-sky');
     const presetCustom = document.getElementById('preset-custom');
     const envFileInput = document.getElementById('env-file-input');
 
+    const sliderTime = document.getElementById('slider-time');
+    const timeDisplay = document.getElementById('time-display');
+    const btnToggleCycle = document.getElementById('btn-toggle-cycle');
+    const cyclePlayText = document.getElementById('cycle-play-text');
+
+    const sliderSpeed = document.getElementById('slider-speed');
+    const sliderSunIntensity = document.getElementById('slider-sun-intensity');
+    const sliderAmbientIntensity = document.getElementById('slider-ambient-intensity');
+    const sliderStarIntensity = document.getElementById('slider-star-intensity');
+
     if (presetDark) {
         presetDark.addEventListener('click', () => {
             document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
             presetDark.classList.add('active');
-            if (visorPanel) visorPanel.style.background = '#141414';
+            Engine.environment.preset = 'dark';
         });
     }
 
@@ -344,19 +361,86 @@ function setupModals() {
         presetSky.addEventListener('click', () => {
             document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
             presetSky.classList.add('active');
-            if (visorPanel) visorPanel.style.background = 'linear-gradient(to bottom, #1e3c72, #2a5298, #6dd5ed)';
+            Engine.environment.preset = 'sky';
         });
     }
+
+    if (sliderTime && timeDisplay) {
+        sliderTime.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            Engine.environment.timeOfDay = val;
+            timeDisplay.textContent = formatTimeString(val);
+        });
+    }
+
+    if (btnToggleCycle) {
+        btnToggleCycle.addEventListener('click', () => {
+            Engine.environment.isCycling = !Engine.environment.isCycling;
+            if (Engine.environment.isCycling) {
+                btnToggleCycle.classList.add('active');
+                if (cyclePlayText) cyclePlayText.textContent = 'Pausar Día/Noche';
+            } else {
+                btnToggleCycle.classList.remove('active');
+                if (cyclePlayText) cyclePlayText.textContent = 'Animar Día/Noche';
+            }
+        });
+    }
+
+    if (sliderSpeed) {
+        sliderSpeed.addEventListener('input', (e) => {
+            Engine.environment.cycleSpeed = parseFloat(e.target.value);
+        });
+    }
+
+    if (sliderSunIntensity) {
+        sliderSunIntensity.addEventListener('input', (e) => {
+            Engine.environment.sunIntensity = parseFloat(e.target.value);
+        });
+    }
+
+    if (sliderAmbientIntensity) {
+        sliderAmbientIntensity.addEventListener('input', (e) => {
+            Engine.environment.ambientIntensity = parseFloat(e.target.value);
+        });
+    }
+
+    if (sliderStarIntensity) {
+        sliderStarIntensity.addEventListener('input', (e) => {
+            Engine.environment.starIntensity = parseFloat(e.target.value);
+        });
+    }
+
+    Engine.onEnvironmentUpdate = (env) => {
+        if (sliderTime) sliderTime.value = env.timeOfDay;
+        if (timeDisplay) timeDisplay.textContent = formatTimeString(env.timeOfDay);
+    };
 
     if (envFileInput) {
         envFileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
-            if (file && visorPanel) {
+            if (file) {
                 const reader = new FileReader();
                 reader.onload = (evt) => {
-                    document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
-                    if (presetCustom) presetCustom.classList.add('active');
-                    visorPanel.style.background = `url(${evt.target.result}) center/cover no-repeat`;
+                    const img = new Image();
+                    img.onload = () => {
+                        const gl = Engine.gl;
+                        if (!gl) return;
+                        if (!Engine.environment.customGLTexture) {
+                            Engine.environment.customGLTexture = gl.createTexture();
+                        }
+                        gl.bindTexture(gl.TEXTURE_2D, Engine.environment.customGLTexture);
+                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+                        document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+                        if (presetCustom) presetCustom.classList.add('active');
+                        Engine.environment.preset = 'custom';
+                    };
+                    img.src = evt.target.result;
                 };
                 reader.readAsDataURL(file);
             }

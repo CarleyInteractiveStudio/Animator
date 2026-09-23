@@ -22,6 +22,18 @@ const Engine = {
     brushRadius: 0.8,
     brushColor: [1.0, 0.2, 0.2, 1.0],
 
+    environment: {
+        preset: 'sky', // 'dark', 'sky', 'custom'
+        timeOfDay: 12.0, // 0.0 to 24.0
+        isCycling: false,
+        cycleSpeed: 1.0,
+        sunIntensity: 1.0,
+        ambientIntensity: 0.35,
+        starIntensity: 1.0,
+        customGLTexture: null
+    },
+    onEnvironmentUpdate: null,
+
     initialize: (canvasElement) => {
         canvas = canvasElement;
         webglContext = initWebGL(canvas);
@@ -304,6 +316,13 @@ const Engine = {
                 deltaTime = 0.016;
             }
             lastTime = time;
+
+            if (Engine.environment && Engine.environment.isCycling) {
+                Engine.environment.timeOfDay = (Engine.environment.timeOfDay + deltaTime * Engine.environment.cycleSpeed * 0.4) % 24.0;
+                if (Engine.onEnvironmentUpdate) {
+                    Engine.onEnvironmentUpdate(Engine.environment);
+                }
+            }
 
             updateCamera(deltaTime);
 

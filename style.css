@@ -453,3 +453,123 @@ body {
     justify-content: center;
     font-size: 24px;
 }
+
+/* Environment Settings Panel Styling */
+.env-settings-group {
+    background: #181818;
+    border: 1px solid #2d2d2d;
+    border-radius: 6px;
+    padding: 12px;
+    margin-top: 8px;
+}
+
+.env-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4da6ff;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #282828;
+}
+
+.env-row {
+    margin-bottom: 10px;
+}
+
+.env-row-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.env-row-header label, .env-col label {
+    font-size: 11px;
+    color: #bbb;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.highlight-val {
+    color: #4da6ff;
+    font-weight: bold;
+    font-family: monospace;
+}
+
+.env-btn-play {
+    background: #282828;
+    border: 1px solid #3d3d3d;
+    color: #eee;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.env-btn-play:hover {
+    background: #007acc;
+    border-color: #007acc;
+    color: #fff;
+}
+
+.env-btn-play.active {
+    background: #27ae60;
+    border-color: #27ae60;
+    color: #fff;
+}
+
+.env-row-split {
+    display: flex;
+    gap: 12px;
+}
+
+.env-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.modern-range {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #2a2a2a;
+    outline: none;
+}
+
+.modern-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #4da6ff;
+    cursor: pointer;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+    transition: transform 0.1s ease;
+}
+
+.modern-range::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    background: #66b3ff;
+}
+
+.modal-file-btn {
+    font-size: 11px;
+    color: #aaa;
+    background: #141414;
+    border: 1px solid #333;
+    padding: 6px;
+    border-radius: 4px;
+    width: 100%;
+}
