@@ -5,7 +5,6 @@ export class Mesh {
         this.indices = new Uint16Array(indices);
         this.vertexCount = indices.length;
 
-        // Default white colors if not provided
         if (!colors) {
             colors = [];
             for (let i = 0; i < vertices.length / 3; i++) {
@@ -14,7 +13,6 @@ export class Mesh {
         }
         this.colors = new Float32Array(colors);
 
-        // Recalculate or store normals
         if (!normals) {
             normals = Mesh.calculateNormals(this.vertices, this.indices);
         }
@@ -298,12 +296,12 @@ export class Mesh {
         const hw = width * 0.5;
         const hh = height;
         const hd = depth * 0.5;
-        const rad = 0.02;
-        const r = 0.0, g = 0.85, b = 1.0, a = 0.9; // High-tech cyan area box
+        const rad = 0.025;
+        const r = 0.0, g = 0.85, b = 1.0, a = 0.9;
 
         const corners = [
-            [-hw, 0,  hd], [ hw, 0,  hd], [ hw, 0, -hd], [-hw, 0, -hd], // Bottom 4
-            [-hw, hh, hd], [ hw, hh, hd], [ hw, hh, -hd], [-hw, hh, -hd]  // Top 4
+            [-hw, 0,  hd], [ hw, 0,  hd], [ hw, 0, -hd], [-hw, 0, -hd],
+            [-hw, hh, hd], [ hw, hh, hd], [ hw, hh, -hd], [-hw, hh, -hd]
         ];
 
         // Bottom quad lines
@@ -370,7 +368,6 @@ export class Mesh {
     }
 
     static createCloudPuff(gl, radius = 0.4) {
-        // Soft volumetric cloud particle puff for Tornado dust & clouds
         const vertices = [];
         const normals = [];
         const indices = [];
@@ -390,12 +387,11 @@ export class Mesh {
                 const y = cosTheta;
                 const z = Math.sin(phi) * sinTheta;
 
-                // Subtle organic bump
                 const bump = 1.0 + Math.sin(phi * 3.0) * Math.cos(theta * 2.0) * 0.15;
 
                 vertices.push(x * radius * bump, y * radius * bump, z * radius * bump);
                 normals.push(x, y, z);
-                colors.push(0.75, 0.78, 0.82, 0.55); // Stormy cloud dust grey
+                colors.push(0.75, 0.78, 0.82, 0.55);
             }
         }
 
@@ -405,7 +401,7 @@ export class Mesh {
                 const second = first + longBands + 1;
 
                 indices.push(first, first + 1, second);
-                indices.push(second, first + 1, second + 1);
+                indices.push(second, second + 1, first + 1);
             }
         }
 
@@ -662,6 +658,7 @@ export class Mesh {
     }
 
     static createCinemaCamera(gl) {
+        // Enlarged & lengthened AAA game engine style Camera Gizmo
         const vertices = [];
         const indices = [];
         const colors = [];
@@ -702,10 +699,28 @@ export class Mesh {
             for (let i = 0; i < 8; i++) colors.push(r, g, b, a);
         }
 
-        const cr = 0.2, cg = 0.8, cb = 1.0;
-        const rad = 0.012;
+        const cr = 0.2, cg = 0.85, cb = 1.0;
+        const rad = 0.025; // Thicker lines
 
-        const fw = 0.45, fh = 0.32, fz = -0.9;
+        // Enlarged Camera Body Box
+        const bw = 0.5, bh = 0.35, bd = 0.6;
+        addThickLine(-bw, -bh, 0,  bw, -bh, 0, rad, cr, cg, cb);
+        addThickLine( bw, -bh, 0,  bw,  bh, 0, rad, cr, cg, cb);
+        addThickLine( bw,  bh, 0, -bw,  bh, 0, rad, cr, cg, cb);
+        addThickLine(-bw,  bh, 0, -bw, -bh, 0, rad, cr, cg, cb);
+
+        addThickLine(-bw, -bh, bd,  bw, -bh, bd, rad, cr, cg, cb);
+        addThickLine( bw, -bh, bd,  bw,  bh, bd, rad, cr, cg, cb);
+        addThickLine( bw,  bh, bd, -bw,  bh, bd, rad, cr, cg, cb);
+        addThickLine(-bw,  bh, bd, -bw, -bh, bd, rad, cr, cg, cb);
+
+        addThickLine(-bw, -bh, 0, -bw, -bh, bd, rad, cr, cg, cb);
+        addThickLine( bw, -bh, 0,  bw, -bh, bd, rad, cr, cg, cb);
+        addThickLine( bw,  bh, 0,  bw,  bh, bd, rad, cr, cg, cb);
+        addThickLine(-bw,  bh, 0, -bw,  bh, bd, rad, cr, cg, cb);
+
+        // Long Frustum pyramid corners extending far forward (-Z)
+        const fw = 1.2, fh = 0.75, fz = -2.2;
         const fp = [
             [-fw, -fh, fz],
             [ fw, -fh, fz],
@@ -713,18 +728,21 @@ export class Mesh {
             [-fw,  fh, fz]
         ];
 
+        // 4 pyramid lines from camera front face (0,0,0) to frustum corners
         for (let i = 0; i < 4; i++) {
             addThickLine(0, 0, 0, fp[i][0], fp[i][1], fp[i][2], rad, cr, cg, cb);
         }
 
+        // Frustum rectangle outline
         for (let i = 0; i < 4; i++) {
             const next = (i + 1) % 4;
             addThickLine(fp[i][0], fp[i][1], fp[i][2], fp[next][0], fp[next][1], fp[next][2], rad, cr, cg, cb);
         }
 
-        addThickLine(0, fh, fz, 0, fh + 0.25, fz, rad, cr, cg, cb);
-        addThickLine(-fw * 0.5, fh, fz, 0, fh + 0.25, fz, rad, cr, cg, cb);
-        addThickLine(fw * 0.5, fh, fz, 0, fh + 0.25, fz, rad, cr, cg, cb);
+        // Top triangle direction indicator
+        addThickLine(0, fh, fz, 0, fh + 0.4, fz, rad, cr, cg, cb);
+        addThickLine(-fw * 0.5, fh, fz, 0, fh + 0.4, fz, rad, cr, cg, cb);
+        addThickLine(fw * 0.5, fh, fz, 0, fh + 0.4, fz, rad, cr, cg, cb);
 
         return new Mesh(gl, vertices, indices, null, colors);
     }
