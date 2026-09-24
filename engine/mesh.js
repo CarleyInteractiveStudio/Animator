@@ -509,73 +509,62 @@ export class Mesh {
         return new Mesh(gl, vertices, indices);
     }
 
-    static createTornadoVortex(gl, height = 5.0, topRadius = 3.5, bottomRadius = 0.3, rings = 24, segments = 24) {
+    static createTornadoVortex(gl) {
+        // Minimal subtle ground ring anchor for Tornado position handle
         const vertices = [];
         const indices = [];
+        const colors = [];
+        const segs = 16;
+        const rad = 0.5;
 
-        for (let r = 0; r <= rings; r++) {
-            const v = r / rings;
-            const y = (v - 0.5) * height;
-            const currentRadius = bottomRadius + (topRadius - bottomRadius) * Math.pow(v, 1.2);
-            const twistAngle = v * Math.PI * 4.0; // Twist spiral
-
-            for (let s = 0; s <= segments; s++) {
-                const u = s / segments;
-                const angle = u * Math.PI * 2.0 + twistAngle;
-
-                const wave = Math.sin(u * Math.PI * 6.0 + v * Math.PI * 3.0) * 0.15 * currentRadius;
-
-                const x = Math.cos(angle) * (currentRadius + wave);
-                const z = Math.sin(angle) * (currentRadius + wave);
-
-                vertices.push(x, y, z);
-            }
+        for (let i = 0; i <= segs; i++) {
+            const a = (i * Math.PI * 2) / segs;
+            vertices.push(Math.cos(a) * rad, 0.05, Math.sin(a) * rad);
+            vertices.push(Math.cos(a) * (rad + 0.05), 0.05, Math.sin(a) * (rad + 0.05));
+            colors.push(0.3, 0.8, 1.0, 0.4, 0.3, 0.8, 1.0, 0.0);
         }
-
-        for (let r = 0; r < rings; r++) {
-            for (let s = 0; s < segments; s++) {
-                const first = r * (segments + 1) + s;
-                const second = first + segments + 1;
-
-                indices.push(first, second, first + 1);
-                indices.push(second, second + 1, first + 1);
-            }
+        for (let i = 0; i < segs; i++) {
+            const i1 = i * 2;
+            indices.push(i1, i1 + 1, i1 + 2, i1 + 1, i1 + 3, i1 + 2);
         }
-
-        return new Mesh(gl, vertices, indices);
-    }
-
-    static createLeaf(gl) {
-        const vertices = [
-             0.0,  0.2, 0.0,
-            -0.15, 0.0, 0.0,
-             0.15, 0.0, 0.0,
-             0.0, -0.2, 0.0
-        ];
-        const indices = [0, 1, 2, 1, 3, 2];
-        const colors = [
-            0.2, 0.8, 0.3, 0.9,
-            0.3, 0.85, 0.2, 0.9,
-            0.1, 0.75, 0.3, 0.9,
-            0.15, 0.7, 0.2, 0.9
-        ];
         return new Mesh(gl, vertices, indices, null, colors);
     }
 
     static createWindRay(gl) {
-        const vertices = [
-            -0.05, 0.0, -0.8,
-             0.05, 0.0, -0.8,
-             0.05, 0.0,  0.8,
-            -0.05, 0.0,  0.8
-        ];
-        const indices = [0, 1, 2, 0, 2, 3];
-        const colors = [
-            0.8, 0.95, 1.0, 0.0,
-            0.8, 0.95, 1.0, 0.0,
-            0.85, 0.98, 1.0, 0.6,
-            0.85, 0.98, 1.0, 0.6
-        ];
+        // 3D volumetric cross-profile curved ribbon segment (visible from all camera angles)
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        const segments = 8;
+        const length = 1.2;
+        const w = 0.04;
+
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const z = (t - 0.5) * length;
+            const curveY = Math.sin(t * Math.PI) * 0.12; // Natural 3D curve flow
+            const alpha = Math.sin(t * Math.PI) * 0.75;  // Fades softly at head and tail
+
+            // Horizontal plane vertices
+            vertices.push(-w, curveY, z,   w, curveY, z);
+            colors.push(0.85, 0.95, 1.0, alpha,   0.85, 0.95, 1.0, alpha);
+
+            // Vertical plane vertices (cross section for 3D visibility)
+            vertices.push(0, curveY - w, z,   0, curveY + w, z);
+            colors.push(0.85, 0.95, 1.0, alpha,   0.85, 0.95, 1.0, alpha);
+        }
+
+        for (let i = 0; i < segments; i++) {
+            const base = i * 4;
+            const next = (i + 1) * 4;
+
+            // Horizontal quad
+            indices.push(base, base + 1, next + 1, base, next + 1, next);
+            // Vertical quad
+            indices.push(base + 2, base + 3, next + 3, base + 2, next + 3, next + 2);
+        }
+
         return new Mesh(gl, vertices, indices, null, colors);
     }
 
