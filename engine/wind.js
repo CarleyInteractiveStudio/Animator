@@ -60,32 +60,51 @@ export class WindParticleSystem {
         const isTornado = wz && wz.type === 'tornado';
         const progress = Math.random();
 
-        // Position relative to box bounds
-        const relX = (Math.random() - 0.5) * size[0];
-        const relY = Math.random() * size[1];
-        const relZ = (Math.random() - 0.5) * size[2];
-
         const isSkyCloudRing = isTornado && wz.tornadoSkyCloudCirculation && Math.random() < 0.28;
+
+        // Position uniformly distributed throughout the 3D volume
+        const hRatio = isSkyCloudRing ? (0.85 + Math.random() * 0.15) : Math.random();
+        const relY = hRatio * size[1];
+
+        let currentRadius = 1.0;
+        if (isTornado) {
+            if (isSkyCloudRing || hRatio >= 0.88) {
+                currentRadius = wz.tornadoSkyCloudRadius || (wz.tornadoTopRadius * 1.5);
+            } else if (hRatio < 0.5) {
+                const t = hRatio / 0.5;
+                currentRadius = (1 - t) * wz.tornadoBottomRadius + t * wz.tornadoMidRadius;
+            } else {
+                const t = (hRatio - 0.5) / 0.5;
+                currentRadius = (1 - t) * wz.tornadoMidRadius + t * wz.tornadoTopRadius;
+            }
+        }
+
+        const spiralAngle = Math.random() * Math.PI * 2;
+        const posX = isTornado ? (center[0] + Math.cos(spiralAngle) * currentRadius) : (center[0] + (Math.random() - 0.5) * size[0]);
+        const posY = center[1] + relY;
+        const posZ = isTornado ? (center[2] + Math.sin(spiralAngle) * currentRadius) : (center[2] + (Math.random() - 0.5) * size[2]);
+
+        const maxLife = 1.8 + Math.random() * 1.5;
 
         return {
             zoneObj: zoneObj,
             isTornado: isTornado,
             isCloudPuff: isTornado && (isSkyCloudRing || Math.random() < (wz.tornadoCloudDensity || 0.6)),
             isSkyCloudRing: isSkyCloudRing,
-            position: [center[0] + relX, center[1] + relY, center[2] + relZ],
-            prevPosition: [center[0] + relX, center[1] + relY, center[2] + relZ],
+            position: [posX, posY, posZ],
+            prevPosition: [posX, posY, posZ],
             progress: progress, // 0.0 to 1.0 along its lifespan
             speed: (wz ? wz.speed : 4.0) * (0.8 + Math.random() * 0.4),
             scale: isSkyCloudRing ? (0.6 + Math.random() * 0.8) : (isTornado ? (0.2 + Math.random() * 0.5) : (0.15 + Math.random() * 0.25)),
-            life: progress * (1.8 + Math.random() * 1.5),
-            maxLife: 1.8 + Math.random() * 1.5,
-            spiralAngle: Math.random() * Math.PI * 2,
-            heightRatio: isSkyCloudRing ? (0.85 + Math.random() * 0.15) : Math.random(), // 0.0 bottom to 1.0 top of tornado
+            life: progress * maxLife, // Staggered initial life so respawns are uniformly distributed in time
+            maxLife: maxLife,
+            spiralAngle: spiralAngle,
+            heightRatio: hRatio,
             headOffset: Math.random() * Math.PI * 2,
             tangent: [1, 0, 0],
-            headAlpha: 0.0, // Fade in head
-            tailAlpha: 1.0, // Fade out tail
-            headZigZag: [0, 0, 0] // Dynamic serpentine head-to-tail sine wave offset
+            headAlpha: 0.0,
+            tailAlpha: 1.0,
+            headZigZag: [0, 0, 0]
         };
     }
 
@@ -110,7 +129,6 @@ export class WindParticleSystem {
             const p = this.particles[i];
             const zoneObj = p.zoneObj;
             if (!zoneObj || !zoneObj.windZone || !zoneObj.windZone.enabled) {
-                // Reassign or recreate
                 if (activeZones.length > 0) {
                     p.zoneObj = activeZones[Math.floor(Math.random() * activeZones.length)];
                 } else {
@@ -149,7 +167,6 @@ export class WindParticleSystem {
                 // Variable Tornado Shape Profile (Bottom, Mid waist, Top, or Top Sky Cloud Mesocyclone Ring)
                 let currentRadius;
                 if (p.isSkyCloudRing || h >= 0.88) {
-                    // Sky storm cloud circulation disk rotating in the sky above the funnel
                     currentRadius = wz.tornadoSkyCloudRadius || (wz.tornadoTopRadius * 1.5);
                 } else if (h < 0.5) {
                     const t = h / 0.5;
@@ -163,12 +180,12 @@ export class WindParticleSystem {
                 const angularSpeed = (4.0 + (1.0 - h) * 5.0) * wz.strength * 0.3;
                 p.spiralAngle += angularSpeed * deltaTime;
 
-                const targetX = center[0] + Math.cos(p.spiralAngle) * currentRadius;
-                const targetZ = center[2] + Math.sin(p.spiralAngle) * currentRadius;
+                const targetX = center[0] + trunkZigX + Math.cos(p.spiralAngle) * currentRadius;
+                const targetZ = center[2] + trunkZigZ + Math.sin(p.spiralAngle) * currentRadius;
 
                 // Upward draft + spiral motion
                 p.position[0] += (targetX - p.position[0]) * 12.0 * deltaTime;
-                p.position[1] += wz.strength * 1.8 * deltaTime;
+                p.position[1] += (p.isSkyCloudRing ? wz.strength * 0.2 : wz.strength * 1.8) * deltaTime;
                 p.position[2] += (targetZ - p.position[2]) * 12.0 * deltaTime;
 
                 p.tangent = [
@@ -200,15 +217,15 @@ export class WindParticleSystem {
                 p.tangent = [dir[0], dir[1] + waveY * 0.2, dir[2]];
             }
 
-            // Respawn particle inside box bounds when lifecycle ends
+            // Continuous uniform recycling / respawning across the full volume
             const halfX = size[0] * 0.5;
             const halfY = size[1];
             const halfZ = size[2] * 0.5;
 
             const isOutOfBounds =
-                Math.abs(p.position[0] - center[0]) > halfX * 1.3 ||
-                (p.position[1] < center[1] || p.position[1] > center[1] + halfY * 1.2) ||
-                Math.abs(p.position[2] - center[2]) > halfZ * 1.3;
+                Math.abs(p.position[0] - center[0]) > halfX * 1.4 ||
+                (p.position[1] < center[1] - 0.5 || p.position[1] > center[1] + halfY * 1.1) ||
+                Math.abs(p.position[2] - center[2]) > halfZ * 1.4;
 
             if (p.life >= p.maxLife || isOutOfBounds) {
                 p.life = 0.0;
@@ -216,14 +233,30 @@ export class WindParticleSystem {
 
                 if (wz.type === 'tornado') {
                     p.spiralAngle = Math.random() * Math.PI * 2;
-                    p.heightRatio = 0.0;
-                    p.position[0] = center[0] + (Math.random() - 0.5) * wz.tornadoBottomRadius;
-                    p.position[1] = center[1] + Math.random() * 0.2;
-                    p.position[2] = center[2] + (Math.random() - 0.5) * wz.tornadoBottomRadius;
+                    // Recycle particle uniformly across the height gradient [0, 1] so every section stays filled constantly
+                    p.heightRatio = p.isSkyCloudRing ? (0.85 + Math.random() * 0.15) : Math.random();
+                    const hRatio = p.heightRatio;
+                    const newY = center[1] + hRatio * size[1];
+
+                    let currentRadius = 1.0;
+                    if (p.isSkyCloudRing || hRatio >= 0.88) {
+                        currentRadius = wz.tornadoSkyCloudRadius || (wz.tornadoTopRadius * 1.5);
+                    } else if (hRatio < 0.5) {
+                        const t = hRatio / 0.5;
+                        currentRadius = (1 - t) * wz.tornadoBottomRadius + t * wz.tornadoMidRadius;
+                    } else {
+                        const t = (hRatio - 0.5) / 0.5;
+                        currentRadius = (1 - t) * wz.tornadoMidRadius + t * wz.tornadoTopRadius;
+                    }
+
+                    p.position[0] = center[0] + Math.cos(p.spiralAngle) * currentRadius;
+                    p.position[1] = newY;
+                    p.position[2] = center[2] + Math.sin(p.spiralAngle) * currentRadius;
                 } else {
-                    // Spawn at entry face of wind box
+                    // Recycle uniformly across box length & height so ribbons populate the full box
                     const dir = wz.direction || [1, 0, 0];
-                    p.position[0] = center[0] - dir[0] * halfX + (Math.random() - 0.5) * (size[0] * 0.2);
+                    const randDist = (Math.random() - 0.5) * size[0];
+                    p.position[0] = center[0] + randDist;
                     p.position[1] = center[1] + Math.random() * size[1];
                     p.position[2] = center[2] + (Math.random() - 0.5) * size[2];
                 }
