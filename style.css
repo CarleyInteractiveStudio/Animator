@@ -164,19 +164,48 @@ body {
     display: block;
 }
 
-/* Viewport Overlay Toolbar */
-#viewport-toolbar {
+/* Draggable Floating Viewport Widgets */
+.draggable-widget {
     position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(26, 26, 26, 0.88);
+    backdrop-filter: blur(10px);
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    z-index: 50;
+    user-select: none;
+}
+
+.drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: background 0.15s ease;
+}
+
+.drag-handle:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+#viewport-toolbar {
     top: 12px;
     left: 12px;
-    display: flex;
-    gap: 8px;
-    background: rgba(30, 30, 30, 0.85);
-    backdrop-filter: blur(8px);
-    padding: 4px;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    z-index: 50;
+}
+
+#simulation-toolbar {
+    top: 12px;
+    right: 12px;
 }
 
 .tool-category {

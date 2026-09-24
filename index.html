@@ -71,7 +71,10 @@
 
         <div id="visor-panel" class="panel">
             <div class="panel-title">Visor 3D</div>
-            <div id="viewport-toolbar">
+            <div id="viewport-toolbar" class="draggable-widget">
+                <div class="drag-handle" title="Arrastrar Barra de Herramientas">
+                    <svg width="10" height="14" viewBox="0 0 10 14" fill="#888"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/><circle cx="3" cy="11" r="1.5"/><circle cx="7" cy="11" r="1.5"/></svg>
+                </div>
                 <div class="tool-category" id="cat-transform">
                     <button class="tool-btn active" title="Transformación">
                         <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13 6v5h5V8.5L22 12l-4 3.5V13h-5v5h2.5L12 22l-3.5-4H11v-5H6v2.5L2 12l4-3.5V11h5V6H8.5L12 2l3.5 4H13z"/></svg>
@@ -107,17 +110,20 @@
                         <div class="submenu-item" data-tool="fill">Relleno Completo</div>
                     </div>
                 </div>
+            </div>
 
-                <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
-                    <button id="btn-play-sim" class="play-control-btn" title="Iniciar / Pausar Simulación y Viento">
-                        <svg id="play-sim-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                        <span id="play-sim-text">Play</span>
-                    </button>
-                    <button id="btn-record-sim" class="record-control-btn" title="Grabar Video de la Escena">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8" fill="#ff4d4d"/></svg>
-                        <span id="record-sim-text">Grabar</span>
-                    </button>
+            <div id="simulation-toolbar" class="draggable-widget">
+                <div class="drag-handle" title="Arrastrar Controles de Simulación">
+                    <svg width="10" height="14" viewBox="0 0 10 14" fill="#888"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/><circle cx="3" cy="11" r="1.5"/><circle cx="7" cy="11" r="1.5"/></svg>
                 </div>
+                <button id="btn-play-sim" class="play-control-btn" title="Iniciar / Pausar Simulación y Viento">
+                    <svg id="play-sim-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <span id="play-sim-text">Play</span>
+                </button>
+                <button id="btn-record-sim" class="record-control-btn" title="Grabar Video de la Escena">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8" fill="#ff4d4d"/></svg>
+                    <span id="record-sim-text">Grabar</span>
+                </button>
             </div>
             <div class="panel-content"></div>
         </div>

@@ -971,6 +971,65 @@ function setupKeyboardShortcuts() {
 let mediaRecorder = null;
 let recordedChunks = [];
 
+function setupDraggableWidgets() {
+    const visorPanel = document.getElementById('visor-panel');
+    if (!visorPanel) return;
+
+    document.querySelectorAll('.draggable-widget').forEach(widget => {
+        const handle = widget.querySelector('.drag-handle') || widget;
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let initialLeft = 0, initialTop = 0;
+
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+
+            const visorRect = visorPanel.getBoundingClientRect();
+            const widgetRect = widget.getBoundingClientRect();
+
+            initialLeft = widgetRect.left - visorRect.left;
+            initialTop = widgetRect.top - visorRect.top;
+
+            widget.style.left = `${initialLeft}px`;
+            widget.style.top = `${initialTop}px`;
+            widget.style.right = 'auto';
+
+            const onMouseMove = (moveEvt) => {
+                if (!isDragging) return;
+
+                const dx = moveEvt.clientX - startX;
+                const dy = moveEvt.clientY - startY;
+
+                let newLeft = initialLeft + dx;
+                let newTop = initialTop + dy;
+
+                const maxLeft = visorPanel.clientWidth - widget.offsetWidth;
+                const maxTop = visorPanel.clientHeight - widget.offsetHeight;
+
+                newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+                newTop = Math.max(0, Math.min(newTop, maxTop));
+
+                widget.style.left = `${newLeft}px`;
+                widget.style.top = `${newTop}px`;
+            };
+
+            const onMouseUp = () => {
+                isDragging = false;
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
+            };
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+        });
+    });
+}
+
 function setupToolbarEvents() {
     const statusMode = document.getElementById('status-mode');
 
@@ -1088,6 +1147,7 @@ function main() {
             setupFileImportExportEvents();
             setupModals();
             setupToolbarEvents();
+            setupDraggableWidgets();
             setupKeyboardShortcuts();
 
             const sphereMesh = Mesh.createSphere(Engine.gl);
