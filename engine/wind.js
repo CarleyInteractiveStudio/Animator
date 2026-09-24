@@ -14,7 +14,7 @@ export class WindZoneComponent {
 }
 
 export class WindParticleSystem {
-    constructor(maxParticles = 1200) {
+    constructor(maxParticles = 5000) {
         this.maxParticles = maxParticles;
         this.particles = [];
         this.initParticles();
@@ -23,26 +23,27 @@ export class WindParticleSystem {
     initParticles() {
         this.particles = [];
         for (let i = 0; i < this.maxParticles; i++) {
-            this.particles.push(this.createParticle());
+            this.particles.push(this.createParticle(true));
         }
     }
 
-    createParticle() {
+    createParticle(initialRandom = false) {
         return {
-            position: [
-                (Math.random() - 0.5) * 20,
+            position: initialRandom ? [
+                (Math.random() - 0.5) * 24,
                 Math.random() * 10,
-                (Math.random() - 0.5) * 20
-            ],
+                (Math.random() - 0.5) * 24
+            ] : [-15, Math.random() * 8, (Math.random() - 0.5) * 20],
+            prevPosition: [0, 0, 0],
             tangent: [1, 0, 0],
-            scale: 0.1 + Math.random() * 0.25,
-            life: Math.random(),
-            maxLife: 1.5 + Math.random() * 2.0,
+            curvature: 0.0, // Dynamic bend curvature based on trajectory angle changes
+            scale: 0.12 + Math.random() * 0.28,
+            life: initialRandom ? Math.random() * 2.0 : 0.0,
+            maxLife: 1.8 + Math.random() * 2.5,
             isTornado: false,
-            // Tornado spiral state properties
             spiralAngle: Math.random() * Math.PI * 2,
-            heightOffset: Math.random() * 6.0,
-            orbitRadius: 0.2 + Math.random() * 0.3
+            heightOffset: Math.random() * 7.0,
+            radialDistance: 0.2 + Math.random() * 0.4
         };
     }
 
@@ -54,6 +55,11 @@ export class WindParticleSystem {
         for (let i = 0; i < this.particles.length; i++) {
             const p = this.particles[i];
             p.life += deltaTime;
+
+            // Store previous position for trajectory bending calculations
+            p.prevPosition[0] = p.position[0];
+            p.prevPosition[1] = p.position[1];
+            p.prevPosition[2] = p.position[2];
 
             let netVel = [0, 0, 0];
             let isTornadoParticle = false;
@@ -69,47 +75,59 @@ export class WindParticleSystem {
                 const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
                 if (wz.type === 'tornado') {
-                    // Tornado particle vortex spiral flow
+                    // Realistic Tornado Logarithmic Funnel Vortex
                     isTornadoParticle = true;
                     p.isTornado = true;
 
-                    // Particle spirals upward and outward in a funnel shape
-                    const hRatio = Math.max(0, p.position[1] - center[1]) / 6.0; // 0 at bottom, 1 at top
-                    const funnelRadius = (0.3 + Math.pow(hRatio, 1.3) * 3.5) * (wz.radius / 6.0);
+                    const heightAboveBase = Math.max(0, p.position[1] - center[1]);
+                    const hRatio = Math.min(1.0, heightAboveBase / 7.0); // Funnel height 7 units
 
-                    p.spiralAngle += (3.5 + (1.0 - hRatio) * 4.0) * wz.strength * 0.3 * deltaTime;
+                    // Logarithmic expanding radius (narrow bottom, wide top)
+                    const funnelRadius = (0.2 + Math.pow(hRatio, 1.4) * 4.2) * (wz.radius / 7.0);
+
+                    // High rotational speed at bottom, easing as funnel widens
+                    const angularSpeed = (4.0 + (1.0 - hRatio) * 6.0) * wz.strength * 0.25;
+                    p.spiralAngle += angularSpeed * deltaTime;
 
                     const targetX = center[0] + Math.cos(p.spiralAngle) * funnelRadius;
                     const targetZ = center[2] + Math.sin(p.spiralAngle) * funnelRadius;
 
-                    // Smooth velocity towards funnel spiral trajectory
-                    netVel[0] = (targetX - p.position[0]) * 8.0;
-                    netVel[1] = wz.strength * 1.8 + hRatio * 1.2; // Upward suction
-                    netVel[2] = (targetZ - p.position[2]) * 8.0;
+                    netVel[0] = (targetX - p.position[0]) * 10.0;
+                    netVel[1] = wz.strength * 2.2 + hRatio * 1.5; // Strong upward draft
+                    netVel[2] = (targetZ - p.position[2]) * 10.0;
 
-                    // Flow tangent direction along spiral
+                    // Tangent vector around spiral
                     p.tangent = [
                         -Math.sin(p.spiralAngle),
-                        0.4,
+                        0.5,
                         Math.cos(p.spiralAngle)
                     ];
+                    p.curvature = 1.2 + hRatio * 1.8; // High curvature along tornado spiral
                 } else if (dist <= wz.radius) {
+                    p.isTornado = false;
                     const factor = (1.0 - dist / wz.radius) * wz.strength;
 
                     if (wz.type === 'gust') {
-                        const pulse = (Math.sin(time * 4.0 + p.position[0] * 0.4) * 0.5 + 0.5) * 2.0;
+                        const pulse = (Math.sin(time * 5.0 + p.position[0] * 0.5) * 0.5 + 0.5) * 2.2;
                         const dir = wz.direction;
-                        netVel[0] += dir[0] * factor * pulse * 2.5;
+                        netVel[0] += dir[0] * factor * pulse * 3.0;
                         netVel[1] += dir[1] * factor * pulse;
-                        netVel[2] += dir[2] * factor * pulse * 2.5;
-                        p.tangent = [dir[0], dir[1] + Math.sin(time * 5.0) * 0.2, dir[2]];
+                        netVel[2] += dir[2] * factor * pulse * 3.0;
+
+                        // Dynamic bending along gust turbulence waves
+                        const wave = Math.sin(time * 6.0 + p.position[0]);
+                        p.tangent = [dir[0], dir[1] + wave * 0.35, dir[2] + wave * 0.2];
+                        p.curvature = Math.abs(wave) * 0.8;
                     } else { // 'breeze'
                         const dir = wz.direction;
-                        const wave = Math.sin(time * 2.5 + p.position[0] * 0.8) * wz.turbulence;
-                        netVel[0] += (dir[0] + wave * 0.3) * factor * 2.0;
-                        netVel[1] += (dir[1] + Math.cos(time * 2.0) * 0.15) * factor;
-                        netVel[2] += (dir[2] + wave * 0.3) * factor * 2.0;
-                        p.tangent = [dir[0], Math.sin(time * 2.0) * 0.2, dir[2]];
+                        const wave = Math.sin(time * 3.0 + p.position[0] * 0.6) * wz.turbulence;
+                        netVel[0] += (dir[0] + wave * 0.2) * factor * 2.2;
+                        netVel[1] += (dir[1] + Math.cos(time * 2.0) * 0.1) * factor;
+                        netVel[2] += (dir[2] + wave * 0.2) * factor * 2.2;
+
+                        // Straight continuous flow with gentle bending
+                        p.tangent = [dir[0], Math.sin(time * 2.5) * 0.15, dir[2]];
+                        p.curvature = Math.abs(wave) * 0.3;
                     }
                 }
             }
@@ -118,25 +136,26 @@ export class WindParticleSystem {
             p.position[1] += netVel[1] * deltaTime;
             p.position[2] += netVel[2] * deltaTime;
 
-            // Normalize tangent vector
             const tLen = Math.hypot(p.tangent[0], p.tangent[1], p.tangent[2]) || 1;
             p.tangent[0] /= tLen; p.tangent[1] /= tLen; p.tangent[2] /= tLen;
 
-            // Respawn particles
-            if (p.life > p.maxLife || p.position[1] > 12 || Math.abs(p.position[0]) > 25 || Math.abs(p.position[2]) > 25) {
-                p.life = 0;
+            // Dynamic emission / respawn when particles reach life end or boundary
+            if (p.life > p.maxLife || p.position[1] > 14 || Math.abs(p.position[0]) > 28 || Math.abs(p.position[2]) > 28) {
+                p.life = 0.0;
+                p.maxLife = 1.8 + Math.random() * 2.5;
+
                 if (activeTornado) {
                     const tc = activeTornado.transform.position;
-                    // Spawn at base of tornado funnel
-                    const initAngle = Math.random() * Math.PI * 2;
-                    p.spiralAngle = initAngle;
-                    p.position[0] = tc[0] + (Math.random() - 0.5) * 2.0;
-                    p.position[1] = tc[1] + Math.random() * 0.5;
-                    p.position[2] = tc[2] + (Math.random() - 0.5) * 2.0;
+                    // Spawn continuously at tornado base funnel opening
+                    p.spiralAngle = Math.random() * Math.PI * 2;
+                    p.position[0] = tc[0] + (Math.random() - 0.5) * 1.5;
+                    p.position[1] = tc[1] + Math.random() * 0.3;
+                    p.position[2] = tc[2] + (Math.random() - 0.5) * 1.5;
                 } else {
-                    p.position[0] = (Math.random() - 0.5) * 20;
-                    p.position[1] = Math.random() * 8;
-                    p.position[2] = (Math.random() - 0.5) * 20;
+                    // Spawn from incoming wind edge
+                    p.position[0] = -16.0 + (Math.random() - 0.5) * 4.0;
+                    p.position[1] = Math.random() * 9.0;
+                    p.position[2] = (Math.random() - 0.5) * 24.0;
                 }
             }
         }

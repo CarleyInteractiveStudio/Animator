@@ -569,26 +569,26 @@ export class Mesh {
     }
 
     static createCinemaCamera(gl) {
+        // Game engine style Camera Gizmo: 3D frustum wireframe lines + top triangle indicator
         const vertices = [];
         const indices = [];
         const colors = [];
 
-        function addThickLine(x1, y1, z1, x2, y2, z2, radius, r, g, b) {
+        function addThickLine(x1, y1, z1, x2, y2, z2, radius, r, g, b, a = 1.0) {
             const start = vertices.length / 3;
             const dx = x2 - x1, dy = y2 - y1, dz = z2 - z1;
-            const len = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            const len = Math.hypot(dx, dy, dz);
             if (len < 0.0001) return;
 
-            // Generate a thin box along the segment
             let nx = -dy, ny = dx, nz = 0;
             if (Math.abs(nx) < 0.001 && Math.abs(ny) < 0.001) { nx = 1; ny = 0; }
-            const nlen = Math.sqrt(nx*nx + ny*ny + nz*nz);
+            const nlen = Math.hypot(nx, ny, nz);
             nx = (nx / nlen) * radius; ny = (ny / nlen) * radius; nz = (nz / nlen) * radius;
 
             const px = (dy * nz - dz * ny) / radius;
             const py = (dz * nx - dx * nz) / radius;
             const pz = (dx * ny - dy * nx) / radius;
-            const plen = Math.sqrt(px*px + py*py + pz*pz);
+            const plen = Math.hypot(px, py, pz);
             const rx = (px / plen) * radius, ry = (py / plen) * radius, rz = (pz / plen) * radius;
 
             vertices.push(
@@ -607,39 +607,37 @@ export class Mesh {
                 1, 5, 6, 1, 6, 2,   4, 0, 3, 4, 3, 7
             ];
             for (const idx of quadIndices) indices.push(start + idx);
-            for (let i = 0; i < 8; i++) colors.push(r, g, b, 1.0);
+            for (let i = 0; i < 8; i++) colors.push(r, g, b, a);
         }
 
-        const cr = 0.2, cg = 0.7, cb = 1.0; // Clean Cyan Icon vector color
-        const w = 0.35, h = 0.25, d = 0.4;
-        const radius = 0.015;
+        const cr = 0.2, cg = 0.8, cb = 1.0; // Game engine cyan
+        const rad = 0.012;
 
-        // Camera wireframe body box
-        const p = [
-            [-w, -h,  d], [ w, -h,  d], [ w,  h,  d], [-w,  h,  d],
-            [-w, -h, -d], [ w, -h, -d], [ w,  h, -d], [-w,  h, -d]
+        // Origin point (0,0,0)
+        // Frustum pyramid corners at front (-Z)
+        const fw = 0.45, fh = 0.32, fz = -0.9;
+        const fp = [
+            [-fw, -fh, fz],
+            [ fw, -fh, fz],
+            [ fw,  fh, fz],
+            [-fw,  fh, fz]
         ];
-        const lines = [
-            [0,1], [1,2], [2,3], [3,0],
-            [4,5], [5,6], [6,7], [7,4],
-            [0,4], [1,5], [2,6], [3,7]
-        ];
-        for (const [i, j] of lines) {
-            addThickLine(p[i][0], p[i][1], p[i][2], p[j][0], p[j][1], p[j][2], radius, cr, cg, cb);
+
+        // 4 pyramid lines from camera origin (0,0,0) to frustum corners
+        for (let i = 0; i < 4; i++) {
+            addThickLine(0, 0, 0, fp[i][0], fp[i][1], fp[i][2], rad, cr, cg, cb);
         }
 
-        // Camera Lens trapezoid frustum pointing forwards (-Z)
-        const fw = 0.5, fh = 0.35, fz = -0.9;
-        const fp = [[-fw, -fh, fz], [fw, -fh, fz], [fw, fh, fz], [-fw, fh, fz]];
+        // Frustum rectangle outline
         for (let i = 0; i < 4; i++) {
             const next = (i + 1) % 4;
-            addThickLine(fp[i][0], fp[i][1], fp[i][2], fp[next][0], fp[next][1], fp[next][2], radius, cr, cg, cb);
-            addThickLine(p[4 + i][0], p[4 + i][1], p[4 + i][2], fp[i][0], fp[i][1], fp[i][2], radius * 0.8, cr, cg, cb);
+            addThickLine(fp[i][0], fp[i][1], fp[i][2], fp[next][0], fp[next][1], fp[next][2], rad, cr, cg, cb);
         }
 
-        // Top reel circles (simplified wireframe triangles/diamonds)
-        addThickLine(-w*0.5, h, 0, -w*0.5, h + 0.2, 0, radius, cr, cg, cb);
-        addThickLine(w*0.5, h, 0, w*0.5, h + 0.2, 0, radius, cr, cg, cb);
+        // Top triangle direction indicator
+        addThickLine(0, fh, fz, 0, fh + 0.25, fz, rad, cr, cg, cb);
+        addThickLine(-fw * 0.5, fh, fz, 0, fh + 0.25, fz, rad, cr, cg, cb);
+        addThickLine(fw * 0.5, fh, fz, 0, fh + 0.25, fz, rad, cr, cg, cb);
 
         return new Mesh(gl, vertices, indices, null, colors);
     }
