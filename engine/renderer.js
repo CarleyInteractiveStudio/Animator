@@ -58,6 +58,7 @@ export function initWebGL(canvas) {
         uniform float u_cloudDensity;
         uniform float u_cloudAltitude;
         uniform float u_windSpeed;
+        uniform bool u_showSkyClouds;
         uniform int u_envPreset; // 0 = Studio Dark, 1 = Dynamic 3D Sky, 2 = Custom
 
         uniform sampler2D u_customTexture;
@@ -175,7 +176,7 @@ export function initWebGL(canvas) {
             }
 
             // Volumetric Ray-Marched Atmospheric Sky Clouds
-            if (dir.y > 0.02 && u_cloudCoverage > 0.01 && u_envPreset == 1) {
+            if (u_showSkyClouds && dir.y > 0.02 && u_cloudCoverage > 0.01 && u_envPreset == 1) {
                 vec3 cloudLightDir = normalize(u_sunDirection);
                 float sunPhase = max(0.0, dot(dir, cloudLightDir));
 
@@ -243,6 +244,7 @@ export function initWebGL(canvas) {
             cloudDensity: gl.getUniformLocation(skyProgram, 'u_cloudDensity'),
             cloudAltitude: gl.getUniformLocation(skyProgram, 'u_cloudAltitude'),
             windSpeed: gl.getUniformLocation(skyProgram, 'u_windSpeed'),
+            showSkyClouds: gl.getUniformLocation(skyProgram, 'u_showSkyClouds'),
             envPreset: gl.getUniformLocation(skyProgram, 'u_envPreset'),
             customTexture: gl.getUniformLocation(skyProgram, 'u_customTexture'),
             useCustomTexture: gl.getUniformLocation(skyProgram, 'u_useCustomTexture')
@@ -539,6 +541,7 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.uniform1f(skyProgramInfo.uniformLocations.cloudDensity, env ? env.cloudDensity : 1.0);
         gl.uniform1f(skyProgramInfo.uniformLocations.cloudAltitude, env ? env.cloudAltitude : 1.0);
         gl.uniform1f(skyProgramInfo.uniformLocations.windSpeed, env ? env.windSpeed : 0.5);
+        gl.uniform1i(skyProgramInfo.uniformLocations.showSkyClouds, env && env.showSkyClouds !== undefined ? (env.showSkyClouds ? 1 : 0) : 1);
 
         let presetCode = 1; // Default: Dynamic 3D Sky
         if (env) {

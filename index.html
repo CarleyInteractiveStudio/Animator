@@ -56,24 +56,7 @@
 
     <div id="app-container">
         <div id="jerarquia-panel" class="panel">
-            <div class="panel-header-actions">
-                <div class="panel-title">Jerarquía</div>
-                <div class="menu-item add-btn" style="display: flex; align-items: center; gap: 4px; padding: 2px 6px; background: #007acc; border-radius: 4px; color: #fff; font-size: 11px; cursor: pointer; margin-right: 6px;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    <span>Crear Objeto</span>
-                    <div class="dropdown-menu">
-                        <div class="dropdown-item" data-create="cube">Cubo</div>
-                        <div class="dropdown-item" data-create="sphere">Esfera</div>
-                        <div class="dropdown-item" data-create="plane">Plano</div>
-                        <div class="dropdown-item" data-create="cylinder">Cilindro</div>
-                        <div class="dropdown-item" data-create="cone">Cono</div>
-                        <div class="dropdown-item" data-create="pyramid">Pirámide</div>
-                        <div class="dropdown-item" data-create="ramp">Prisma / Rampa</div>
-                        <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
-                        <div class="dropdown-item" data-create="cloud" style="color: #4da6ff; font-weight: bold;">+ Nube 3D Volumétrica</div>
-                    </div>
-                </div>
-            </div>
+            <div class="panel-title">Jerarquía</div>
             <div class="panel-content"></div>
         </div>
 
@@ -198,6 +181,11 @@
                             <input type="range" id="slider-wind-speed" min="0.0" max="3.0" step="0.1" value="0.5" class="modern-range">
                         </div>
                     </div>
+
+                    <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="chk-sky-clouds" checked style="accent-color: #007acc; cursor: pointer;">
+                        <label for="chk-sky-clouds" style="font-size: 11px; color: #eee; cursor: pointer;">Mostrar / Ocultar Nubes de la Bóveda Celeste</label>
+                    </div>
                 </div>
             </div>
         </div>
@@ -277,6 +265,27 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Right-Click Context Menus -->
+    <div id="hierarchy-context-menu" class="context-menu" style="display: none;">
+        <div class="context-menu-title">Crear Objeto 3D</div>
+        <div class="context-menu-item" data-create="cube">Cubo</div>
+        <div class="context-menu-item" data-create="sphere">Esfera</div>
+        <div class="context-menu-item" data-create="plane">Plano</div>
+        <div class="context-menu-item" data-create="cylinder">Cilindro</div>
+        <div class="context-menu-item" data-create="cone">Cono</div>
+        <div class="context-menu-item" data-create="pyramid">Pirámide</div>
+        <div class="context-menu-item" data-create="ramp">Prisma / Rampa</div>
+        <div class="context-menu-item" data-create="torus">Torus (Dona)</div>
+        <div class="context-menu-item" data-create="cloud" style="color: #4da6ff; font-weight: bold;">+ Nube 3D Volumétrica</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" id="ctx-delete-object" style="color: #ff4d4d;">Eliminar Objeto</div>
+    </div>
+
+    <div id="inspector-context-menu" class="context-menu" style="display: none;">
+        <div class="context-menu-title">Acciones de Inspector</div>
+        <div class="context-menu-item" id="ctx-add-component">+ Añadir Componente</div>
     </div>
 
     <input type="file" id="file-import-input" accept=".obj,.gltf" style="display: none;">

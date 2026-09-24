@@ -488,13 +488,8 @@ export class Mesh {
                 // Continuous FBM volumetric displacement along normal vector
                 const displacement = fbm3D(px, py, pz);
                 px += nx * displacement;
-                py += ny * displacement * 1.2; // Extra billowing on top
+                py += ny * displacement * 1.1; // Organic billowing around entire cloud body
                 pz += nz * displacement;
-
-                // Flatten flat condensation cloud base at bottom
-                if (py < -0.1) {
-                    py = -0.1 + (py + 0.1) * 0.2;
-                }
 
                 vertices.push(px, py, pz);
             }

@@ -435,6 +435,7 @@ function setupModals() {
     const sliderCloudDensity = document.getElementById('slider-cloud-density');
     const sliderCloudAltitude = document.getElementById('slider-cloud-altitude');
     const sliderWindSpeed = document.getElementById('slider-wind-speed');
+    const chkSkyClouds = document.getElementById('chk-sky-clouds');
 
     if (presetDark) {
         presetDark.addEventListener('click', () => {
@@ -518,6 +519,12 @@ function setupModals() {
     if (sliderWindSpeed) {
         sliderWindSpeed.addEventListener('input', (e) => {
             Engine.environment.windSpeed = parseFloat(e.target.value);
+        });
+    }
+
+    if (chkSkyClouds) {
+        chkSkyClouds.addEventListener('change', (e) => {
+            Engine.environment.showSkyClouds = e.target.checked;
         });
     }
 
@@ -612,6 +619,64 @@ function spawnPrimitive(type) {
     vec3.set(obj.transform.position, (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);
     Engine.scene.addGameObject(obj);
     selectObject(obj);
+}
+
+function setupContextMenuEvents() {
+    const hierarchyPanel = document.getElementById('jerarquia-panel');
+    const inspectorPanel = document.getElementById('inspector-panel');
+
+    const hierarchyCtx = document.getElementById('hierarchy-context-menu');
+    const inspectorCtx = document.getElementById('inspector-context-menu');
+
+    const hideContextMenus = () => {
+        if (hierarchyCtx) hierarchyCtx.style.display = 'none';
+        if (inspectorCtx) inspectorCtx.style.display = 'none';
+    };
+
+    window.addEventListener('click', hideContextMenus);
+
+    if (hierarchyPanel && hierarchyCtx) {
+        hierarchyPanel.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            hideContextMenus();
+
+            hierarchyCtx.style.left = `${e.clientX}px`;
+            hierarchyCtx.style.top = `${e.clientY}px`;
+            hierarchyCtx.style.display = 'block';
+        });
+    }
+
+    if (inspectorPanel && inspectorCtx) {
+        inspectorPanel.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            hideContextMenus();
+
+            inspectorCtx.style.left = `${e.clientX}px`;
+            inspectorCtx.style.top = `${e.clientY}px`;
+            inspectorCtx.style.display = 'block';
+        });
+    }
+
+    const ctxDelete = document.getElementById('ctx-delete-object');
+    if (ctxDelete) {
+        ctxDelete.addEventListener('click', () => {
+            if (Engine.selectedGameObject && Engine.scene) {
+                const idx = Engine.scene.gameObjects.indexOf(Engine.selectedGameObject);
+                if (idx !== -1) {
+                    Engine.scene.gameObjects.splice(idx, 1);
+                    selectObject(null);
+                }
+            }
+        });
+    }
+
+    const ctxAddComp = document.getElementById('ctx-add-component');
+    if (ctxAddComp) {
+        ctxAddComp.addEventListener('click', () => {
+            const modal = document.getElementById('modal-component');
+            if (modal) modal.style.display = 'flex';
+        });
+    }
 }
 
 function setupCreateMenuEvents() {
@@ -770,6 +835,7 @@ function main() {
         visorContent.appendChild(canvas);
 
         if (Engine.initialize(canvas)) {
+            setupContextMenuEvents();
             setupCreateMenuEvents();
             setupFileImportExportEvents();
             setupModals();
@@ -824,11 +890,31 @@ function main() {
                 lastMouseY = e.clientY;
 
                 if (Engine.mode === 'object' && activeGizmoAxis) {
-                    const sensitivity = 0.03;
-                    const delta = (dx - dy) * sensitivity;
-
                     const axisMap = { x: 0, y: 1, z: 2 };
                     const axisIdx = axisMap[activeGizmoAxis];
+
+                    // Project active 3D world axis into screen space to maintain 1:1 camera-relative movement
+                    const viewMat = Engine.camera ? Engine.camera.getViewMatrix() : null;
+                    let sign = 1.0;
+
+                    if (viewMat && axisIdx !== undefined) {
+                        const axisWorld = [0, 0, 0];
+                        axisWorld[axisIdx] = 1.0;
+
+                        // View matrix direction projection
+                        const axisView = [
+                            viewMat[0]*axisWorld[0] + viewMat[4]*axisWorld[1] + viewMat[8]*axisWorld[2],
+                            viewMat[1]*axisWorld[0] + viewMat[5]*axisWorld[1] + viewMat[9]*axisWorld[2],
+                            viewMat[2]*axisWorld[0] + viewMat[6]*axisWorld[1] + viewMat[10]*axisWorld[2]
+                        ];
+
+                        const screenProj = axisView[0] * dx - axisView[1] * dy;
+                        sign = screenProj >= 0 ? 1.0 : -1.0;
+                    }
+
+                    const sensitivity = 0.03;
+                    const rawDelta = Math.hypot(dx, dy) * sensitivity * sign;
+                    const delta = rawDelta;
 
                     if (axisIdx !== undefined) {
                         if (Engine.mode === 'model' && Engine.selectedSubElement && Engine.selectedGameObject.mesh) {
