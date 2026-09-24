@@ -210,6 +210,7 @@ function updateInspectorPanel() {
 
     if (hasWind) {
         const wz = selectedObject.windZone;
+        const sz = wz.size || [8.0, 6.0, 8.0];
         html += `
             <div class="inspector-section" style="border: 1px solid #00d2ff44; background: #00d2ff0a; padding: 10px; border-radius: 6px; margin-top: 10px;">
                 <div class="inspector-section-title" style="color: #00d2ff; display: flex; align-items: center; gap: 6px;">
@@ -219,19 +220,62 @@ function updateInspectorPanel() {
                 <div style="margin-top: 8px;">
                     <label style="font-size: 11px; color: #ccc;">Tipo de Viento:</label>
                     <select id="wind-type-select" style="width: 100%; padding: 4px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 11px; margin-top: 4px;">
-                        <option value="breeze" ${wz.type === 'breeze' ? 'selected' : ''}>Brisa Lineal (Direccional)</option>
-                        <option value="tornado" ${wz.type === 'tornado' ? 'selected' : ''}>Tornado / Huracán (Vórtice Espiral)</option>
+                        <option value="breeze" ${wz.type === 'breeze' ? 'selected' : ''}>Brisa Lineal (Cintas Serpentinas)</option>
+                        <option value="tornado" ${wz.type === 'tornado' ? 'selected' : ''}>Tornado / Huracán (Cintura Variable + Nubes)</option>
                         <option value="gust" ${wz.type === 'gust' ? 'selected' : ''}>Ráfagas y Turbulencia</option>
                     </select>
                 </div>
+
+                <div style="margin-top: 10px;">
+                    <label style="font-size: 11px; color: #00d2ff; font-weight: bold;">Área del Gizmo 3D (Caja Volumétrica):</label>
+                    <div class="transform-inputs" style="margin-top: 4px;">
+                        <div class="axis-input">
+                            <span class="axis-label x">Ancho</span>
+                            <input type="number" step="0.5" id="wind-size-x" value="${sz[0].toFixed(1)}">
+                        </div>
+                        <div class="axis-input">
+                            <span class="axis-label y">Alto</span>
+                            <input type="number" step="0.5" id="wind-size-y" value="${sz[1].toFixed(1)}">
+                        </div>
+                        <div class="axis-input">
+                            <span class="axis-label z">Prof.</span>
+                            <input type="number" step="0.5" id="wind-size-z" value="${sz[2].toFixed(1)}">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 8px;">
+                    <label style="font-size: 11px; color: #ccc;">Cantidad de Partículas / Cintas: <span id="val-particle-count" style="color: #00d2ff;">${wz.particleCount || 500}</span></label>
+                    <input type="number" id="input-particle-count" min="10" max="10000" step="50" value="${wz.particleCount || 500}" style="width: 100%; background: #222; color: #fff; border: 1px solid #444; padding: 4px; border-radius: 4px; font-size: 11px; margin-top: 2px;">
+                </div>
+
                 <div style="margin-top: 8px;">
                     <label style="font-size: 11px; color: #ccc;">Fuerza / Intensidad: <span id="val-wind-strength" style="color: #00d2ff;">${wz.strength.toFixed(1)}</span></label>
                     <input type="range" id="slider-wind-strength" min="0.1" max="10.0" step="0.1" value="${wz.strength}" class="modern-range" style="width: 100%; margin-top: 2px;">
                 </div>
-                <div style="margin-top: 8px;">
-                    <label style="font-size: 11px; color: #ccc;">Radio de Cobertura: <span id="val-wind-radius" style="color: #00d2ff;">${wz.radius.toFixed(1)}m</span></label>
-                    <input type="range" id="slider-wind-radius" min="1.0" max="30.0" step="0.5" value="${wz.radius}" class="modern-range" style="width: 100%; margin-top: 2px;">
-                </div>
+
+                ${wz.type === 'tornado' ? `
+                    <div style="margin-top: 10px; border-top: 1px dashed #00d2ff44; padding-top: 8px;">
+                        <label style="font-size: 11px; color: #00d2ff; font-weight: bold;">Forma del Tornado:</label>
+                        <div style="margin-top: 6px;">
+                            <label style="font-size: 10px; color: #aaa;">Radio Superior (Copa): <span id="val-tor-top">${(wz.tornadoTopRadius || 5.0).toFixed(1)}m</span></label>
+                            <input type="range" id="slider-tor-top" min="1.0" max="15.0" step="0.5" value="${wz.tornadoTopRadius || 5.0}" class="modern-range" style="width: 100%;">
+                        </div>
+                        <div style="margin-top: 6px;">
+                            <label style="font-size: 10px; color: #aaa;">Radio Medio (Cintura): <span id="val-tor-mid">${(wz.tornadoMidRadius || 1.2).toFixed(1)}m</span></label>
+                            <input type="range" id="slider-tor-mid" min="0.2" max="10.0" step="0.2" value="${wz.tornadoMidRadius || 1.2}" class="modern-range" style="width: 100%;">
+                        </div>
+                        <div style="margin-top: 6px;">
+                            <label style="font-size: 10px; color: #aaa;">Radio Inferior (Base): <span id="val-tor-bot">${(wz.tornadoBottomRadius || 0.8).toFixed(1)}m</span></label>
+                            <input type="range" id="slider-tor-bot" min="0.1" max="8.0" step="0.2" value="${wz.tornadoBottomRadius || 0.8}" class="modern-range" style="width: 100%;">
+                        </div>
+                    </div>
+                ` : `
+                    <div style="margin-top: 8px;">
+                        <label style="font-size: 11px; color: #ccc;">Ondulación Zig-Zag (Onda): <span id="val-wave-amp" style="color: #00d2ff;">${(wz.waveAmplitude || 0.35).toFixed(2)}</span></label>
+                        <input type="range" id="slider-wave-amp" min="0.0" max="1.5" step="0.05" value="${wz.waveAmplitude || 0.35}" class="modern-range" style="width: 100%; margin-top: 2px;">
+                    </div>
+                `}
             </div>
         `;
     }
@@ -479,17 +523,45 @@ function updateInspectorPanel() {
     }
 
     const windTypeSelect = inspectorContent.querySelector('#wind-type-select');
+    const windSizeX = inspectorContent.querySelector('#wind-size-x');
+    const windSizeY = inspectorContent.querySelector('#wind-size-y');
+    const windSizeZ = inspectorContent.querySelector('#wind-size-z');
+    const inputParticleCount = inspectorContent.querySelector('#input-particle-count');
     const sliderWindStrength = inspectorContent.querySelector('#slider-wind-strength');
-    const sliderWindRadius = inspectorContent.querySelector('#slider-wind-radius');
+
+    const sliderTorTop = inspectorContent.querySelector('#slider-tor-top');
+    const sliderTorMid = inspectorContent.querySelector('#slider-tor-mid');
+    const sliderTorBot = inspectorContent.querySelector('#slider-tor-bot');
+    const sliderWaveAmp = inspectorContent.querySelector('#slider-wave-amp');
 
     if (windTypeSelect) {
         windTypeSelect.addEventListener('change', (e) => {
             selectedObject.windZone.type = e.target.value;
-            if (e.target.value === 'tornado') {
-                selectedObject.mesh = Mesh.createTornadoVortex(Engine.gl);
-            }
+            updateInspectorPanel();
         });
     }
+
+    const updateWindBoxSize = () => {
+        if (!selectedObject.windZone) return;
+        const sx = parseFloat(windSizeX.value) || 1.0;
+        const sy = parseFloat(windSizeY.value) || 1.0;
+        const sz = parseFloat(windSizeZ.value) || 1.0;
+        selectedObject.windZone.size = [sx, sy, sz];
+    };
+
+    [windSizeX, windSizeY, windSizeZ].forEach(input => {
+        if (input) input.addEventListener('input', updateWindBoxSize);
+    });
+
+    if (inputParticleCount) {
+        inputParticleCount.addEventListener('input', (e) => {
+            const count = parseInt(e.target.value) || 100;
+            selectedObject.windZone.particleCount = count;
+            const lbl = inspectorContent.querySelector('#val-particle-count');
+            if (lbl) lbl.textContent = count;
+        });
+    }
+
     if (sliderWindStrength) {
         sliderWindStrength.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
@@ -498,12 +570,40 @@ function updateInspectorPanel() {
             if (lbl) lbl.textContent = val.toFixed(1);
         });
     }
-    if (sliderWindRadius) {
-        sliderWindRadius.addEventListener('input', (e) => {
+
+    if (sliderTorTop) {
+        sliderTorTop.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
-            selectedObject.windZone.radius = val;
-            const lbl = inspectorContent.querySelector('#val-wind-radius');
+            selectedObject.windZone.tornadoTopRadius = val;
+            const lbl = inspectorContent.querySelector('#val-tor-top');
             if (lbl) lbl.textContent = val.toFixed(1) + 'm';
+        });
+    }
+
+    if (sliderTorMid) {
+        sliderTorMid.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            selectedObject.windZone.tornadoMidRadius = val;
+            const lbl = inspectorContent.querySelector('#val-tor-mid');
+            if (lbl) lbl.textContent = val.toFixed(1) + 'm';
+        });
+    }
+
+    if (sliderTorBot) {
+        sliderTorBot.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            selectedObject.windZone.tornadoBottomRadius = val;
+            const lbl = inspectorContent.querySelector('#val-tor-bot');
+            if (lbl) lbl.textContent = val.toFixed(1) + 'm';
+        });
+    }
+
+    if (sliderWaveAmp) {
+        sliderWaveAmp.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            selectedObject.windZone.waveAmplitude = val;
+            const lbl = inspectorContent.querySelector('#val-wave-amp');
+            if (lbl) lbl.textContent = val.toFixed(2);
         });
     }
 }
@@ -741,7 +841,7 @@ function createPrimitiveMesh(type) {
         case 'ramp': return Mesh.createRamp(gl);
         case 'torus': return Mesh.createTorus(gl);
         case 'cloud': return Mesh.createCloud(gl);
-        case 'windzone': return Mesh.createTornadoVortex(gl);
+        case 'windzone': return null;
         case 'camera': return Mesh.createCinemaCamera(gl);
         case 'cube':
         default:
@@ -1209,7 +1309,6 @@ function main() {
                     const axisMap = { x: 0, y: 1, z: 2 };
                     const axisIdx = axisMap[activeGizmoAxis];
 
-                    // Project active 3D world axis into screen space to maintain 1:1 camera-relative movement
                     const viewMat = Engine.camera ? Engine.camera.getViewMatrix() : null;
                     let sign = 1.0;
 
@@ -1217,7 +1316,6 @@ function main() {
                         const axisWorld = [0, 0, 0];
                         axisWorld[axisIdx] = 1.0;
 
-                        // View matrix direction projection
                         const axisView = [
                             viewMat[0]*axisWorld[0] + viewMat[4]*axisWorld[1] + viewMat[8]*axisWorld[2],
                             viewMat[1]*axisWorld[0] + viewMat[5]*axisWorld[1] + viewMat[9]*axisWorld[2],
