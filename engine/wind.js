@@ -89,7 +89,7 @@ export class WindParticleSystem {
         return {
             zoneObj: zoneObj,
             isTornado: isTornado,
-            isCloudPuff: isTornado && (isSkyCloudRing || Math.random() < (wz.tornadoCloudDensity || 0.6)),
+            isCloudPuff: isTornado && isSkyCloudRing, // Only upper sky storm cloud ring has cloud puff textures
             isSkyCloudRing: isSkyCloudRing,
             position: [posX, posY, posZ],
             prevPosition: [posX, posY, posZ],
