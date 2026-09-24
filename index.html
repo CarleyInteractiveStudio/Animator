@@ -29,7 +29,10 @@
                 <div class="dropdown-menu">
                     <div class="dropdown-item" data-create="cube">Cubo</div>
                     <div class="dropdown-item" data-create="sphere">Esfera</div>
-                    <div class="dropdown-item" data-create="plane">Plano</div>
+                    <div class="dropdown-item" data-create="plane">Plano Simple</div>
+                    <div class="dropdown-item" data-create="deformable_plane" style="color: #2ecc71; font-weight: bold;">Plano Deformable (Grid)</div>
+                    <div class="dropdown-item" id="btn-open-terrain-modal" style="color: #2ecc71; font-weight: bold;">Terreno Smooth (Roblox Style)</div>
+                    <div class="dropdown-divider"></div>
                     <div class="dropdown-item" data-create="cylinder">Cilindro</div>
                     <div class="dropdown-item" data-create="cone">Cono</div>
                     <div class="dropdown-item" data-create="pyramid">Pirámide</div>
@@ -133,6 +136,97 @@
         <div id="inspector-panel" class="panel">
             <div class="panel-title">Inspector</div>
             <div class="panel-content"></div>
+        </div>
+    </div>
+
+    <!-- Modal: Generador de Terreno Procedimental -->
+    <div id="modal-terrain" class="modal-overlay" style="display: none;">
+        <div class="modal-card modal-large">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <h3>Generador Automático de Terreno 3D (Estilo Roblox Studio)</h3>
+                </div>
+                <button class="modal-close" id="close-terrain-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="env-settings-group">
+                    <div class="env-section-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                        <span>Dimensiones y Relieve de la Zona</span>
+                    </div>
+
+                    <div class="env-row-split">
+                        <div class="env-col">
+                            <label>Ancho (X): <span id="val-terrain-width" class="highlight-val">30m</span></label>
+                            <input type="range" id="slider-terrain-width" min="10" max="80" step="2" value="30" class="modern-range">
+                        </div>
+                        <div class="env-col">
+                            <label>Largo (Z): <span id="val-terrain-depth" class="highlight-val">30m</span></label>
+                            <input type="range" id="slider-terrain-depth" min="10" max="80" step="2" value="30" class="modern-range">
+                        </div>
+                    </div>
+
+                    <div class="env-row-split" style="margin-top: 8px;">
+                        <div class="env-col">
+                            <label>Altura de Montañas: <span id="val-terrain-height" class="highlight-val">4.5m</span></label>
+                            <input type="range" id="slider-terrain-height" min="0" max="15" step="0.5" value="4.5" class="modern-range">
+                        </div>
+                        <div class="env-col">
+                            <label>Rugosidad / Frecuencia:</label>
+                            <input type="range" id="slider-terrain-roughness" min="0.02" max="0.3" step="0.01" value="0.08" class="modern-range">
+                        </div>
+                    </div>
+
+                    <div class="env-row-split" style="margin-top: 8px;">
+                        <div class="env-col">
+                            <label>Semilla Aleatoria (Seed):</label>
+                            <input type="number" id="input-terrain-seed" value="1234" style="width: 100%; padding: 5px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 12px;">
+                        </div>
+                        <div class="env-col">
+                            <label>Nivel de Agua / Lago: <span id="val-terrain-water" class="highlight-val">0.5m</span></label>
+                            <input type="range" id="slider-terrain-water" min="-1" max="5" step="0.2" value="0.5" class="modern-range">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="env-settings-group" style="margin-top: 10px;">
+                    <div class="env-section-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                        <span>Vegetación y Bioma Procedural</span>
+                    </div>
+
+                    <div class="env-row-split">
+                        <div class="env-col">
+                            <label>Densidad de Árboles 3D:</label>
+                            <input type="range" id="slider-tree-density" min="0" max="50" step="2" value="16" class="modern-range">
+                        </div>
+                        <div class="env-col">
+                            <label>Densidad de Rocas 3D:</label>
+                            <input type="range" id="slider-rock-density" min="0" max="40" step="2" value="12" class="modern-range">
+                        </div>
+                    </div>
+
+                    <div class="env-row-split" style="margin-top: 8px;">
+                        <div class="env-col">
+                            <label>Densidad de Césped 3D:</label>
+                            <input type="range" id="slider-grass-density" min="0" max="60" step="5" value="25" class="modern-range">
+                        </div>
+                        <div class="env-col" style="display: flex; align-items: center; gap: 8px; margin-top: 16px;">
+                            <input type="checkbox" id="chk-terrain-water" checked style="accent-color: #007acc; cursor: pointer;">
+                            <label for="chk-terrain-water" style="font-size: 11px; color: #eee; cursor: pointer; font-weight: bold;">Generar Superficie de Lago / Agua</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
+                    <button id="btn-cancel-terrain" style="padding: 8px 16px; background: #333; color: #ccc; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 12px;">Cancelar</button>
+                    <button id="btn-generate-terrain" style="padding: 8px 20px; background: #2ecc71; color: #111; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        Generar Terreno Roblox
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -306,7 +400,10 @@
         <div class="context-menu-title">Crear Objeto 3D</div>
         <div class="context-menu-item" data-create="cube">Cubo</div>
         <div class="context-menu-item" data-create="sphere">Esfera</div>
-        <div class="context-menu-item" data-create="plane">Plano</div>
+        <div class="context-menu-item" data-create="plane">Plano Simple</div>
+        <div class="context-menu-item" data-create="deformable_plane" style="color: #2ecc71; font-weight: bold;">+ Plano Deformable (Grid)</div>
+        <div class="context-menu-item" id="ctx-open-terrain-modal" style="color: #2ecc71; font-weight: bold;">+ Terreno Smooth (Roblox Style)</div>
+        <div class="context-menu-divider"></div>
         <div class="context-menu-item" data-create="cylinder">Cilindro</div>
         <div class="context-menu-item" data-create="cone">Cono</div>
         <div class="context-menu-item" data-create="pyramid">Pirámide</div>

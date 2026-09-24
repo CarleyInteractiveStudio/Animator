@@ -13,6 +13,8 @@ let objectCounters = {
     cube: 1,
     sphere: 0,
     plane: 0,
+    deformable_plane: 0,
+    terrain: 0,
     cylinder: 0,
     cone: 0,
     pyramid: 0,
@@ -20,7 +22,11 @@ let objectCounters = {
     torus: 0,
     cloud: 0,
     windzone: 0,
-    camera: 0
+    camera: 0,
+    tree: 0,
+    rock: 0,
+    grass: 0,
+    water: 0
 };
 
 function setupResizers() {
@@ -668,6 +674,13 @@ function setupModals() {
     const btnOpenEnv = document.getElementById('btn-open-env-modal');
     const closeEnv = document.getElementById('close-env-modal');
 
+    const modalTerrain = document.getElementById('modal-terrain');
+    const btnOpenTerrain = document.getElementById('btn-open-terrain-modal');
+    const ctxOpenTerrain = document.getElementById('ctx-open-terrain-modal');
+    const closeTerrain = document.getElementById('close-terrain-modal');
+    const btnCancelTerrain = document.getElementById('btn-cancel-terrain');
+    const btnGenerateTerrain = document.getElementById('btn-generate-terrain');
+
     if (closeComp && modalComp) {
         closeComp.addEventListener('click', () => modalComp.style.display = 'none');
     }
@@ -678,6 +691,58 @@ function setupModals() {
 
     if (closeEnv && modalEnv) {
         closeEnv.addEventListener('click', () => modalEnv.style.display = 'none');
+    }
+
+    const openTerrainModal = () => {
+        if (modalTerrain) modalTerrain.style.display = 'flex';
+    };
+
+    if (btnOpenTerrain) btnOpenTerrain.addEventListener('click', openTerrainModal);
+    if (ctxOpenTerrain) ctxOpenTerrain.addEventListener('click', openTerrainModal);
+
+    if (closeTerrain && modalTerrain) {
+        closeTerrain.addEventListener('click', () => modalTerrain.style.display = 'none');
+    }
+    if (btnCancelTerrain && modalTerrain) {
+        btnCancelTerrain.addEventListener('click', () => modalTerrain.style.display = 'none');
+    }
+
+    // Modal terrain input labels update
+    const sliderW = document.getElementById('slider-terrain-width');
+    const sliderD = document.getElementById('slider-terrain-depth');
+    const sliderH = document.getElementById('slider-terrain-height');
+    const sliderWater = document.getElementById('slider-terrain-water');
+
+    if (sliderW) {
+        sliderW.addEventListener('input', (e) => {
+            const lbl = document.getElementById('val-terrain-width');
+            if (lbl) lbl.textContent = `${e.target.value}m`;
+        });
+    }
+    if (sliderD) {
+        sliderD.addEventListener('input', (e) => {
+            const lbl = document.getElementById('val-terrain-depth');
+            if (lbl) lbl.textContent = `${e.target.value}m`;
+        });
+    }
+    if (sliderH) {
+        sliderH.addEventListener('input', (e) => {
+            const lbl = document.getElementById('val-terrain-height');
+            if (lbl) lbl.textContent = `${parseFloat(e.target.value).toFixed(1)}m`;
+        });
+    }
+    if (sliderWater) {
+        sliderWater.addEventListener('input', (e) => {
+            const lbl = document.getElementById('val-terrain-water');
+            if (lbl) lbl.textContent = `${parseFloat(e.target.value).toFixed(1)}m`;
+        });
+    }
+
+    if (btnGenerateTerrain) {
+        btnGenerateTerrain.addEventListener('click', () => {
+            generateSmoothTerrainFromModal();
+            if (modalTerrain) modalTerrain.style.display = 'none';
+        });
     }
 
     const modalSettings = document.getElementById('modal-settings');
@@ -722,7 +787,6 @@ function setupModals() {
             if (modalComp) modalComp.style.display = 'none';
         });
     });
-
 
     const presetDark = document.getElementById('preset-dark');
     const presetSky = document.getElementById('preset-sky');
@@ -874,11 +938,123 @@ function setupModals() {
     }
 }
 
+function sampleTerrainHeight(mesh, x, z) {
+    if (!mesh || !mesh.terrainHeights) return 0;
+
+    const sub = mesh.terrainSubdivisions;
+    const halfW = mesh.terrainWidth / 2;
+    const halfD = mesh.terrainDepth / 2;
+
+    const normX = (x + halfW) / mesh.terrainWidth;
+    const normZ = (z + halfD) / mesh.terrainDepth;
+
+    const gridX = Math.max(0, Math.min(sub, Math.floor(normX * sub)));
+    const gridZ = Math.max(0, Math.min(sub, Math.floor(normZ * sub)));
+
+    const idx = gridZ * (sub + 1) + gridX;
+    return mesh.terrainHeights[idx] || 0;
+}
+
+function generateSmoothTerrainFromModal() {
+    const width = parseFloat(document.getElementById('slider-terrain-width').value) || 30;
+    const depth = parseFloat(document.getElementById('slider-terrain-depth').value) || 30;
+    const heightScale = parseFloat(document.getElementById('slider-terrain-height').value) || 4.5;
+    const noiseScale = parseFloat(document.getElementById('slider-terrain-roughness').value) || 0.08;
+    const seed = parseInt(document.getElementById('input-terrain-seed').value) || 1234;
+    const waterLevel = parseFloat(document.getElementById('slider-terrain-water').value) || 0.5;
+
+    const numTrees = parseInt(document.getElementById('slider-tree-density').value) || 16;
+    const numRocks = parseInt(document.getElementById('slider-rock-density').value) || 12;
+    const numGrass = parseInt(document.getElementById('slider-grass-density').value) || 25;
+    const hasWater = document.getElementById('chk-terrain-water').checked;
+
+    objectCounters.terrain = (objectCounters.terrain || 0) + 1;
+    const terrainName = `Terreno Smooth ${objectCounters.terrain}`;
+
+    const terrainMesh = Mesh.createSmoothTerrain(Engine.gl, {
+        width, depth, heightScale, noiseScale, seed, waterLevel, subdivisions: 48
+    });
+    const terrainObj = new GameObject(terrainName, terrainMesh);
+    Engine.scene.addGameObject(terrainObj);
+
+    function rnd(s) {
+        const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
+        return x - Math.floor(x);
+    }
+
+    // Scatter Trees
+    for (let i = 0; i < numTrees; i++) {
+        const rx = (rnd(seed + i * 3.1) - 0.5) * (width * 0.85);
+        const rz = (rnd(seed + i * 7.4) - 0.5) * (depth * 0.85);
+        const ry = sampleTerrainHeight(terrainMesh, rx, rz);
+
+        if (ry >= waterLevel + 0.2) {
+            objectCounters.tree++;
+            const treeMesh = Mesh.createTree(Engine.gl, seed + i);
+            const treeObj = new GameObject(`Árbol ${objectCounters.tree}`, treeMesh);
+            vec3.set(treeObj.transform.position, rx, ry, rz);
+            const scaleVar = 0.8 + rnd(seed + i * 2) * 0.5;
+            treeObj.transform.scale = [scaleVar, scaleVar, scaleVar];
+            treeObj.windElasticity = 0.4;
+            Engine.scene.addGameObject(treeObj);
+        }
+    }
+
+    // Scatter Rocks
+    for (let i = 0; i < numRocks; i++) {
+        const rx = (rnd(seed * 2 + i * 4.3) - 0.5) * (width * 0.88);
+        const rz = (rnd(seed * 2 + i * 8.1) - 0.5) * (depth * 0.88);
+        const ry = sampleTerrainHeight(terrainMesh, rx, rz);
+
+        objectCounters.rock++;
+        const rockMesh = Mesh.createRock(Engine.gl, seed + i * 5);
+        const rockObj = new GameObject(`Roca ${objectCounters.rock}`, rockMesh);
+        vec3.set(rockObj.transform.position, rx, ry, rz);
+        const scaleVar = 0.6 + rnd(seed + i * 3) * 0.8;
+        rockObj.transform.scale = [scaleVar, scaleVar * 0.7, scaleVar];
+        Engine.scene.addGameObject(rockObj);
+    }
+
+    // Scatter Grass Tufts
+    for (let i = 0; i < numGrass; i++) {
+        const rx = (rnd(seed * 3 + i * 5.2) - 0.5) * (width * 0.85);
+        const rz = (rnd(seed * 3 + i * 9.3) - 0.5) * (depth * 0.85);
+        const ry = sampleTerrainHeight(terrainMesh, rx, rz);
+
+        if (ry >= waterLevel + 0.1) {
+            objectCounters.grass++;
+            const grassMesh = Mesh.createGrassTuft(Engine.gl, seed + i);
+            const grassObj = new GameObject(`Césped ${objectCounters.grass}`, grassMesh);
+            vec3.set(grassObj.transform.position, rx, ry, rz);
+            grassObj.windElasticity = 0.6;
+            Engine.scene.addGameObject(grassObj);
+        }
+    }
+
+    // Optional Water Plane
+    if (hasWater) {
+        objectCounters.water++;
+        const waterMesh = Mesh.createPlane(Engine.gl);
+        const waterObj = new GameObject(`Lago / Agua ${objectCounters.water}`, waterMesh);
+        vec3.set(waterObj.transform.position, 0, waterLevel, 0);
+        waterObj.transform.scale = [width / 2, 1, depth / 2];
+        waterObj.material = {
+            color: [0.15, 0.55, 0.85, 0.75],
+            metallic: 0.8,
+            roughness: 0.1
+        };
+        Engine.scene.addGameObject(waterObj);
+    }
+
+    selectObject(terrainObj);
+}
+
 function createPrimitiveMesh(type) {
     const gl = Engine.gl;
     switch (type) {
         case 'sphere': return Mesh.createSphere(gl);
         case 'plane': return Mesh.createPlane(gl);
+        case 'deformable_plane': return Mesh.createDeformablePlane(gl, 32, 16);
         case 'cylinder': return Mesh.createCylinder(gl);
         case 'cone': return Mesh.createCone(gl);
         case 'pyramid': return Mesh.createPyramid(gl);
@@ -899,6 +1075,7 @@ function getPrimitiveName(type) {
     switch (type) {
         case 'sphere': return `Esfera ${num}`;
         case 'plane': return `Plano ${num}`;
+        case 'deformable_plane': return `Plano Deformable ${num}`;
         case 'cylinder': return `Cilindro ${num}`;
         case 'cone': return `Cono ${num}`;
         case 'pyramid': return `Pirámide ${num}`;

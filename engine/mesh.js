@@ -296,25 +296,22 @@ export class Mesh {
         const hw = width * 0.5;
         const hh = height;
         const hd = depth * 0.5;
-        const rad = 0.012; // Fine, precise game engine gizmo lines
-        const r = 0.2, g = 0.95, b = 0.3, a = 0.95; // Vibrant game engine green
+        const rad = 0.012;
+        const r = 0.2, g = 0.95, b = 0.3, a = 0.95;
 
         const corners = [
             [-hw, 0,  hd], [ hw, 0,  hd], [ hw, 0, -hd], [-hw, 0, -hd],
             [-hw, hh, hd], [ hw, hh, hd], [ hw, hh, -hd], [-hw, hh, -hd]
         ];
 
-        // Bottom quad lines
         for (let i = 0; i < 4; i++) {
             const next = (i + 1) % 4;
             addThickLine(corners[i][0], corners[i][1], corners[i][2], corners[next][0], corners[next][1], corners[next][2], rad, r, g, b, a);
         }
-        // Top quad lines
         for (let i = 0; i < 4; i++) {
             const next = (i + 1) % 4 + 4;
             addThickLine(corners[i + 4][0], corners[i + 4][1], corners[i + 4][2], corners[next][0], corners[next][1], corners[next][2], rad, r, g, b, a);
         }
-        // Vertical pillar lines
         for (let i = 0; i < 4; i++) {
             addThickLine(corners[i][0], corners[i][1], corners[i][2], corners[i + 4][0], corners[i + 4][1], corners[i + 4][2], rad, r, g, b, a);
         }
@@ -331,6 +328,284 @@ export class Mesh {
         ];
         const indices = [0, 1, 2, 0, 2, 3];
         return new Mesh(gl, vertices, indices);
+    }
+
+    static createDeformablePlane(gl, subdivisions = 32, size = 16) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        const halfSize = size / 2;
+        const step = size / subdivisions;
+
+        for (let z = 0; z <= subdivisions; z++) {
+            const posZ = -halfSize + z * step;
+            for (let x = 0; x <= subdivisions; x++) {
+                const posX = -halfSize + x * step;
+                vertices.push(posX, 0.0, posZ);
+                colors.push(0.7, 0.75, 0.8, 1.0);
+            }
+        }
+
+        for (let z = 0; z < subdivisions; z++) {
+            for (let x = 0; x < subdivisions; x++) {
+                const row1 = z * (subdivisions + 1);
+                const row2 = (z + 1) * (subdivisions + 1);
+
+                const i1 = row1 + x;
+                const i2 = row1 + x + 1;
+                const i3 = row2 + x;
+                const i4 = row2 + x + 1;
+
+                indices.push(i1, i3, i2);
+                indices.push(i2, i3, i4);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
+    static createSmoothTerrain(gl, options = {}) {
+        const width = options.width || 30;
+        const depth = options.depth || 30;
+        const heightScale = options.heightScale !== undefined ? options.heightScale : 4.0;
+        const noiseScale = options.noiseScale || 0.1;
+        const seed = options.seed || 1234;
+        const subdivisions = options.subdivisions || 48;
+        const waterLevel = options.waterLevel !== undefined ? options.waterLevel : 0.5;
+
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        function rnd(s) {
+            const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        }
+
+        function noise2D(x, z) {
+            const sx = x * noiseScale + (seed % 100) * 1.7;
+            const sz = z * noiseScale + (seed % 100) * 2.3;
+
+            let h = 0.5 * Math.sin(sx) + 0.5 * Math.cos(sz);
+            h += 0.25 * Math.sin(sx * 2.1 + sz * 1.5);
+            h += 0.125 * Math.cos(sx * 4.3 - sz * 3.1);
+
+            return Math.max(-0.2, h);
+        }
+
+        const halfW = width / 2;
+        const halfD = depth / 2;
+        const stepX = width / subdivisions;
+        const stepZ = depth / subdivisions;
+
+        const heights = [];
+
+        for (let z = 0; z <= subdivisions; z++) {
+            const posZ = -halfD + z * stepZ;
+            for (let x = 0; x <= subdivisions; x++) {
+                const posX = -halfW + x * stepX;
+                const rawH = noise2D(posX, posZ);
+                const posY = rawH * heightScale;
+
+                vertices.push(posX, posY, posZ);
+                heights.push(posY);
+
+                // Biome coloring (Beach Sand, Lush Grass, Mountain Rock, Snow Cap)
+                let r = 0.3, g = 0.7, b = 0.3, a = 1.0;
+                if (posY < waterLevel + 0.3) {
+                    // Sand / Beach
+                    r = 0.88; g = 0.82; b = 0.55;
+                } else if (posY < heightScale * 0.5) {
+                    // Grass / Valley
+                    const grassVar = rnd(posX * 10 + posZ * 5) * 0.1;
+                    r = 0.25 + grassVar; g = 0.68 + grassVar; b = 0.28;
+                } else if (posY < heightScale * 0.8) {
+                    // Mountain Stone / Rock
+                    const rockVar = rnd(posX * 8 + posZ * 3) * 0.08;
+                    r = 0.48 + rockVar; g = 0.48 + rockVar; b = 0.52 + rockVar;
+                } else {
+                    // Snow Top
+                    r = 0.92; g = 0.95; b = 0.98;
+                }
+
+                colors.push(r, g, b, a);
+            }
+        }
+
+        for (let z = 0; z < subdivisions; z++) {
+            for (let x = 0; x < subdivisions; x++) {
+                const row1 = z * (subdivisions + 1);
+                const row2 = (z + 1) * (subdivisions + 1);
+
+                const i1 = row1 + x;
+                const i2 = row1 + x + 1;
+                const i3 = row2 + x;
+                const i4 = row2 + x + 1;
+
+                indices.push(i1, i3, i2);
+                indices.push(i2, i3, i4);
+            }
+        }
+
+        const mesh = new Mesh(gl, vertices, indices, null, colors);
+        mesh.terrainHeights = heights;
+        mesh.terrainSubdivisions = subdivisions;
+        mesh.terrainWidth = width;
+        mesh.terrainDepth = depth;
+        return mesh;
+    }
+
+    static createTree(gl, seed = 1) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        function rnd(s) {
+            const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        }
+
+        // Trunk (Cylinder/Cone)
+        const trunkHeight = 1.8 + rnd(seed * 1.5) * 0.6;
+        const trunkRadiusBottom = 0.22;
+        const trunkRadiusTop = 0.12;
+        const trunkSegs = 8;
+
+        for (let i = 0; i <= trunkSegs; i++) {
+            const a = (i * Math.PI * 2) / trunkSegs;
+            const cosA = Math.cos(a);
+            const sinA = Math.sin(a);
+
+            // Bottom vertex
+            vertices.push(cosA * trunkRadiusBottom, 0, sinA * trunkRadiusBottom);
+            colors.push(0.42, 0.26, 0.15, 1.0);
+
+            // Top vertex
+            vertices.push(cosA * trunkRadiusTop, trunkHeight, sinA * trunkRadiusTop);
+            colors.push(0.38, 0.22, 0.12, 1.0);
+        }
+
+        for (let i = 0; i < trunkSegs; i++) {
+            const b = i * 2;
+            indices.push(b, b + 1, b + 2);
+            indices.push(b + 1, b + 3, b + 2);
+        }
+
+        // Foliage (3 layered spheres / cones)
+        const layers = 3;
+        for (let l = 0; l < layers; l++) {
+            const layerY = trunkHeight * 0.7 + l * 0.7;
+            const layerRadius = 0.9 - l * 0.2;
+            const layerHeight = 1.1 - l * 0.15;
+            const fSegs = 10;
+
+            const baseIndex = vertices.length / 3;
+
+            // Tip
+            vertices.push(0, layerY + layerHeight, 0);
+            colors.push(0.18, 0.65 - l * 0.08, 0.22, 1.0);
+
+            for (let i = 0; i <= fSegs; i++) {
+                const a = (i * Math.PI * 2) / fSegs;
+                const bump = 1.0 + (rnd(seed * (i + l * 10)) - 0.5) * 0.2;
+                const rx = Math.cos(a) * layerRadius * bump;
+                const rz = Math.sin(a) * layerRadius * bump;
+
+                vertices.push(rx, layerY, rz);
+                colors.push(0.15, 0.58 - l * 0.05, 0.2, 1.0);
+            }
+
+            for (let i = 0; i < fSegs; i++) {
+                indices.push(baseIndex, baseIndex + 1 + i, baseIndex + 2 + i);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
+    static createRock(gl, seed = 1) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        function rnd(s) {
+            const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        }
+
+        const latBands = 8;
+        const longBands = 8;
+        const radius = 0.6;
+
+        for (let lat = 0; lat <= latBands; lat++) {
+            const theta = (lat * Math.PI) / latBands;
+            const sinTheta = Math.sin(theta);
+            const cosTheta = Math.cos(theta);
+
+            for (let lon = 0; lon <= longBands; lon++) {
+                const phi = (lon * 2 * Math.PI) / longBands;
+                const nx = Math.cos(phi) * sinTheta;
+                const ny = cosTheta;
+                const nz = Math.sin(phi) * sinTheta;
+
+                const deform = 1.0 + (rnd(seed * 3.1 + lat * 2 + lon * 5) - 0.5) * 0.4;
+                const px = nx * radius * deform * 1.2;
+                const py = Math.max(0, ny * radius * deform * 0.8);
+                const pz = nz * radius * deform;
+
+                vertices.push(px, py, pz);
+
+                const cVar = (rnd(seed * 1.7 + lat + lon) - 0.5) * 0.1;
+                colors.push(0.5 + cVar, 0.5 + cVar, 0.54 + cVar, 1.0);
+            }
+        }
+
+        for (let lat = 0; lat < latBands; lat++) {
+            for (let lon = 0; lon < longBands; lon++) {
+                const first = lat * (longBands + 1) + lon;
+                const second = first + longBands + 1;
+
+                indices.push(first, first + 1, second);
+                indices.push(second, first + 1, second + 1);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
+    static createGrassTuft(gl, seed = 1) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        const blades = 5;
+        for (let b = 0; b < blades; b++) {
+            const angle = (b / blades) * Math.PI;
+            const height = 0.5 + (b % 3) * 0.15;
+            const width = 0.08;
+
+            const cosA = Math.cos(angle) * width;
+            const sinA = Math.sin(angle) * width;
+
+            const baseIdx = vertices.length / 3;
+
+            // Base left & right
+            vertices.push(-cosA, 0, -sinA);
+            colors.push(0.2, 0.55, 0.15, 1.0);
+
+            vertices.push(cosA, 0, sinA);
+            colors.push(0.2, 0.55, 0.15, 1.0);
+
+            // Tip
+            const lean = (b % 2 === 0 ? 0.15 : -0.15);
+            vertices.push(sinA * lean, height, cosA * lean);
+            colors.push(0.35, 0.8, 0.25, 1.0);
+
+            indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors);
     }
 
     static createSphere(gl, radius = 0.5, latBands = 16, longBands = 16) {
@@ -658,8 +933,6 @@ export class Mesh {
     }
 
     static createCinemaCamera(gl) {
-        // Professional AAA Game Engine Camera Visualizer (Unreal / Unity style)
-        // Green fine wireframe lines with rectangular body, lens frustum frame, and view pyramid
         const vertices = [];
         const indices = [];
         const colors = [];
@@ -700,16 +973,14 @@ export class Mesh {
             for (let i = 0; i < 8; i++) colors.push(r, g, b, a);
         }
 
-        const cr = 0.2, cg = 0.95, cb = 0.3; // Game engine vibrant green
-        const rad = 0.012; // Finer thickness
+        const cr = 0.2, cg = 0.95, cb = 0.3;
+        const rad = 0.012;
 
-        // 1. Camera Body Box (Back Z = +0.5 to Front Z = 0.0)
         const bw = 0.4, bh = 0.28, bd = 0.5;
         const bCorners = [
             [-bw, -bh, 0.0], [ bw, -bh, 0.0], [ bw,  bh, 0.0], [-bw,  bh, 0.0],
             [-bw, -bh, bd ], [ bw, -bh, bd ], [ bw,  bh, bd ], [-bw,  bh, bd ]
         ];
-        // Front & back quads of camera body
         for (let i = 0; i < 4; i++) {
             const next = (i + 1) % 4;
             addThickLine(bCorners[i][0], bCorners[i][1], bCorners[i][2], bCorners[next][0], bCorners[next][1], bCorners[next][2], rad, cr, cg, cb);
@@ -717,7 +988,6 @@ export class Mesh {
             addThickLine(bCorners[i][0], bCorners[i][1], bCorners[i][2], bCorners[i+4][0], bCorners[i+4][1], bCorners[i+4][2], rad, cr, cg, cb);
         }
 
-        // 2. Camera Front Lens Cone / Box extending slightly forward to Z = -0.2
         const lw = 0.22, lh = 0.16, lz = -0.2;
         const lCorners = [
             [-lw, -lh, lz], [ lw, -lh, lz], [ lw,  lh, lz], [-lw,  lh, lz]
@@ -728,19 +998,16 @@ export class Mesh {
             addThickLine(bCorners[i][0] * 0.6, bCorners[i][1] * 0.6, 0.0, lCorners[i][0], lCorners[i][1], lCorners[i][2], rad, cr, cg, cb);
         }
 
-        // 3. Game Engine View Frustum Pyramid extending from lens corners to large view plane (-Z = -2.5)
         const fw = 1.3, fh = 0.85, fz = -2.5;
         const fCorners = [
             [-fw, -fh, fz], [ fw, -fh, fz], [ fw,  fh, fz], [-fw,  fh, fz]
         ];
-        // 4 pyramid lines from lens corners to view frame
         for (let i = 0; i < 4; i++) {
             const next = (i + 1) % 4;
             addThickLine(lCorners[i][0], lCorners[i][1], lCorners[i][2], fCorners[i][0], fCorners[i][1], fCorners[i][2], rad, cr, cg, cb);
             addThickLine(fCorners[i][0], fCorners[i][1], fCorners[i][2], fCorners[next][0], fCorners[next][1], fCorners[next][2], rad, cr, cg, cb);
         }
 
-        // 4. Top orientation marker pyramid on top of camera
         addThickLine(0, bh, bd * 0.5, 0, bh + 0.3, bd * 0.5, rad, cr, cg, cb);
         addThickLine(-bw * 0.4, bh, bd * 0.5, 0, bh + 0.3, bd * 0.5, rad, cr, cg, cb);
         addThickLine(bw * 0.4, bh, bd * 0.5, 0, bh + 0.3, bd * 0.5, rad, cr, cg, cb);
