@@ -324,25 +324,62 @@ export function initWebGL(canvas) {
         uniform float u_cloudTranslucency;
         uniform vec3 u_cloudTint;
 
-        // Procedural Checkerboard
-        vec4 getCheckerboard(vec2 st, float scale) {
-            vec2 chk = floor(st * scale);
-            float f = mod(chk.x + chk.y, 2.0);
-            return mix(vec4(0.1, 0.1, 0.1, 1.0), vec4(0.9, 0.9, 0.9, 1.0), f);
+        // 3D Volumetric Hash & Noise for per-pixel continuous surface texturing
+        float hash3D(vec3 p) {
+            p = fract(p * vec3(443.897, 441.423, 437.195));
+            p += dot(p, p.yzx + 19.19);
+            return fract((p.x + p.y) * p.z);
         }
 
-        // Noise
-        float hash(vec2 p) {
-            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        float noise3D(vec3 p) {
+            vec3 i = floor(p);
+            vec3 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+
+            return mix(
+                mix(mix(hash3D(i + vec3(0,0,0)), hash3D(i + vec3(1,0,0)), f.x),
+                    mix(hash3D(i + vec3(0,1,0)), hash3D(i + vec3(1,1,0)), f.x), f.y),
+                mix(mix(hash3D(i + vec3(0,0,1)), hash3D(i + vec3(1,0,1)), f.x),
+                    mix(hash3D(i + vec3(0,1,1)), hash3D(i + vec3(1,1,1)), f.x), f.y), f.z);
         }
 
         float noise(vec2 p) {
-            vec2 i = floor(p);
-            vec2 f = fract(p);
-            vec2 u = f * f * (3.0 - 2.0 * f);
+            return noise3D(vec3(p, 0.0));
+        }
 
-            return mix(mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
-                       mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+        // Per-Pixel Triplanar Projection mapping for seamless textures across all angles and meshes
+        vec4 getTriplanarCheckerboard(vec3 pos, vec3 norm, float scale) {
+            vec3 blending = pow(abs(norm), vec3(4.0));
+            blending = max(blending, 0.00001);
+            blending /= (blending.x + blending.y + blending.z);
+
+            vec2 chkX = floor(pos.yz * scale);
+            float fX = mod(chkX.x + chkX.y, 2.0);
+
+            vec2 chkY = floor(pos.xz * scale);
+            float fY = mod(chkY.x + chkY.y, 2.0);
+
+            vec2 chkZ = floor(pos.xy * scale);
+            float fZ = mod(chkZ.x + chkZ.y, 2.0);
+
+            float colX = mix(0.1, 0.9, fX);
+            float colY = mix(0.1, 0.9, fY);
+            float colZ = mix(0.1, 0.9, fZ);
+
+            float finalVal = colX * blending.x + colY * blending.y + colZ * blending.z;
+            return vec4(vec3(finalVal), 1.0);
+        }
+
+        float getTriplanarNoise(vec3 pos, vec3 norm, float scale) {
+            vec3 blending = pow(abs(norm), vec3(4.0));
+            blending = max(blending, 0.00001);
+            blending /= (blending.x + blending.y + blending.z);
+
+            float nX = noise3D(pos.yzx * scale);
+            float nY = noise3D(pos.xzy * scale + vec3(17.1, 31.4, 9.2));
+            float nZ = noise3D(pos.xyz * scale + vec3(5.3, 88.2, 12.8));
+
+            return nX * blending.x + nY * blending.y + nZ * blending.z;
         }
 
         void main() {
@@ -377,12 +414,18 @@ export function initWebGL(canvas) {
                 return;
             }
 
+            vec3 normNorm = normalize(v_normal);
+
             if (u_textureType == 1) {
-                vec2 uv = v_texcoord.x == 0.0 && v_texcoord.y == 0.0 ? v_worldPosition.xz : v_texcoord;
-                baseColor *= getCheckerboard(uv, u_textureScale);
+                if (v_texcoord.x != 0.0 || v_texcoord.y != 0.0) {
+                    vec2 chk = floor(v_texcoord * u_textureScale);
+                    float f = mod(chk.x + chk.y, 2.0);
+                    baseColor *= mix(vec4(0.1, 0.1, 0.1, 1.0), vec4(0.9, 0.9, 0.9, 1.0), f);
+                } else {
+                    baseColor *= getTriplanarCheckerboard(v_worldPosition, normNorm, u_textureScale);
+                }
             } else if (u_textureType == 2) {
-                vec2 uv = v_texcoord.x == 0.0 && v_texcoord.y == 0.0 ? v_worldPosition.xz : v_texcoord;
-                float n = noise(uv * u_textureScale);
+                float n = getTriplanarNoise(v_worldPosition, normNorm, u_textureScale);
                 baseColor *= vec4(vec3(n), 1.0);
             }
 

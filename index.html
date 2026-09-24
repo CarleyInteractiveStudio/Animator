@@ -154,39 +154,6 @@
                     </div>
                 </div>
 
-                <div id="cloud-settings-container" class="env-settings-group" style="margin-top: 10px;">
-                    <div class="env-section-title">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4da6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-                        <span>Generación de Nubes Volumétricas en el Cielo</span>
-                    </div>
-
-                    <div class="env-row-split">
-                        <div class="env-col">
-                            <label>Cobertura de Nubes:</label>
-                            <input type="range" id="slider-cloud-coverage" min="0.0" max="1.0" step="0.02" value="0.55" class="modern-range">
-                        </div>
-                        <div class="env-col">
-                            <label>Densidad / Esponjosidad:</label>
-                            <input type="range" id="slider-cloud-density" min="0.1" max="2.0" step="0.1" value="1.0" class="modern-range">
-                        </div>
-                    </div>
-
-                    <div class="env-row-split" style="margin-top: 8px;">
-                        <div class="env-col">
-                            <label>Altitud de Capa:</label>
-                            <input type="range" id="slider-cloud-altitude" min="0.5" max="3.0" step="0.1" value="1.0" class="modern-range">
-                        </div>
-                        <div class="env-col">
-                            <label>Velocidad del Viento:</label>
-                            <input type="range" id="slider-wind-speed" min="0.0" max="3.0" step="0.1" value="0.5" class="modern-range">
-                        </div>
-                    </div>
-
-                    <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="chk-sky-clouds" checked style="accent-color: #007acc; cursor: pointer;">
-                        <label for="chk-sky-clouds" style="font-size: 11px; color: #eee; cursor: pointer;">Mostrar / Ocultar Nubes de la Bóveda Celeste</label>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -255,6 +222,40 @@
                         <div class="env-col">
                             <label>Brillo de Estrellas (Noche):</label>
                             <input type="range" id="slider-star-intensity" min="0.0" max="2.0" step="0.1" value="1.0" class="modern-range">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cloud-settings-container" class="env-settings-group" style="margin-top: 10px;">
+                    <div class="env-section-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4da6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+                        <span>Nubes Atmosféricas de la Bóveda Celeste</span>
+                    </div>
+
+                    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="chk-sky-clouds" checked style="accent-color: #007acc; cursor: pointer;">
+                        <label for="chk-sky-clouds" style="font-size: 11px; color: #eee; cursor: pointer; font-weight: bold;">Mostrar Nubes en el Fondo del Cielo</label>
+                    </div>
+
+                    <div class="env-row-split">
+                        <div class="env-col">
+                            <label>Cobertura de Nubes:</label>
+                            <input type="range" id="slider-cloud-coverage" min="0.0" max="1.0" step="0.02" value="0.55" class="modern-range">
+                        </div>
+                        <div class="env-col">
+                            <label>Densidad / Esponjosidad:</label>
+                            <input type="range" id="slider-cloud-density" min="0.1" max="2.0" step="0.1" value="1.0" class="modern-range">
+                        </div>
+                    </div>
+
+                    <div class="env-row-split" style="margin-top: 8px;">
+                        <div class="env-col">
+                            <label>Altitud de Capa:</label>
+                            <input type="range" id="slider-cloud-altitude" min="0.5" max="3.0" step="0.1" value="1.0" class="modern-range">
+                        </div>
+                        <div class="env-col">
+                            <label>Velocidad del Viento:</label>
+                            <input type="range" id="slider-wind-speed" min="0.0" max="3.0" step="0.1" value="0.5" class="modern-range">
                         </div>
                     </div>
                 </div>
