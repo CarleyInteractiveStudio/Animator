@@ -35,6 +35,8 @@
                     <div class="dropdown-item" data-create="pyramid">Pirámide</div>
                     <div class="dropdown-item" data-create="ramp">Prisma / Rampa</div>
                     <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
+                    <div class="dropdown-item" data-create="cloud">Nube 3D Volumétrica</div>
+                    <div class="dropdown-item" data-create="windzone" style="color: #00d2ff; font-weight: bold;">Zona de Viento 3D</div>
                     <div class="dropdown-divider"></div>
                     <div class="dropdown-item" id="btn-add-bone">Armadura / Hueso</div>
                 </div>
@@ -45,8 +47,15 @@
                     <div class="dropdown-item">Restablecer Layout</div>
                 </div>
             </div>
-            <div class="menu-item" id="btn-open-env-modal">
-                <span style="color: #4da6ff; font-weight: bold;">🌌 Entorno / Skybox</span>
+            <div class="menu-item">
+                <span>Configuración</span>
+                <div class="dropdown-menu">
+                    <div class="dropdown-item" id="btn-open-settings-modal">Ajustes de Grabación y Motor</div>
+                </div>
+            </div>
+            <div class="menu-item" id="btn-open-env-modal" style="display: flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4da6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                <span style="color: #4da6ff; font-weight: bold;">Entorno / Skybox</span>
             </div>
         </div>
         <div class="status-bar" id="status-mode">Modo Objeto</div>
@@ -54,22 +63,7 @@
 
     <div id="app-container">
         <div id="jerarquia-panel" class="panel">
-            <div class="panel-header-actions">
-                <div class="panel-title">Jerarquía</div>
-                <div class="menu-item add-btn">
-                    <span>+ Crear</span>
-                    <div class="dropdown-menu">
-                        <div class="dropdown-item" data-create="cube">Cubo</div>
-                        <div class="dropdown-item" data-create="sphere">Esfera</div>
-                        <div class="dropdown-item" data-create="plane">Plano</div>
-                        <div class="dropdown-item" data-create="cylinder">Cilindro</div>
-                        <div class="dropdown-item" data-create="cone">Cono</div>
-                        <div class="dropdown-item" data-create="pyramid">Pirámide</div>
-                        <div class="dropdown-item" data-create="ramp">Prisma / Rampa</div>
-                        <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
-                    </div>
-                </div>
-            </div>
+            <div class="panel-title">Jerarquía</div>
             <div class="panel-content"></div>
         </div>
 
@@ -77,7 +71,10 @@
 
         <div id="visor-panel" class="panel">
             <div class="panel-title">Visor 3D</div>
-            <div id="viewport-toolbar">
+            <div id="viewport-toolbar" class="draggable-widget">
+                <div class="drag-handle" title="Arrastrar Barra de Herramientas">
+                    <svg width="10" height="14" viewBox="0 0 10 14" fill="#888"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/><circle cx="3" cy="11" r="1.5"/><circle cx="7" cy="11" r="1.5"/></svg>
+                </div>
                 <div class="tool-category" id="cat-transform">
                     <button class="tool-btn active" title="Transformación">
                         <svg class="tool-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13 6v5h5V8.5L22 12l-4 3.5V13h-5v5h2.5L12 22l-3.5-4H11v-5H6v2.5L2 12l4-3.5V11h5V6H8.5L12 2l3.5 4H13z"/></svg>
@@ -114,6 +111,20 @@
                     </div>
                 </div>
             </div>
+
+            <div id="simulation-toolbar" class="draggable-widget">
+                <div class="drag-handle" title="Arrastrar Controles de Simulación">
+                    <svg width="10" height="14" viewBox="0 0 10 14" fill="#888"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/><circle cx="3" cy="11" r="1.5"/><circle cx="7" cy="11" r="1.5"/></svg>
+                </div>
+                <button id="btn-play-sim" class="play-control-btn" title="Iniciar / Pausar Simulación y Viento">
+                    <svg id="play-sim-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <span id="play-sim-text">Play</span>
+                </button>
+                <button id="btn-record-sim" class="record-control-btn" title="Grabar Video de la Escena">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8" fill="#ff4d4d"/></svg>
+                    <span id="record-sim-text">Grabar</span>
+                </button>
+            </div>
             <div class="panel-content"></div>
         </div>
 
@@ -129,34 +140,53 @@
     <div id="modal-component" class="modal-overlay" style="display: none;">
         <div class="modal-card">
             <div class="modal-header">
-                <h3>🧩 Añadir Componente a Objeto</h3>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4da6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                    <h3>Añadir Componente a Objeto</h3>
+                </div>
                 <button class="modal-close" id="close-component-modal">&times;</button>
             </div>
             <div class="modal-body">
-                <input type="text" id="component-search" placeholder="🔍 Buscar componente (God Rays, Oscuridad, Material)..." class="modal-search">
+                <input type="text" id="component-search" placeholder="Buscar componente (God Rays, Oscuridad, Material)..." class="modal-search">
                 <div class="component-grid">
                     <div class="component-card" data-add-comp="godrays">
-                        <div class="comp-icon">☀️</div>
+                        <div class="comp-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f1c40f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                        </div>
                         <div class="comp-info">
                             <h4>Luz Volumétrica (God Rays)</h4>
                             <p>Efecto de rayos de luz de marcha de rayos (*Ray-marching*) entrando por ventanas y aperturas.</p>
                         </div>
                     </div>
                     <div class="component-card" data-add-comp="darkness">
-                        <div class="comp-icon">🌑</div>
+                        <div class="comp-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9b59b6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                        </div>
                         <div class="comp-info">
                             <h4>Zona de Oscuridad y Niebla</h4>
                             <p>Volumen de absorción/cancelación de luz para sombras profundas y penumbras en personajes o zonas.</p>
                         </div>
                     </div>
                     <div class="component-card" data-add-comp="material">
-                        <div class="comp-icon">🎨</div>
+                        <div class="comp-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e67e22" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.92 0 1.7-.71 1.7-1.63 0-.43-.17-.83-.44-1.13-.27-.3-.44-.71-.44-1.14 0-.92.78-1.7 1.7-1.7h2.18c2.86 0 5.3-2.24 5.3-5.1C22 6.4 17.5 2 12 2z"/></svg>
+                        </div>
                         <div class="comp-info">
                             <h4>Material PBR & Texturas Procedimentales</h4>
                             <p>Controles de metálico, rugosidad, tablero de ajedrez y ruido Perlin procedimental.</p>
                         </div>
                     </div>
+                    <div class="component-card" data-add-comp="wind">
+                        <div class="comp-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00d2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>
+                        </div>
+                        <div class="comp-info">
+                            <h4>Zona de Viento 3D</h4>
+                            <p>Campo de viento con modos Brisa, Tornado/Vórtice y Ráfagas para mover y deformar objetos y nubes.</p>
+                        </div>
+                    </div>
                 </div>
+
             </div>
         </div>
     </div>
@@ -165,27 +195,162 @@
     <div id="modal-environment" class="modal-overlay" style="display: none;">
         <div class="modal-card modal-large">
             <div class="modal-header">
-                <h3>🌌 Configuración de Entorno y Skybox</h3>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4da6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                    <h3>Configuración de Entorno y Skybox 3D</h3>
+                </div>
                 <button class="modal-close" id="close-env-modal">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="preset-selector-grid">
                     <div class="preset-card active" id="preset-dark">
                         <div class="preset-preview dark-preview"></div>
-                        <span>Oscuro Profundo</span>
+                        <span>Oscuro Studio</span>
                     </div>
                     <div class="preset-card" id="preset-sky">
                         <div class="preset-preview sky-preview"></div>
-                        <span>Cielo EEVEE / Gradiente</span>
+                        <span>Cielo 3D Dinámico</span>
                     </div>
                     <div class="preset-card" id="preset-custom">
-                        <div class="preset-preview custom-preview">🌄</div>
-                        <span>HDRI / Imagen Personalizada</span>
+                        <div class="preset-preview custom-preview">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        </div>
+                        <span>HDRI / Imagen Custom</span>
                     </div>
                 </div>
-                <div class="env-controls-section">
-                    <label>Subir Imagen HDRI o Fondo Custom:</label>
+
+                <div id="sky-settings-container" class="env-settings-group">
+                    <div class="env-section-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4da6ff" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                        <span>Ciclo Solar y Bóveda Celeste 3D (Sol y Luna)</span>
+                    </div>
+
+                    <div class="env-row">
+                        <div class="env-row-header">
+                            <label>Hora del Día: <span id="time-display" class="highlight-val">12:00</span></label>
+                            <button id="btn-toggle-cycle" class="env-btn-play">
+                                <svg id="cycle-play-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                <span id="cycle-play-text">Animar Día/Noche</span>
+                            </button>
+                        </div>
+                        <input type="range" id="slider-time" min="0" max="24" step="0.1" value="12" class="modern-range">
+                    </div>
+
+                    <div class="env-row-split">
+                        <div class="env-col">
+                            <label>Velocidad del Ciclo:</label>
+                            <input type="range" id="slider-speed" min="0.1" max="5.0" step="0.1" value="1.0" class="modern-range">
+                        </div>
+                        <div class="env-col">
+                            <label>Intensidad Solar / Luz:</label>
+                            <input type="range" id="slider-sun-intensity" min="0.0" max="2.0" step="0.05" value="1.0" class="modern-range">
+                        </div>
+                    </div>
+
+                    <div class="env-row-split" style="margin-top: 8px;">
+                        <div class="env-col">
+                            <label>Luz Ambiental:</label>
+                            <input type="range" id="slider-ambient-intensity" min="0.0" max="1.0" step="0.05" value="0.35" class="modern-range">
+                        </div>
+                        <div class="env-col">
+                            <label>Brillo de Estrellas (Noche):</label>
+                            <input type="range" id="slider-star-intensity" min="0.0" max="2.0" step="0.1" value="1.0" class="modern-range">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cloud-settings-container" class="env-settings-group" style="margin-top: 10px;">
+                    <div class="env-section-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4da6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+                        <span>Nubes Atmosféricas de la Bóveda Celeste</span>
+                    </div>
+
+                    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="chk-sky-clouds" checked style="accent-color: #007acc; cursor: pointer;">
+                        <label for="chk-sky-clouds" style="font-size: 11px; color: #eee; cursor: pointer; font-weight: bold;">Mostrar Nubes en el Fondo del Cielo</label>
+                    </div>
+
+                    <div class="env-row-split">
+                        <div class="env-col">
+                            <label>Cobertura de Nubes:</label>
+                            <input type="range" id="slider-cloud-coverage" min="0.0" max="1.0" step="0.02" value="0.55" class="modern-range">
+                        </div>
+                        <div class="env-col">
+                            <label>Densidad / Esponjosidad:</label>
+                            <input type="range" id="slider-cloud-density" min="0.1" max="2.0" step="0.1" value="1.0" class="modern-range">
+                        </div>
+                    </div>
+
+                    <div class="env-row-split" style="margin-top: 8px;">
+                        <div class="env-col">
+                            <label>Altitud de Capa:</label>
+                            <input type="range" id="slider-cloud-altitude" min="0.5" max="3.0" step="0.1" value="1.0" class="modern-range">
+                        </div>
+                        <div class="env-col">
+                            <label>Velocidad del Viento:</label>
+                            <input type="range" id="slider-wind-speed" min="0.0" max="3.0" step="0.1" value="0.5" class="modern-range">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="env-controls-section" style="margin-top: 14px;">
+                    <label style="font-size: 11px; color: #aaa; margin-bottom: 4px; display: block;">Fondo Personalizado (HDRI / Textura de Cielo):</label>
                     <input type="file" id="env-file-input" accept="image/*" class="modal-file-btn">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right-Click Context Menus -->
+    <div id="hierarchy-context-menu" class="context-menu" style="display: none;">
+        <div class="context-menu-title">Crear Objeto 3D</div>
+        <div class="context-menu-item" data-create="cube">Cubo</div>
+        <div class="context-menu-item" data-create="sphere">Esfera</div>
+        <div class="context-menu-item" data-create="plane">Plano</div>
+        <div class="context-menu-item" data-create="cylinder">Cilindro</div>
+        <div class="context-menu-item" data-create="cone">Cono</div>
+        <div class="context-menu-item" data-create="pyramid">Pirámide</div>
+        <div class="context-menu-item" data-create="ramp">Prisma / Rampa</div>
+        <div class="context-menu-item" data-create="torus">Torus (Dona)</div>
+        <div class="context-menu-item" data-create="cloud" style="color: #4da6ff; font-weight: bold;">+ Nube 3D Volumétrica</div>
+        <div class="context-menu-item" data-create="windzone" style="color: #00d2ff; font-weight: bold;">+ Zona de Viento 3D</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" id="ctx-delete-object" style="color: #ff4d4d;">Eliminar Objeto</div>
+    </div>
+
+    <div id="inspector-context-menu" class="context-menu" style="display: none;">
+        <div class="context-menu-title">Acciones de Inspector</div>
+        <div class="context-menu-item" id="ctx-add-component">+ Añadir Componente</div>
+    </div>
+
+    <!-- Modal: Settings Configuration -->
+    <div id="modal-settings" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4da6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <h3>Configuración de Grabación de Video</h3>
+                </div>
+                <button class="modal-close" id="close-settings-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="env-settings-group">
+                    <div style="margin-bottom: 12px;">
+                        <label style="font-size: 11px; color: #ccc; display: block; margin-bottom: 4px;">Quadros por Segundo (FPS):</label>
+                        <select id="setting-fps" style="width: 100%; padding: 6px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 12px;">
+                            <option value="24">24 FPS (Cine Standard)</option>
+                            <option value="30" selected>30 FPS (Fluido Web)</option>
+                            <option value="60">60 FPS (Ultra Fluido / HD)</option>
+                        </select>
+                    </div>
+
+                    <div style="margin-bottom: 12px;">
+                        <label style="font-size: 11px; color: #ccc; display: block; margin-bottom: 4px;">Formato de Salida:</label>
+                        <select id="setting-format" style="width: 100%; padding: 6px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 12px;">
+                            <option value="webm" selected>WebM Video (Standard Web)</option>
+                            <option value="mp4">MP4 Video (Compatible)</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>

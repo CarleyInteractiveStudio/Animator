@@ -198,6 +198,11 @@ export class Gizmo {
             gl.enableVertexAttribArray(programInfo.attribLocations.vertexNormal);
         }
 
+        if (programInfo.attribLocations.vertexColor !== -1) {
+            gl.disableVertexAttribArray(programInfo.attribLocations.vertexColor);
+            gl.vertexAttrib4f(programInfo.attribLocations.vertexColor, 1.0, 1.0, 1.0, 1.0);
+        }
+
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
         gl.drawElements(gl.TRIANGLES, mesh.vertexCount, gl.UNSIGNED_SHORT, 0);
     }

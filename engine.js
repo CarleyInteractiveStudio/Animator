@@ -4,6 +4,7 @@ import { Input } from './engine/input.js';
 import { Scene } from './engine/scene.js';
 import { Gizmo } from './engine/gizmo.js';
 import { mat4, mat3, vec3 } from './engine/math.js';
+import { WindParticleSystem, applyWindPhysics } from './engine/wind.js';
 
 let webglContext;
 let canvas;
@@ -21,6 +22,27 @@ const Engine = {
     selectedSubElement: null, // { type: 'vertex'|'edge'|'face', index: number }
     brushRadius: 0.8,
     brushColor: [1.0, 0.2, 0.2, 1.0],
+    time: 0.0,
+    isPlaying: false,
+    isRecording: false,
+    activeCameraObject: null,
+    recordingSettings: { fps: 30, format: 'webm' },
+
+    environment: {
+        preset: 'sky', // 'dark', 'sky', 'custom'
+        timeOfDay: 12.0, // 0.0 to 24.0
+        isCycling: false,
+        cycleSpeed: 1.0,
+        sunIntensity: 1.0,
+        ambientIntensity: 0.35,
+        starIntensity: 1.0,
+        cloudCoverage: 0.55,
+        cloudDensity: 1.0,
+        cloudAltitude: 1.0,
+        windSpeed: 0.5,
+        customGLTexture: null
+    },
+    onEnvironmentUpdate: null,
 
     initialize: (canvasElement) => {
         canvas = canvasElement;
@@ -36,6 +58,7 @@ const Engine = {
         Input.initialize(canvas);
         Engine.scene = new Scene();
         Engine.gizmo = new Gizmo(Engine.gl);
+        Engine.windParticleSystem = new WindParticleSystem(120);
 
         return true;
     },
@@ -304,14 +327,40 @@ const Engine = {
                 deltaTime = 0.016;
             }
             lastTime = time;
+            Engine.time += deltaTime;
+
+            if (Engine.environment && Engine.environment.isCycling) {
+                Engine.environment.timeOfDay = (Engine.environment.timeOfDay + deltaTime * Engine.environment.cycleSpeed * 0.4) % 24.0;
+                if (Engine.onEnvironmentUpdate) {
+                    Engine.onEnvironmentUpdate(Engine.environment);
+                }
+            }
+
+            // Wind Physics & Particle Updates
+            if (Engine.scene) {
+                const windZones = Engine.scene.gameObjects.filter(o => o.windZone && o.windZone.enabled);
+                if (Engine.windParticleSystem) {
+                    Engine.windParticleSystem.update(windZones, deltaTime, Engine.time);
+                }
+                applyWindPhysics(Engine.scene, deltaTime, Engine.time);
+            }
 
             updateCamera(deltaTime);
 
             const aspect = canvas.clientWidth / canvas.clientHeight || 1.0;
-            const projectionMatrix = mat4.create();
-            mat4.perspective(projectionMatrix, 45 * Math.PI / 180, aspect, 0.1, 100.0);
+            let fov = 45;
+            let viewMatrix = mat4.create();
 
-            const viewMatrix = camera.getViewMatrix();
+            if (Engine.activeCameraObject) {
+                fov = Engine.activeCameraObject.fov || 45;
+                const camModel = Engine.activeCameraObject.getModelMatrix();
+                mat4.invert(viewMatrix, camModel);
+            } else {
+                viewMatrix = camera.getViewMatrix();
+            }
+
+            const projectionMatrix = mat4.create();
+            mat4.perspective(projectionMatrix, fov * Math.PI / 180, aspect, 0.1, 100.0);
 
             renderWebGL(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix, Engine.selectedGameObject, Engine.gizmo, Engine.mode, Engine.activeTool, Engine.brushRadius);
             requestAnimationFrame(gameLoop);

@@ -425,4 +425,218 @@ export class Mesh {
 
         return new Mesh(gl, vertices, indices);
     }
+
+    static createCloud(gl, seed = 1) {
+        return Mesh.createProceduralCloud(gl, seed);
+    }
+
+    static createProceduralCloud(gl, seed = 1) {
+        const vertices = [];
+        const indices = [];
+
+        // Pseudo-random generator based on seed
+        function rnd(s) {
+            const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        }
+
+        // Randomized shape parameters from seed
+        const stretchX = 1.2 + rnd(seed * 1.1) * 1.6;
+        const stretchY = 0.5 + rnd(seed * 2.3) * 0.7;
+        const stretchZ = 0.8 + rnd(seed * 3.7) * 0.9;
+        const noiseScale = 1.8 + rnd(seed * 4.9) * 2.2;
+        const noiseBumpiness = 0.35 + rnd(seed * 5.2) * 0.45;
+
+        // Smooth 3D organic sinusoidal FBM displacement noise
+        function fbm3D(x, y, z) {
+            let val = 0.0;
+            let freq = 1.2;
+            let amp = 0.22;
+
+            for (let i = 0; i < 3; i++) {
+                const sx = x * freq + (seed % 100) * 1.7;
+                const sy = y * freq + (seed % 100) * 2.3;
+                const sz = z * freq + (seed % 100) * 3.1;
+
+                const n = 0.5 * (Math.sin(sx) + Math.sin(sy + sz) + Math.cos(sz + sx));
+                val += n * amp;
+                freq *= 1.8;
+                amp *= 0.45;
+            }
+            return val;
+        }
+
+        const latBands = 36;
+        const longBands = 36;
+
+        for (let lat = 0; lat <= latBands; lat++) {
+            const theta = (lat * Math.PI) / latBands;
+            const sinTheta = Math.sin(theta);
+            const cosTheta = Math.cos(theta);
+
+            for (let lon = 0; lon <= longBands; lon++) {
+                const phi = (lon * 2 * Math.PI) / longBands;
+                const nx = Math.cos(phi) * sinTheta;
+                const ny = cosTheta;
+                const nz = Math.sin(phi) * sinTheta;
+
+                // Base ellipsoid coordinates
+                let px = nx * stretchX;
+                let py = ny * stretchY;
+                let pz = nz * stretchZ;
+
+                // Continuous FBM volumetric displacement along normal vector
+                const displacement = fbm3D(px, py, pz);
+                px += nx * displacement;
+                py += ny * displacement * 1.1; // Organic billowing around entire cloud body
+                pz += nz * displacement;
+
+                vertices.push(px, py, pz);
+            }
+        }
+
+        for (let lat = 0; lat < latBands; lat++) {
+            for (let lon = 0; lon < longBands; lon++) {
+                const first = lat * (longBands + 1) + lon;
+                const second = first + longBands + 1;
+
+                indices.push(first, first + 1, second);
+                indices.push(second, second + 1, first + 1);
+            }
+        }
+
+        // Return unified single continuous mesh with smooth auto-recalculated normals
+        return new Mesh(gl, vertices, indices);
+    }
+
+    static createTornadoVortex(gl, height = 5.0, topRadius = 3.5, bottomRadius = 0.3, rings = 24, segments = 24) {
+        const vertices = [];
+        const indices = [];
+
+        for (let r = 0; r <= rings; r++) {
+            const v = r / rings;
+            const y = (v - 0.5) * height;
+            const currentRadius = bottomRadius + (topRadius - bottomRadius) * Math.pow(v, 1.2);
+            const twistAngle = v * Math.PI * 4.0; // Twist spiral
+
+            for (let s = 0; s <= segments; s++) {
+                const u = s / segments;
+                const angle = u * Math.PI * 2.0 + twistAngle;
+
+                const wave = Math.sin(u * Math.PI * 6.0 + v * Math.PI * 3.0) * 0.15 * currentRadius;
+
+                const x = Math.cos(angle) * (currentRadius + wave);
+                const z = Math.sin(angle) * (currentRadius + wave);
+
+                vertices.push(x, y, z);
+            }
+        }
+
+        for (let r = 0; r < rings; r++) {
+            for (let s = 0; s < segments; s++) {
+                const first = r * (segments + 1) + s;
+                const second = first + segments + 1;
+
+                indices.push(first, second, first + 1);
+                indices.push(second, second + 1, first + 1);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices);
+    }
+
+    static createLeaf(gl) {
+        const vertices = [
+             0.0,  0.2, 0.0,
+            -0.15, 0.0, 0.0,
+             0.15, 0.0, 0.0,
+             0.0, -0.2, 0.0
+        ];
+        const indices = [0, 1, 2, 1, 3, 2];
+        const colors = [
+            0.2, 0.8, 0.3, 0.9,
+            0.3, 0.85, 0.2, 0.9,
+            0.1, 0.75, 0.3, 0.9,
+            0.15, 0.7, 0.2, 0.9
+        ];
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
+    static createWindRay(gl) {
+        const vertices = [
+            -0.05, 0.0, -0.8,
+             0.05, 0.0, -0.8,
+             0.05, 0.0,  0.8,
+            -0.05, 0.0,  0.8
+        ];
+        const indices = [0, 1, 2, 0, 2, 3];
+        const colors = [
+            0.8, 0.95, 1.0, 0.0,
+            0.8, 0.95, 1.0, 0.0,
+            0.85, 0.98, 1.0, 0.6,
+            0.85, 0.98, 1.0, 0.6
+        ];
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
+    static createCinemaCamera(gl) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        function addBox(cx, cy, cz, sx, sy, sz, r, g, b) {
+            const start = vertices.length / 3;
+            const hx = sx / 2, hy = sy / 2, hz = sz / 2;
+            vertices.push(
+                cx - hx, cy - hy, cz + hz,   cx + hx, cy - hy, cz + hz,   cx + hx, cy + hy, cz + hz,   cx - hx, cy + hy, cz + hz,
+                cx - hx, cy - hy, cz - hz,   cx + hx, cy - hy, cz - hz,   cx + hx, cy + hy, cz - hz,   cx - hx, cy + hy, cz - hz
+            );
+            const quadIndices = [
+                0, 1, 2, 0, 2, 3,   4, 6, 5, 4, 7, 6,
+                3, 2, 6, 3, 6, 7,   0, 5, 1, 0, 4, 5,
+                1, 5, 6, 1, 6, 2,   4, 0, 3, 4, 3, 7
+            ];
+            for (const idx of quadIndices) indices.push(start + idx);
+            for (let i = 0; i < 8; i++) colors.push(r, g, b, 1.0);
+        }
+
+        function addCylinder(cx, cy, cz, rad, height, segs, r, g, b) {
+            const start = vertices.length / 3;
+            vertices.push(cx, cy + height / 2, cz);
+            vertices.push(cx, cy - height / 2, cz);
+            colors.push(r, g, b, 1.0, r, g, b, 1.0);
+
+            for (let i = 0; i <= segs; i++) {
+                const a = (i * Math.PI * 2) / segs;
+                const x = Math.cos(a) * rad;
+                const z = Math.sin(a) * rad;
+                vertices.push(cx + x, cy + height / 2, cz + z);
+                vertices.push(cx + x, cy - height / 2, cz + z);
+                colors.push(r, g, b, 1.0, r, g, b, 1.0);
+            }
+
+            for (let i = 0; i < segs; i++) {
+                const top1 = start + 2 + i * 2;
+                const bot1 = top1 + 1;
+                const top2 = top1 + 2;
+                const bot2 = bot1 + 2;
+                indices.push(top1, bot1, top2, bot1, bot2, top2);
+                indices.push(start, top2, top1);
+                indices.push(start + 1, bot1, bot2);
+            }
+        }
+
+        // Camera Body (Dark Charcoal)
+        addBox(0, 0, 0, 0.8, 0.6, 1.0, 0.15, 0.15, 0.18);
+        // Lens Cone (Black matte)
+        addCylinder(0, 0, -0.7, 0.28, 0.5, 16, 0.08, 0.08, 0.1);
+        // Lens Ring (Cyan highlight)
+        addCylinder(0, 0, -0.9, 0.32, 0.08, 16, 0.0, 0.8, 1.0);
+        // Film Reel 1 (Golden top left)
+        addCylinder(-0.22, 0.5, 0.15, 0.25, 0.12, 16, 0.85, 0.65, 0.2);
+        // Film Reel 2 (Golden top right)
+        addCylinder(0.22, 0.5, 0.15, 0.25, 0.12, 16, 0.85, 0.65, 0.2);
+
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
 }
