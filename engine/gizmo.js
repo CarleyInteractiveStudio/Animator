@@ -26,7 +26,7 @@ export class Gizmo {
 
         // Edit Mode Sub-element & Area Handle Spheres
         this.vertexDot = Mesh.createSphere(gl, 0.06, 12, 12);
-        this.cornerSphere = Mesh.createSphere(gl, 0.18, 14, 14); // 8 corner scaling handles for wind box
+        this.cornerSphere = Mesh.createSphere(gl, 0.12, 14, 14); // 8 corner scaling handles for wind box
     }
 
     renderWindZoneAreaBox(gl, programInfo, targetObject, viewMatrix, projectionMatrix) {
@@ -45,7 +45,7 @@ export class Gizmo {
 
         const matrix = targetObject.getModelMatrix();
         gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, matrix);
-        gl.uniform4f(programInfo.uniformLocations.tintColor, 0.0, 0.85, 1.0, 0.9);
+        gl.uniform4f(programInfo.uniformLocations.tintColor, 0.2, 0.95, 0.3, 0.95); // Matching vibrant green
 
         // 1. Draw 3D wireframe box
         this.drawMesh(gl, programInfo, this.windBoxMesh);
@@ -60,7 +60,7 @@ export class Gizmo {
             [-hw, hh, hd], [ hw, hh, hd], [ hw, hh, -hd], [-hw, hh, -hd]
         ];
 
-        gl.uniform4f(programInfo.uniformLocations.tintColor, 0.0, 0.85, 1.0, 1.0);
+        gl.uniform4f(programInfo.uniformLocations.tintColor, 0.2, 0.95, 0.3, 1.0);
         for (const c of corners) {
             const cornerMat = mat4.create();
             mat4.translate(cornerMat, matrix, c);

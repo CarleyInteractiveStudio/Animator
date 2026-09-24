@@ -296,8 +296,8 @@ export class Mesh {
         const hw = width * 0.5;
         const hh = height;
         const hd = depth * 0.5;
-        const rad = 0.025;
-        const r = 0.0, g = 0.85, b = 1.0, a = 0.9;
+        const rad = 0.012; // Fine, precise game engine gizmo lines
+        const r = 0.2, g = 0.95, b = 0.3, a = 0.95; // Vibrant game engine green
 
         const corners = [
             [-hw, 0,  hd], [ hw, 0,  hd], [ hw, 0, -hd], [-hw, 0, -hd],
@@ -658,7 +658,8 @@ export class Mesh {
     }
 
     static createCinemaCamera(gl) {
-        // Enlarged & lengthened AAA game engine style Camera Gizmo
+        // Professional AAA Game Engine Camera Visualizer (Unreal / Unity style)
+        // Green fine wireframe lines with rectangular body, lens frustum frame, and view pyramid
         const vertices = [];
         const indices = [];
         const colors = [];
@@ -699,50 +700,50 @@ export class Mesh {
             for (let i = 0; i < 8; i++) colors.push(r, g, b, a);
         }
 
-        const cr = 0.2, cg = 0.85, cb = 1.0;
-        const rad = 0.025; // Thicker lines
+        const cr = 0.2, cg = 0.95, cb = 0.3; // Game engine vibrant green
+        const rad = 0.012; // Finer thickness
 
-        // Enlarged Camera Body Box
-        const bw = 0.5, bh = 0.35, bd = 0.6;
-        addThickLine(-bw, -bh, 0,  bw, -bh, 0, rad, cr, cg, cb);
-        addThickLine( bw, -bh, 0,  bw,  bh, 0, rad, cr, cg, cb);
-        addThickLine( bw,  bh, 0, -bw,  bh, 0, rad, cr, cg, cb);
-        addThickLine(-bw,  bh, 0, -bw, -bh, 0, rad, cr, cg, cb);
-
-        addThickLine(-bw, -bh, bd,  bw, -bh, bd, rad, cr, cg, cb);
-        addThickLine( bw, -bh, bd,  bw,  bh, bd, rad, cr, cg, cb);
-        addThickLine( bw,  bh, bd, -bw,  bh, bd, rad, cr, cg, cb);
-        addThickLine(-bw,  bh, bd, -bw, -bh, bd, rad, cr, cg, cb);
-
-        addThickLine(-bw, -bh, 0, -bw, -bh, bd, rad, cr, cg, cb);
-        addThickLine( bw, -bh, 0,  bw, -bh, bd, rad, cr, cg, cb);
-        addThickLine( bw,  bh, 0,  bw,  bh, bd, rad, cr, cg, cb);
-        addThickLine(-bw,  bh, 0, -bw,  bh, bd, rad, cr, cg, cb);
-
-        // Long Frustum pyramid corners extending far forward (-Z)
-        const fw = 1.2, fh = 0.75, fz = -2.2;
-        const fp = [
-            [-fw, -fh, fz],
-            [ fw, -fh, fz],
-            [ fw,  fh, fz],
-            [-fw,  fh, fz]
+        // 1. Camera Body Box (Back Z = +0.5 to Front Z = 0.0)
+        const bw = 0.4, bh = 0.28, bd = 0.5;
+        const bCorners = [
+            [-bw, -bh, 0.0], [ bw, -bh, 0.0], [ bw,  bh, 0.0], [-bw,  bh, 0.0],
+            [-bw, -bh, bd ], [ bw, -bh, bd ], [ bw,  bh, bd ], [-bw,  bh, bd ]
         ];
-
-        // 4 pyramid lines from camera front face (0,0,0) to frustum corners
-        for (let i = 0; i < 4; i++) {
-            addThickLine(0, 0, 0, fp[i][0], fp[i][1], fp[i][2], rad, cr, cg, cb);
-        }
-
-        // Frustum rectangle outline
+        // Front & back quads of camera body
         for (let i = 0; i < 4; i++) {
             const next = (i + 1) % 4;
-            addThickLine(fp[i][0], fp[i][1], fp[i][2], fp[next][0], fp[next][1], fp[next][2], rad, cr, cg, cb);
+            addThickLine(bCorners[i][0], bCorners[i][1], bCorners[i][2], bCorners[next][0], bCorners[next][1], bCorners[next][2], rad, cr, cg, cb);
+            addThickLine(bCorners[i+4][0], bCorners[i+4][1], bCorners[i+4][2], bCorners[next+4][0], bCorners[next+4][1], bCorners[next+4][2], rad, cr, cg, cb);
+            addThickLine(bCorners[i][0], bCorners[i][1], bCorners[i][2], bCorners[i+4][0], bCorners[i+4][1], bCorners[i+4][2], rad, cr, cg, cb);
         }
 
-        // Top triangle direction indicator
-        addThickLine(0, fh, fz, 0, fh + 0.4, fz, rad, cr, cg, cb);
-        addThickLine(-fw * 0.5, fh, fz, 0, fh + 0.4, fz, rad, cr, cg, cb);
-        addThickLine(fw * 0.5, fh, fz, 0, fh + 0.4, fz, rad, cr, cg, cb);
+        // 2. Camera Front Lens Cone / Box extending slightly forward to Z = -0.2
+        const lw = 0.22, lh = 0.16, lz = -0.2;
+        const lCorners = [
+            [-lw, -lh, lz], [ lw, -lh, lz], [ lw,  lh, lz], [-lw,  lh, lz]
+        ];
+        for (let i = 0; i < 4; i++) {
+            const next = (i + 1) % 4;
+            addThickLine(lCorners[i][0], lCorners[i][1], lCorners[i][2], lCorners[next][0], lCorners[next][1], lCorners[next][2], rad, cr, cg, cb);
+            addThickLine(bCorners[i][0] * 0.6, bCorners[i][1] * 0.6, 0.0, lCorners[i][0], lCorners[i][1], lCorners[i][2], rad, cr, cg, cb);
+        }
+
+        // 3. Game Engine View Frustum Pyramid extending from lens corners to large view plane (-Z = -2.5)
+        const fw = 1.3, fh = 0.85, fz = -2.5;
+        const fCorners = [
+            [-fw, -fh, fz], [ fw, -fh, fz], [ fw,  fh, fz], [-fw,  fh, fz]
+        ];
+        // 4 pyramid lines from lens corners to view frame
+        for (let i = 0; i < 4; i++) {
+            const next = (i + 1) % 4;
+            addThickLine(lCorners[i][0], lCorners[i][1], lCorners[i][2], fCorners[i][0], fCorners[i][1], fCorners[i][2], rad, cr, cg, cb);
+            addThickLine(fCorners[i][0], fCorners[i][1], fCorners[i][2], fCorners[next][0], fCorners[next][1], fCorners[next][2], rad, cr, cg, cb);
+        }
+
+        // 4. Top orientation marker pyramid on top of camera
+        addThickLine(0, bh, bd * 0.5, 0, bh + 0.3, bd * 0.5, rad, cr, cg, cb);
+        addThickLine(-bw * 0.4, bh, bd * 0.5, 0, bh + 0.3, bd * 0.5, rad, cr, cg, cb);
+        addThickLine(bw * 0.4, bh, bd * 0.5, 0, bh + 0.3, bd * 0.5, rad, cr, cg, cb);
 
         return new Mesh(gl, vertices, indices, null, colors);
     }
