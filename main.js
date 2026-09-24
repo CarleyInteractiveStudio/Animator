@@ -256,7 +256,7 @@ function updateInspectorPanel() {
 
                 ${wz.type === 'tornado' ? `
                     <div style="margin-top: 10px; border-top: 1px dashed #00d2ff44; padding-top: 8px;">
-                        <label style="font-size: 11px; color: #00d2ff; font-weight: bold;">Forma del Tornado:</label>
+                        <label style="font-size: 11px; color: #00d2ff; font-weight: bold;">Forma y Zig-Zag del Tornado:</label>
                         <div style="margin-top: 6px;">
                             <label style="font-size: 10px; color: #aaa;">Radio Superior (Copa): <span id="val-tor-top">${(wz.tornadoTopRadius || 5.0).toFixed(1)}m</span></label>
                             <input type="range" id="slider-tor-top" min="1.0" max="15.0" step="0.5" value="${wz.tornadoTopRadius || 5.0}" class="modern-range" style="width: 100%;">
@@ -268,6 +268,23 @@ function updateInspectorPanel() {
                         <div style="margin-top: 6px;">
                             <label style="font-size: 10px; color: #aaa;">Radio Inferior (Base): <span id="val-tor-bot">${(wz.tornadoBottomRadius || 0.8).toFixed(1)}m</span></label>
                             <input type="range" id="slider-tor-bot" min="0.1" max="8.0" step="0.2" value="${wz.tornadoBottomRadius || 0.8}" class="modern-range" style="width: 100%;">
+                        </div>
+
+                        <div style="margin-top: 8px;">
+                            <label style="font-size: 10px; color: #00d2ff; font-weight: bold;">Sway / Zig-Zag del Tronco:</label>
+                            <div style="margin-top: 4px;">
+                                <label style="font-size: 10px; color: #aaa;">Curvatura Zig-Zag: <span id="val-tor-zig-amp">${(wz.tornadoZigZagAmplitude || 1.2).toFixed(1)}m</span></label>
+                                <input type="range" id="slider-tor-zig-amp" min="0.0" max="4.0" step="0.1" value="${wz.tornadoZigZagAmplitude || 1.2}" class="modern-range" style="width: 100%;">
+                            </div>
+                            <div style="margin-top: 4px;">
+                                <label style="font-size: 10px; color: #aaa;">Velocidad de Balanceo: <span id="val-tor-zig-freq">${(wz.tornadoZigZagFrequency || 1.8).toFixed(1)}</span></label>
+                                <input type="range" id="slider-tor-zig-freq" min="0.2" max="5.0" step="0.1" value="${wz.tornadoZigZagFrequency || 1.8}" class="modern-range" style="width: 100%;">
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between;">
+                            <label style="font-size: 10px; color: #aaa;">Nube de Tormenta Superior (Meso-ciclón):</label>
+                            <input type="checkbox" id="chk-tor-sky-cloud" ${wz.tornadoSkyCloudCirculation ? 'checked' : ''} style="cursor: pointer;">
                         </div>
                     </div>
                 ` : `
@@ -532,6 +549,9 @@ function updateInspectorPanel() {
     const sliderTorTop = inspectorContent.querySelector('#slider-tor-top');
     const sliderTorMid = inspectorContent.querySelector('#slider-tor-mid');
     const sliderTorBot = inspectorContent.querySelector('#slider-tor-bot');
+    const sliderTorZigAmp = inspectorContent.querySelector('#slider-tor-zig-amp');
+    const sliderTorZigFreq = inspectorContent.querySelector('#slider-tor-zig-freq');
+    const chkTorSkyCloud = inspectorContent.querySelector('#chk-tor-sky-cloud');
     const sliderWaveAmp = inspectorContent.querySelector('#slider-wave-amp');
 
     if (windTypeSelect) {
@@ -595,6 +615,30 @@ function updateInspectorPanel() {
             selectedObject.windZone.tornadoBottomRadius = val;
             const lbl = inspectorContent.querySelector('#val-tor-bot');
             if (lbl) lbl.textContent = val.toFixed(1) + 'm';
+        });
+    }
+
+    if (sliderTorZigAmp) {
+        sliderTorZigAmp.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            selectedObject.windZone.tornadoZigZagAmplitude = val;
+            const lbl = inspectorContent.querySelector('#val-tor-zig-amp');
+            if (lbl) lbl.textContent = val.toFixed(1) + 'm';
+        });
+    }
+
+    if (sliderTorZigFreq) {
+        sliderTorZigFreq.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            selectedObject.windZone.tornadoZigZagFrequency = val;
+            const lbl = inspectorContent.querySelector('#val-tor-zig-freq');
+            if (lbl) lbl.textContent = val.toFixed(1);
+        });
+    }
+
+    if (chkTorSkyCloud) {
+        chkTorSkyCloud.addEventListener('change', (e) => {
+            selectedObject.windZone.tornadoSkyCloudCirculation = e.target.checked;
         });
     }
 

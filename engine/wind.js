@@ -22,6 +22,12 @@ export class WindZoneComponent {
         this.tornadoMidRadius = 1.2; // Waist
         this.tornadoBottomRadius = 0.8;
         this.tornadoCloudDensity = 0.7; // Cloud texture puff density
+
+        // Realistic Sky Cloud Circulation & Serpentine Trunk Zig-Zag
+        this.tornadoSkyCloudCirculation = true; // Top mesocyclone sky cloud rotation
+        this.tornadoSkyCloudRadius = 7.5; // Radius of upper storm sky cloud ring
+        this.tornadoZigZagAmplitude = 1.2; // Zig-Zag serpentine sway amplitude
+        this.tornadoZigZagFrequency = 1.8; // Zig-Zag sway speed / frequency
     }
 }
 
@@ -59,19 +65,22 @@ export class WindParticleSystem {
         const relY = Math.random() * size[1];
         const relZ = (Math.random() - 0.5) * size[2];
 
+        const isSkyCloudRing = isTornado && wz.tornadoSkyCloudCirculation && Math.random() < 0.28;
+
         return {
             zoneObj: zoneObj,
             isTornado: isTornado,
-            isCloudPuff: isTornado && Math.random() < (wz.tornadoCloudDensity || 0.6),
+            isCloudPuff: isTornado && (isSkyCloudRing || Math.random() < (wz.tornadoCloudDensity || 0.6)),
+            isSkyCloudRing: isSkyCloudRing,
             position: [center[0] + relX, center[1] + relY, center[2] + relZ],
             prevPosition: [center[0] + relX, center[1] + relY, center[2] + relZ],
             progress: progress, // 0.0 to 1.0 along its lifespan
             speed: (wz ? wz.speed : 4.0) * (0.8 + Math.random() * 0.4),
-            scale: isTornado ? (0.2 + Math.random() * 0.5) : (0.15 + Math.random() * 0.25),
+            scale: isSkyCloudRing ? (0.6 + Math.random() * 0.8) : (isTornado ? (0.2 + Math.random() * 0.5) : (0.15 + Math.random() * 0.25)),
             life: progress * (1.8 + Math.random() * 1.5),
             maxLife: 1.8 + Math.random() * 1.5,
             spiralAngle: Math.random() * Math.PI * 2,
-            heightRatio: Math.random(), // 0.0 bottom to 1.0 top of tornado
+            heightRatio: isSkyCloudRing ? (0.85 + Math.random() * 0.15) : Math.random(), // 0.0 bottom to 1.0 top of tornado
             headOffset: Math.random() * Math.PI * 2,
             tangent: [1, 0, 0],
             headAlpha: 0.0, // Fade in head
@@ -129,10 +138,20 @@ export class WindParticleSystem {
                 p.isTornado = true;
                 p.heightRatio = Math.min(1.0, Math.max(0.0, (p.position[1] - center[1]) / size[1]));
 
-                // Variable Tornado Shape Profile (Bottom, Mid waist, Top)
                 const h = p.heightRatio;
+
+                // Dynamic Serpentine Zig-Zag Trunk Sway (bends along height `h` then straightens out dynamically)
+                const zigAmp = wz.tornadoZigZagAmplitude || 1.2;
+                const zigFreq = wz.tornadoZigZagFrequency || 1.8;
+                const trunkZigX = Math.sin(time * zigFreq + h * 3.5 + p.headOffset) * Math.sin(h * Math.PI) * zigAmp;
+                const trunkZigZ = Math.cos(time * zigFreq * 0.8 + h * 3.0) * Math.sin(h * Math.PI) * (zigAmp * 0.8);
+
+                // Variable Tornado Shape Profile (Bottom, Mid waist, Top, or Top Sky Cloud Mesocyclone Ring)
                 let currentRadius;
-                if (h < 0.5) {
+                if (p.isSkyCloudRing || h >= 0.88) {
+                    // Sky storm cloud circulation disk rotating in the sky above the funnel
+                    currentRadius = wz.tornadoSkyCloudRadius || (wz.tornadoTopRadius * 1.5);
+                } else if (h < 0.5) {
                     const t = h / 0.5;
                     currentRadius = (1 - t) * wz.tornadoBottomRadius + t * wz.tornadoMidRadius;
                 } else {
