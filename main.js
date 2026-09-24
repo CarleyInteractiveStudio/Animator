@@ -19,7 +19,8 @@ let objectCounters = {
     ramp: 0,
     torus: 0,
     cloud: 0,
-    windzone: 0
+    windzone: 0,
+    camera: 0
 };
 
 function setupResizers() {
@@ -112,6 +113,7 @@ function updateInspectorPanel() {
     const hasDarkness = !!selectedObject.darknessZone;
     const hasWind = !!selectedObject.windZone;
     const isCloud = !!selectedObject.cloudProps;
+    const isCameraObj = !!selectedObject.isCinemaCamera;
 
     const elasticity = selectedObject.windElasticity !== undefined ? selectedObject.windElasticity : (isCloud ? 0.8 : 0.0);
 
@@ -185,6 +187,26 @@ function updateInspectorPanel() {
             </div>
         </div>
     `;
+
+    if (isCameraObj) {
+        html += `
+            <div class="inspector-section" style="border: 1px solid #ff4d4d44; background: #ff4d4d0a; padding: 10px; border-radius: 6px; margin-top: 10px;">
+                <div class="inspector-section-title" style="color: #ff4d4d; display: flex; align-items: center; gap: 6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff4d4d" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    <span>Cámara de Cine 3D</span>
+                </div>
+                <div style="margin-top: 10px;">
+                    <button id="btn-toggle-cam-view" style="width: 100%; padding: 6px; background: ${Engine.activeCameraObject === selectedObject ? '#ff4d4d' : '#222'}; color: #fff; border: 1px solid #ff4d4d; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 11px;">
+                        ${Engine.activeCameraObject === selectedObject ? 'Restablecer Cámara de Trabajo' : 'Ver a través de esta Cámara'}
+                    </button>
+                </div>
+                <div style="margin-top: 8px;">
+                    <label style="font-size: 11px; color: #ccc;">Campo de Visión (FOV): <span id="val-cam-fov">${(selectedObject.fov || 45).toFixed(0)}º</span></label>
+                    <input type="range" id="slider-cam-fov" min="20" max="110" step="1" value="${selectedObject.fov || 45}" class="modern-range" style="width: 100%; margin-top: 2px;">
+                </div>
+            </div>
+        `;
+    }
 
     if (hasWind) {
         const wz = selectedObject.windZone;
@@ -423,6 +445,29 @@ function updateInspectorPanel() {
         });
     }
 
+    const btnToggleCamView = inspectorContent.querySelector('#btn-toggle-cam-view');
+    const sliderCamFov = inspectorContent.querySelector('#slider-cam-fov');
+
+    if (btnToggleCamView) {
+        btnToggleCamView.addEventListener('click', () => {
+            if (Engine.activeCameraObject === selectedObject) {
+                Engine.activeCameraObject = null;
+            } else {
+                Engine.activeCameraObject = selectedObject;
+            }
+            updateInspectorPanel();
+        });
+    }
+
+    if (sliderCamFov) {
+        sliderCamFov.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            selectedObject.fov = val;
+            const fovLbl = inspectorContent.querySelector('#val-cam-fov');
+            if (fovLbl) fovLbl.textContent = `${val.toFixed(0)}º`;
+        });
+    }
+
     const sliderElasticity = inspectorContent.querySelector('#slider-elasticity');
     if (sliderElasticity) {
         sliderElasticity.addEventListener('input', (e) => {
@@ -489,6 +534,31 @@ function setupModals() {
 
     if (closeEnv && modalEnv) {
         closeEnv.addEventListener('click', () => modalEnv.style.display = 'none');
+    }
+
+    const modalSettings = document.getElementById('modal-settings');
+    const btnOpenSettings = document.getElementById('btn-open-settings-modal');
+    const closeSettings = document.getElementById('close-settings-modal');
+
+    if (btnOpenSettings && modalSettings) {
+        btnOpenSettings.addEventListener('click', () => modalSettings.style.display = 'flex');
+    }
+    if (closeSettings && modalSettings) {
+        closeSettings.addEventListener('click', () => modalSettings.style.display = 'none');
+    }
+
+    const settingFps = document.getElementById('setting-fps');
+    const settingFormat = document.getElementById('setting-format');
+
+    if (settingFps) {
+        settingFps.addEventListener('change', (e) => {
+            Engine.recordingSettings.fps = parseInt(e.target.value) || 30;
+        });
+    }
+    if (settingFormat) {
+        settingFormat.addEventListener('change', (e) => {
+            Engine.recordingSettings.format = e.target.value;
+        });
     }
 
     document.querySelectorAll('[data-add-comp]').forEach(card => {
@@ -672,6 +742,7 @@ function createPrimitiveMesh(type) {
         case 'torus': return Mesh.createTorus(gl);
         case 'cloud': return Mesh.createCloud(gl);
         case 'windzone': return Mesh.createTornadoVortex(gl);
+        case 'camera': return Mesh.createCinemaCamera(gl);
         case 'cube':
         default:
             return Mesh.createCube(gl);
@@ -691,6 +762,7 @@ function getPrimitiveName(type) {
         case 'torus': return `Torus ${num}`;
         case 'cloud': return `Nube ${num}`;
         case 'windzone': return `Zona de Viento ${num}`;
+        case 'camera': return `Cámara de Cine ${num}`;
         case 'cube':
         default:
             return `Cubo ${num}`;
@@ -713,6 +785,10 @@ function spawnPrimitive(type) {
         obj.windElasticity = 0.8;
     } else if (type === 'windzone') {
         obj.windZone = new WindZoneComponent();
+    } else if (type === 'camera') {
+        obj.isCinemaCamera = true;
+        obj.fov = 45;
+        obj.material = { isUnlit: true };
     }
 
     vec3.set(obj.transform.position, (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);
@@ -892,8 +968,81 @@ function setupKeyboardShortcuts() {
     });
 }
 
+let mediaRecorder = null;
+let recordedChunks = [];
+
 function setupToolbarEvents() {
     const statusMode = document.getElementById('status-mode');
+
+    const btnPlaySim = document.getElementById('btn-play-sim');
+    const playSimText = document.getElementById('play-sim-text');
+    const playSimIcon = document.getElementById('play-sim-icon');
+
+    const btnRecordSim = document.getElementById('btn-record-sim');
+    const recordSimText = document.getElementById('record-sim-text');
+
+    if (btnPlaySim) {
+        btnPlaySim.addEventListener('click', () => {
+            Engine.isPlaying = !Engine.isPlaying;
+            if (Engine.isPlaying) {
+                btnPlaySim.classList.add('active');
+                if (playSimText) playSimText.textContent = 'Pausar';
+                if (playSimIcon) playSimIcon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+            } else {
+                btnPlaySim.classList.remove('active');
+                if (playSimText) playSimText.textContent = 'Play';
+                if (playSimIcon) playSimIcon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+            }
+        });
+    }
+
+    if (btnRecordSim) {
+        btnRecordSim.addEventListener('click', () => {
+            Engine.isRecording = !Engine.isRecording;
+            const canvas = document.querySelector('#visor-panel canvas');
+
+            if (Engine.isRecording) {
+                btnRecordSim.classList.add('active');
+                if (recordSimText) recordSimText.textContent = 'Detener Grabar';
+
+                if (canvas) {
+                    try {
+                        const stream = canvas.captureStream(Engine.recordingSettings.fps || 30);
+                        const mimeType = Engine.recordingSettings.format === 'mp4' ? 'video/webm' : 'video/webm';
+                        mediaRecorder = new MediaRecorder(stream, { mimeType });
+                        recordedChunks = [];
+
+                        mediaRecorder.ondataavailable = (evt) => {
+                            if (evt.data && evt.data.size > 0) {
+                                recordedChunks.push(evt.data);
+                            }
+                        };
+
+                        mediaRecorder.onstop = () => {
+                            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `grabacion_escena_${Date.now()}.${Engine.recordingSettings.format || 'webm'}`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                        };
+
+                        mediaRecorder.start();
+                    } catch (err) {
+                        console.error("Recording error:", err);
+                    }
+                }
+            } else {
+                btnRecordSim.classList.remove('active');
+                if (recordSimText) recordSimText.textContent = 'Grabar';
+
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+            }
+        });
+    }
 
     document.querySelectorAll('.submenu-item').forEach(item => {
         item.addEventListener('click', (e) => {
@@ -943,6 +1092,13 @@ function main() {
 
             const sphereMesh = Mesh.createSphere(Engine.gl);
             const cubeMesh = Mesh.createCube(Engine.gl);
+            const cameraMesh = Mesh.createCinemaCamera(Engine.gl);
+
+            const cameraObj = new GameObject('Cámara de Cine 1', cameraMesh);
+            cameraObj.isCinemaCamera = true;
+            cameraObj.fov = 45;
+            cameraObj.material = { isUnlit: true };
+            vec3.set(cameraObj.transform.position, 0, 2.5, 6.0);
 
             const cube1 = new GameObject('Cubo 1', cubeMesh);
             vec3.set(cube1.transform.position, -1.8, 0, 0);
@@ -950,6 +1106,7 @@ function main() {
             const sphere1 = new GameObject('Esfera 1', sphereMesh);
             vec3.set(sphere1.transform.position, 1.8, 0, 0);
 
+            Engine.scene.addGameObject(cameraObj);
             Engine.scene.addGameObject(cube1);
             Engine.scene.addGameObject(sphere1);
 

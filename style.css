@@ -620,3 +620,51 @@ body {
     background: #383838;
     margin: 4px 0;
 }
+
+.play-control-btn {
+    background: #27ae60;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.play-control-btn:hover {
+    background: #2ecc71;
+}
+
+.play-control-btn.active {
+    background: #e67e22;
+}
+
+.record-control-btn {
+    background: #252525;
+    color: #ff4d4d;
+    border: 1px solid #ff4d4d66;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.record-control-btn:hover {
+    background: #ff4d4d22;
+    border-color: #ff4d4d;
+}
+
+.record-control-btn.active {
+    background: #ff4d4d;
+    color: #fff;
+}

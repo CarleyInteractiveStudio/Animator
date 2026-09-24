@@ -23,6 +23,10 @@ const Engine = {
     brushRadius: 0.8,
     brushColor: [1.0, 0.2, 0.2, 1.0],
     time: 0.0,
+    isPlaying: false,
+    isRecording: false,
+    activeCameraObject: null,
+    recordingSettings: { fps: 30, format: 'webm' },
 
     environment: {
         preset: 'sky', // 'dark', 'sky', 'custom'
@@ -344,10 +348,19 @@ const Engine = {
             updateCamera(deltaTime);
 
             const aspect = canvas.clientWidth / canvas.clientHeight || 1.0;
-            const projectionMatrix = mat4.create();
-            mat4.perspective(projectionMatrix, 45 * Math.PI / 180, aspect, 0.1, 100.0);
+            let fov = 45;
+            let viewMatrix = mat4.create();
 
-            const viewMatrix = camera.getViewMatrix();
+            if (Engine.activeCameraObject) {
+                fov = Engine.activeCameraObject.fov || 45;
+                const camModel = Engine.activeCameraObject.getModelMatrix();
+                mat4.invert(viewMatrix, camModel);
+            } else {
+                viewMatrix = camera.getViewMatrix();
+            }
+
+            const projectionMatrix = mat4.create();
+            mat4.perspective(projectionMatrix, fov * Math.PI / 180, aspect, 0.1, 100.0);
 
             renderWebGL(webglContext, canvas, Engine.scene, projectionMatrix, viewMatrix, Engine.selectedGameObject, Engine.gizmo, Engine.mode, Engine.activeTool, Engine.brushRadius);
             requestAnimationFrame(gameLoop);

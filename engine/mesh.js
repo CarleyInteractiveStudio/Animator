@@ -578,4 +578,65 @@ export class Mesh {
         ];
         return new Mesh(gl, vertices, indices, null, colors);
     }
+
+    static createCinemaCamera(gl) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        function addBox(cx, cy, cz, sx, sy, sz, r, g, b) {
+            const start = vertices.length / 3;
+            const hx = sx / 2, hy = sy / 2, hz = sz / 2;
+            vertices.push(
+                cx - hx, cy - hy, cz + hz,   cx + hx, cy - hy, cz + hz,   cx + hx, cy + hy, cz + hz,   cx - hx, cy + hy, cz + hz,
+                cx - hx, cy - hy, cz - hz,   cx + hx, cy - hy, cz - hz,   cx + hx, cy + hy, cz - hz,   cx - hx, cy + hy, cz - hz
+            );
+            const quadIndices = [
+                0, 1, 2, 0, 2, 3,   4, 6, 5, 4, 7, 6,
+                3, 2, 6, 3, 6, 7,   0, 5, 1, 0, 4, 5,
+                1, 5, 6, 1, 6, 2,   4, 0, 3, 4, 3, 7
+            ];
+            for (const idx of quadIndices) indices.push(start + idx);
+            for (let i = 0; i < 8; i++) colors.push(r, g, b, 1.0);
+        }
+
+        function addCylinder(cx, cy, cz, rad, height, segs, r, g, b) {
+            const start = vertices.length / 3;
+            vertices.push(cx, cy + height / 2, cz);
+            vertices.push(cx, cy - height / 2, cz);
+            colors.push(r, g, b, 1.0, r, g, b, 1.0);
+
+            for (let i = 0; i <= segs; i++) {
+                const a = (i * Math.PI * 2) / segs;
+                const x = Math.cos(a) * rad;
+                const z = Math.sin(a) * rad;
+                vertices.push(cx + x, cy + height / 2, cz + z);
+                vertices.push(cx + x, cy - height / 2, cz + z);
+                colors.push(r, g, b, 1.0, r, g, b, 1.0);
+            }
+
+            for (let i = 0; i < segs; i++) {
+                const top1 = start + 2 + i * 2;
+                const bot1 = top1 + 1;
+                const top2 = top1 + 2;
+                const bot2 = bot1 + 2;
+                indices.push(top1, bot1, top2, bot1, bot2, top2);
+                indices.push(start, top2, top1);
+                indices.push(start + 1, bot1, bot2);
+            }
+        }
+
+        // Camera Body (Dark Charcoal)
+        addBox(0, 0, 0, 0.8, 0.6, 1.0, 0.15, 0.15, 0.18);
+        // Lens Cone (Black matte)
+        addCylinder(0, 0, -0.7, 0.28, 0.5, 16, 0.08, 0.08, 0.1);
+        // Lens Ring (Cyan highlight)
+        addCylinder(0, 0, -0.9, 0.32, 0.08, 16, 0.0, 0.8, 1.0);
+        // Film Reel 1 (Golden top left)
+        addCylinder(-0.22, 0.5, 0.15, 0.25, 0.12, 16, 0.85, 0.65, 0.2);
+        // Film Reel 2 (Golden top right)
+        addCylinder(0.22, 0.5, 0.15, 0.25, 0.12, 16, 0.85, 0.65, 0.2);
+
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
 }
