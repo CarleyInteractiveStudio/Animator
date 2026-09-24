@@ -1,4 +1,5 @@
 import { mat3, mat4, vec3 } from './math.js';
+import { Mesh } from './mesh.js';
 import Engine from '../engine.js';
 
 export function initWebGL(canvas) {
@@ -705,6 +706,41 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         }
 
         gl.drawElements(gl.TRIANGLES, gameObject.mesh.vertexCount, gl.UNSIGNED_SHORT, 0);
+    }
+
+    // --- 3. RENDER 3D WIND PARTICLES & LEAVES ---
+    if (Engine && Engine.windParticleSystem && Engine.windParticleSystem.particles.length > 0) {
+        if (!Engine.leafMesh) Engine.leafMesh = Mesh.createLeaf(gl);
+        if (!Engine.windRayMesh) Engine.windRayMesh = Mesh.createWindRay(gl);
+
+        gl.uniform1i(programInfo.uniformLocations.isUnlit, 1);
+        gl.uniform1i(programInfo.uniformLocations.isCloud, 0);
+        gl.uniform1i(programInfo.uniformLocations.textureType, 0);
+
+        for (const p of Engine.windParticleSystem.particles) {
+            const mesh = p.type === 'leaf' ? Engine.leafMesh : Engine.windRayMesh;
+            gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffer);
+            gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
+
+            if (mesh.colorBuffer) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, mesh.colorBuffer);
+                gl.vertexAttribPointer(programInfo.attribLocations.vertexColor, 4, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
+            }
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
+
+            const particleMatrix = mat4.create();
+            mat4.translate(particleMatrix, particleMatrix, p.position);
+            mat4.rotateY(particleMatrix, particleMatrix, p.rotation);
+            mat4.scale(particleMatrix, particleMatrix, [p.scale, p.scale, p.scale]);
+
+            gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, particleMatrix);
+            gl.uniform4f(programInfo.uniformLocations.tintColor, 1.0, 1.0, 1.0, 0.8);
+
+            gl.drawElements(gl.TRIANGLES, mesh.vertexCount, gl.UNSIGNED_SHORT, 0);
+        }
     }
 
     if (gizmo && selectedGameObject) {

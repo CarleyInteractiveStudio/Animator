@@ -4,6 +4,7 @@ import { Input } from './engine/input.js';
 import { Scene } from './engine/scene.js';
 import { Gizmo } from './engine/gizmo.js';
 import { mat4, mat3, vec3 } from './engine/math.js';
+import { WindParticleSystem, applyWindPhysics } from './engine/wind.js';
 
 let webglContext;
 let canvas;
@@ -53,6 +54,7 @@ const Engine = {
         Input.initialize(canvas);
         Engine.scene = new Scene();
         Engine.gizmo = new Gizmo(Engine.gl);
+        Engine.windParticleSystem = new WindParticleSystem(120);
 
         return true;
     },
@@ -328,6 +330,15 @@ const Engine = {
                 if (Engine.onEnvironmentUpdate) {
                     Engine.onEnvironmentUpdate(Engine.environment);
                 }
+            }
+
+            // Wind Physics & Particle Updates
+            if (Engine.scene) {
+                const windZones = Engine.scene.gameObjects.filter(o => o.windZone && o.windZone.enabled);
+                if (Engine.windParticleSystem) {
+                    Engine.windParticleSystem.update(windZones, deltaTime, Engine.time);
+                }
+                applyWindPhysics(Engine.scene, deltaTime, Engine.time);
             }
 
             updateCamera(deltaTime);

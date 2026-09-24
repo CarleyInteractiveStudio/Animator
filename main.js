@@ -7,6 +7,7 @@ import { vec3 } from './engine/math.js';
 import { OBJLoader, GLTFLoader } from './engine/importer.js';
 import { Armature, Bone } from './engine/bone.js';
 import { VolumetricLightComponent, DarknessZoneComponent } from './engine/lightEffects.js';
+import { WindZoneComponent } from './engine/wind.js';
 
 let objectCounters = {
     cube: 1,
@@ -17,7 +18,8 @@ let objectCounters = {
     pyramid: 0,
     ramp: 0,
     torus: 0,
-    cloud: 0
+    cloud: 0,
+    windzone: 0
 };
 
 function setupResizers() {
@@ -108,9 +110,12 @@ function updateInspectorPanel() {
 
     const hasGodRays = !!selectedObject.volumetricLight;
     const hasDarkness = !!selectedObject.darknessZone;
+    const hasWind = !!selectedObject.windZone;
     const isCloud = !!selectedObject.cloudProps;
 
-    inspectorContent.innerHTML = `
+    const elasticity = selectedObject.windElasticity !== undefined ? selectedObject.windElasticity : (isCloud ? 0.8 : 0.0);
+
+    let html = `
         <div class="inspector-section">
             <div class="inspector-section-title">Objeto: ${selectedObject.name}</div>
         </div>
@@ -172,13 +177,45 @@ function updateInspectorPanel() {
             </div>
         </div>
 
-        <div class="inspector-section" style="margin-top: 15px;">
-            <button id="btn-open-comp-modal" style="width: 100%; background: #007acc; color: #fff; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">
-                + Añadir Componente
-            </button>
+        <div class="inspector-section">
+            <div class="inspector-section-title">Física de Viento / Elasticidad</div>
+            <div style="margin-top: 8px;">
+                <label style="font-size: 11px; color: #aaa;">Sensibilidad al Viento (Deformación): <span id="val-elasticity" style="color: #00d2ff; font-weight: bold;">${elasticity.toFixed(2)}</span></label>
+                <input type="range" id="slider-elasticity" min="0.0" max="2.0" step="0.05" value="${elasticity}" class="modern-range" style="width: 100%; margin-top: 4px;">
+            </div>
         </div>
+    `;
 
-        ${hasGodRays ? `
+    if (hasWind) {
+        const wz = selectedObject.windZone;
+        html += `
+            <div class="inspector-section" style="border: 1px solid #00d2ff44; background: #00d2ff0a; padding: 10px; border-radius: 6px; margin-top: 10px;">
+                <div class="inspector-section-title" style="color: #00d2ff; display: flex; align-items: center; gap: 6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00d2ff" stroke-width="2"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>
+                    <span>Campo de Viento 3D</span>
+                </div>
+                <div style="margin-top: 8px;">
+                    <label style="font-size: 11px; color: #ccc;">Tipo de Viento:</label>
+                    <select id="wind-type-select" style="width: 100%; padding: 4px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 11px; margin-top: 4px;">
+                        <option value="breeze" ${wz.type === 'breeze' ? 'selected' : ''}>Brisa Lineal (Direccional)</option>
+                        <option value="tornado" ${wz.type === 'tornado' ? 'selected' : ''}>Tornado / Huracán (Vórtice Espiral)</option>
+                        <option value="gust" ${wz.type === 'gust' ? 'selected' : ''}>Ráfagas y Turbulencia</option>
+                    </select>
+                </div>
+                <div style="margin-top: 8px;">
+                    <label style="font-size: 11px; color: #ccc;">Fuerza / Intensidad: <span id="val-wind-strength" style="color: #00d2ff;">${wz.strength.toFixed(1)}</span></label>
+                    <input type="range" id="slider-wind-strength" min="0.1" max="10.0" step="0.1" value="${wz.strength}" class="modern-range" style="width: 100%; margin-top: 2px;">
+                </div>
+                <div style="margin-top: 8px;">
+                    <label style="font-size: 11px; color: #ccc;">Radio de Cobertura: <span id="val-wind-radius" style="color: #00d2ff;">${wz.radius.toFixed(1)}m</span></label>
+                    <input type="range" id="slider-wind-radius" min="1.0" max="30.0" step="0.5" value="${wz.radius}" class="modern-range" style="width: 100%; margin-top: 2px;">
+                </div>
+            </div>
+        `;
+    }
+
+    if (hasGodRays) {
+        html += `
         <div class="inspector-section">
             <div class="inspector-section-title">Efectos de Luz Volumétrica (God Rays)</div>
             <div style="margin-bottom: 8px;">
@@ -190,9 +227,11 @@ function updateInspectorPanel() {
                 <input type="range" id="god-exposure" min="0.1" max="2.0" step="0.05" value="${selectedObject.volumetricLight.exposure}" style="width: 100%;">
             </div>
         </div>
-        ` : ''}
+        `;
+    }
 
-        ${hasDarkness ? `
+    if (hasDarkness) {
+        html += `
         <div class="inspector-section">
             <div class="inspector-section-title">Zona de Oscuridad y Niebla Volumétrica</div>
             <div style="margin-bottom: 8px;">
@@ -208,9 +247,11 @@ function updateInspectorPanel() {
                 <input type="range" id="dark-fog" min="0.0" max="1.0" step="0.05" value="${selectedObject.darknessZone.fogDensity}" style="width: 100%;">
             </div>
         </div>
-        ` : ''}
+        `;
+    }
 
-        ${isCloud ? `
+    if (isCloud) {
+        html += `
         <div class="inspector-section">
             <div class="inspector-section-title">Propiedades de Nube 3D</div>
 
@@ -238,8 +279,18 @@ function updateInspectorPanel() {
                 <input type="range" id="slider-cloud-translucency" min="0.0" max="1.0" step="0.05" value="${selectedObject.cloudProps.translucency}" style="width: 100%;">
             </div>
         </div>
-        ` : ''}
+        `;
+    }
+
+    html += `
+        <div class="inspector-section" style="margin-top: 15px;">
+            <button id="btn-open-comp-modal" style="width: 100%; background: #007acc; color: #fff; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">
+                + Añadir Componente
+            </button>
+        </div>
     `;
+
+    inspectorContent.innerHTML = html;
 
     const posXInput = inspectorContent.querySelector('#pos-x');
     const posYInput = inspectorContent.querySelector('#pos-y');
@@ -371,6 +422,45 @@ function updateInspectorPanel() {
             if (valLabel) valLabel.textContent = val.toFixed(2);
         });
     }
+
+    const sliderElasticity = inspectorContent.querySelector('#slider-elasticity');
+    if (sliderElasticity) {
+        sliderElasticity.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            selectedObject.windElasticity = val;
+            const elVal = inspectorContent.querySelector('#val-elasticity');
+            if (elVal) elVal.textContent = val.toFixed(2);
+        });
+    }
+
+    const windTypeSelect = inspectorContent.querySelector('#wind-type-select');
+    const sliderWindStrength = inspectorContent.querySelector('#slider-wind-strength');
+    const sliderWindRadius = inspectorContent.querySelector('#slider-wind-radius');
+
+    if (windTypeSelect) {
+        windTypeSelect.addEventListener('change', (e) => {
+            selectedObject.windZone.type = e.target.value;
+            if (e.target.value === 'tornado') {
+                selectedObject.mesh = Mesh.createTornadoVortex(Engine.gl);
+            }
+        });
+    }
+    if (sliderWindStrength) {
+        sliderWindStrength.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            selectedObject.windZone.strength = val;
+            const lbl = inspectorContent.querySelector('#val-wind-strength');
+            if (lbl) lbl.textContent = val.toFixed(1);
+        });
+    }
+    if (sliderWindRadius) {
+        sliderWindRadius.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            selectedObject.windZone.radius = val;
+            const lbl = inspectorContent.querySelector('#val-wind-radius');
+            if (lbl) lbl.textContent = val.toFixed(1) + 'm';
+        });
+    }
 }
 
 function formatTimeString(timeVal) {
@@ -412,9 +502,13 @@ function setupModals() {
                 }
                 updateInspectorPanel();
             }
+            if (compType === 'wind') {
+                Engine.selectedGameObject.windZone = new WindZoneComponent();
+            }
             if (modalComp) modalComp.style.display = 'none';
         });
     });
+
 
     const presetDark = document.getElementById('preset-dark');
     const presetSky = document.getElementById('preset-sky');
@@ -577,6 +671,7 @@ function createPrimitiveMesh(type) {
         case 'ramp': return Mesh.createRamp(gl);
         case 'torus': return Mesh.createTorus(gl);
         case 'cloud': return Mesh.createCloud(gl);
+        case 'windzone': return Mesh.createTornadoVortex(gl);
         case 'cube':
         default:
             return Mesh.createCube(gl);
@@ -595,6 +690,7 @@ function getPrimitiveName(type) {
         case 'ramp': return `Prisma ${num}`;
         case 'torus': return `Torus ${num}`;
         case 'cloud': return `Nube ${num}`;
+        case 'windzone': return `Zona de Viento ${num}`;
         case 'cube':
         default:
             return `Cubo ${num}`;
@@ -614,6 +710,9 @@ function spawnPrimitive(type) {
             translucency: 0.6,
             tint: [1.0, 1.0, 1.0]
         };
+        obj.windElasticity = 0.8;
+    } else if (type === 'windzone') {
+        obj.windZone = new WindZoneComponent();
     }
 
     vec3.set(obj.transform.position, (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);

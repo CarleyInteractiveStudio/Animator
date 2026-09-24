@@ -508,4 +508,74 @@ export class Mesh {
         // Return unified single continuous mesh with smooth auto-recalculated normals
         return new Mesh(gl, vertices, indices);
     }
+
+    static createTornadoVortex(gl, height = 5.0, topRadius = 3.5, bottomRadius = 0.3, rings = 24, segments = 24) {
+        const vertices = [];
+        const indices = [];
+
+        for (let r = 0; r <= rings; r++) {
+            const v = r / rings;
+            const y = (v - 0.5) * height;
+            const currentRadius = bottomRadius + (topRadius - bottomRadius) * Math.pow(v, 1.2);
+            const twistAngle = v * Math.PI * 4.0; // Twist spiral
+
+            for (let s = 0; s <= segments; s++) {
+                const u = s / segments;
+                const angle = u * Math.PI * 2.0 + twistAngle;
+
+                const wave = Math.sin(u * Math.PI * 6.0 + v * Math.PI * 3.0) * 0.15 * currentRadius;
+
+                const x = Math.cos(angle) * (currentRadius + wave);
+                const z = Math.sin(angle) * (currentRadius + wave);
+
+                vertices.push(x, y, z);
+            }
+        }
+
+        for (let r = 0; r < rings; r++) {
+            for (let s = 0; s < segments; s++) {
+                const first = r * (segments + 1) + s;
+                const second = first + segments + 1;
+
+                indices.push(first, second, first + 1);
+                indices.push(second, second + 1, first + 1);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices);
+    }
+
+    static createLeaf(gl) {
+        const vertices = [
+             0.0,  0.2, 0.0,
+            -0.15, 0.0, 0.0,
+             0.15, 0.0, 0.0,
+             0.0, -0.2, 0.0
+        ];
+        const indices = [0, 1, 2, 1, 3, 2];
+        const colors = [
+            0.2, 0.8, 0.3, 0.9,
+            0.3, 0.85, 0.2, 0.9,
+            0.1, 0.75, 0.3, 0.9,
+            0.15, 0.7, 0.2, 0.9
+        ];
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
+    static createWindRay(gl) {
+        const vertices = [
+            -0.05, 0.0, -0.8,
+             0.05, 0.0, -0.8,
+             0.05, 0.0,  0.8,
+            -0.05, 0.0,  0.8
+        ];
+        const indices = [0, 1, 2, 0, 2, 3];
+        const colors = [
+            0.8, 0.95, 1.0, 0.0,
+            0.8, 0.95, 1.0, 0.0,
+            0.85, 0.98, 1.0, 0.6,
+            0.85, 0.98, 1.0, 0.6
+        ];
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
 }
