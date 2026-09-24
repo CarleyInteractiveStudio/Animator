@@ -28,6 +28,27 @@ export class Gizmo {
         this.vertexDot = Mesh.createSphere(gl, 0.06, 12, 12);
     }
 
+    renderWindZoneAreaBox(gl, programInfo, targetObject, viewMatrix, projectionMatrix) {
+        if (!targetObject || !targetObject.windZone) return;
+
+        const wz = targetObject.windZone;
+        const size = wz.size || [8.0, 6.0, 8.0];
+
+        if (!this.windBoxCache || this.windBoxCache.width !== size[0] || this.windBoxCache.height !== size[1] || this.windBoxCache.depth !== size[2]) {
+            this.windBoxMesh = Mesh.createWireframeBox(gl, size[0], size[1], size[2]);
+            this.windBoxCache = { width: size[0], height: size[1], depth: size[2] };
+        }
+
+        gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
+        gl.uniformMatrix4fv(programInfo.uniformLocations.viewMatrix, false, viewMatrix);
+
+        const matrix = targetObject.getModelMatrix();
+        gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, matrix);
+        gl.uniform4f(programInfo.uniformLocations.tintColor, 0.0, 0.85, 1.0, 0.9);
+
+        this.drawMesh(gl, programInfo, this.windBoxMesh);
+    }
+
     renderSubElementOverlay(gl, programInfo, targetObject, selectedSubElement, viewMatrix, projectionMatrix) {
         if (!targetObject || !targetObject.mesh || !selectedSubElement) return;
 
@@ -66,6 +87,10 @@ export class Gizmo {
         gl.useProgram(programInfo.program);
 
         const pos = targetObject.transform.position;
+
+        if (targetObject.windZone) {
+            this.renderWindZoneAreaBox(gl, programInfo, targetObject, viewMatrix, projectionMatrix);
+        }
 
         if (mode === 'sculpt' || mode === 'paint') {
             this.renderBrushCursor(gl, programInfo, pos, brushRadius, viewMatrix, projectionMatrix);

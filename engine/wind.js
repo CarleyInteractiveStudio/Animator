@@ -5,11 +5,23 @@ export class WindZoneComponent {
         this.enabled = true;
         this.type = 'breeze'; // 'breeze' (linear), 'tornado' (vortex), 'gust' (pulsing turbulence)
         this.strength = 2.0;
-        this.radius = 8.0;
+        this.radius = 8.0; // legacy radius
+        this.size = [8.0, 6.0, 8.0]; // Box area bounds [width X, height Y, depth Z]
         this.direction = [1.0, 0.1, 0.5]; // Normalized vector for breeze/gust
         this.turbulence = 0.5;
         this.showParticles = true;
-        this.particleCount = 50;
+        this.particleCount = 500; // Customizable count from Inspector
+
+        // Stream ribbon curve & wave animation
+        this.waveFrequency = 2.5;
+        this.waveAmplitude = 0.35;
+        this.speed = 4.0;
+
+        // Tornado shape customization
+        this.tornadoTopRadius = 5.0;
+        this.tornadoMidRadius = 1.2; // Waist
+        this.tornadoBottomRadius = 0.8;
+        this.tornadoCloudDensity = 0.7; // Cloud texture puff density
     }
 }
 
@@ -17,145 +29,184 @@ export class WindParticleSystem {
     constructor(maxParticles = 5000) {
         this.maxParticles = maxParticles;
         this.particles = [];
-        this.initParticles();
     }
 
-    initParticles() {
+    initParticlesForZones(windZones) {
         this.particles = [];
-        for (let i = 0; i < this.maxParticles; i++) {
-            this.particles.push(this.createParticle(true));
+        if (!windZones || windZones.length === 0) return;
+
+        for (const zoneObj of windZones) {
+            const wz = zoneObj.windZone;
+            if (!wz || !wz.enabled) continue;
+
+            const count = wz.particleCount || 300;
+            for (let i = 0; i < count; i++) {
+                this.particles.push(this.createParticleForZone(zoneObj, true));
+            }
         }
     }
 
-    createParticle(initialRandom = false) {
+    createParticleForZone(zoneObj, initialRandom = false) {
+        const wz = zoneObj.windZone;
+        const center = zoneObj.transform.position;
+        const size = wz ? wz.size : [8, 6, 8];
+
+        const isTornado = wz && wz.type === 'tornado';
+        const progress = Math.random();
+
+        // Position relative to box bounds
+        const relX = (Math.random() - 0.5) * size[0];
+        const relY = Math.random() * size[1];
+        const relZ = (Math.random() - 0.5) * size[2];
+
         return {
-            position: initialRandom ? [
-                (Math.random() - 0.5) * 24,
-                Math.random() * 10,
-                (Math.random() - 0.5) * 24
-            ] : [-15, Math.random() * 8, (Math.random() - 0.5) * 20],
-            prevPosition: [0, 0, 0],
-            tangent: [1, 0, 0],
-            curvature: 0.0, // Dynamic bend curvature based on trajectory angle changes
-            scale: 0.12 + Math.random() * 0.28,
-            life: initialRandom ? Math.random() * 2.0 : 0.0,
-            maxLife: 1.8 + Math.random() * 2.5,
-            isTornado: false,
+            zoneObj: zoneObj,
+            isTornado: isTornado,
+            isCloudPuff: isTornado && Math.random() < (wz.tornadoCloudDensity || 0.6),
+            position: [center[0] + relX, center[1] + relY, center[2] + relZ],
+            prevPosition: [center[0] + relX, center[1] + relY, center[2] + relZ],
+            progress: progress, // 0.0 to 1.0 along its lifespan
+            speed: (wz ? wz.speed : 4.0) * (0.8 + Math.random() * 0.4),
+            scale: isTornado ? (0.2 + Math.random() * 0.5) : (0.15 + Math.random() * 0.25),
+            life: progress * (1.8 + Math.random() * 1.5),
+            maxLife: 1.8 + Math.random() * 1.5,
             spiralAngle: Math.random() * Math.PI * 2,
-            heightOffset: Math.random() * 7.0,
-            radialDistance: 0.2 + Math.random() * 0.4
+            heightRatio: Math.random(), // 0.0 bottom to 1.0 top of tornado
+            headOffset: Math.random() * Math.PI * 2,
+            tangent: [1, 0, 0],
+            headAlpha: 0.0, // Fade in head
+            tailAlpha: 1.0, // Fade out tail
+            headZigZag: [0, 0, 0] // Dynamic serpentine head-to-tail sine wave offset
         };
     }
 
-    update(windZones, deltaTime, time) {
-        if (!windZones || windZones.length === 0) return;
+    update(windZones, deltaTime, time, isPlaying = false) {
+        if (!isPlaying || !windZones || windZones.length === 0) {
+            this.particles = [];
+            return;
+        }
 
-        const activeTornado = windZones.find(z => z.windZone && z.windZone.enabled && z.windZone.type === 'tornado');
+        // Re-sync particle count with active wind zones
+        let totalDesired = 0;
+        const activeZones = windZones.filter(z => z.windZone && z.windZone.enabled);
+        for (const z of activeZones) {
+            totalDesired += z.windZone.particleCount || 300;
+        }
+
+        if (this.particles.length !== totalDesired) {
+            this.initParticlesForZones(activeZones);
+        }
 
         for (let i = 0; i < this.particles.length; i++) {
             const p = this.particles[i];
-            p.life += deltaTime;
+            const zoneObj = p.zoneObj;
+            if (!zoneObj || !zoneObj.windZone || !zoneObj.windZone.enabled) {
+                // Reassign or recreate
+                if (activeZones.length > 0) {
+                    p.zoneObj = activeZones[Math.floor(Math.random() * activeZones.length)];
+                } else {
+                    continue;
+                }
+            }
 
-            // Store previous position for trajectory bending calculations
+            const wz = p.zoneObj.windZone;
+            const center = p.zoneObj.transform.position;
+            const size = wz.size || [8, 6, 8];
+
+            p.life += deltaTime;
+            p.progress = Math.min(1.0, p.life / p.maxLife);
+
+            // Calculate Head-to-Tail smooth fade (appears at head, vanishes at tail)
+            const fadeIn = Math.sin(Math.min(1.0, p.progress * 4.0) * Math.PI * 0.5); // Fast head spawn fade-in
+            const fadeOut = Math.sin(Math.max(0.0, (1.0 - p.progress) * 3.0) * Math.PI * 0.5); // Tail fade-out
+            p.alpha = Math.max(0.0, Math.min(1.0, fadeIn * fadeOut));
+
             p.prevPosition[0] = p.position[0];
             p.prevPosition[1] = p.position[1];
             p.prevPosition[2] = p.position[2];
 
-            let netVel = [0, 0, 0];
-            let isTornadoParticle = false;
+            if (wz.type === 'tornado') {
+                p.isTornado = true;
+                p.heightRatio = Math.min(1.0, Math.max(0.0, (p.position[1] - center[1]) / size[1]));
 
-            for (const zoneObj of windZones) {
-                const wz = zoneObj.windZone;
-                if (!wz || !wz.enabled) continue;
-
-                const center = zoneObj.transform.position;
-                const dx = p.position[0] - center[0];
-                const dy = p.position[1] - center[1];
-                const dz = p.position[2] - center[2];
-                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-                if (wz.type === 'tornado') {
-                    // Realistic Tornado Logarithmic Funnel Vortex
-                    isTornadoParticle = true;
-                    p.isTornado = true;
-
-                    const heightAboveBase = Math.max(0, p.position[1] - center[1]);
-                    const hRatio = Math.min(1.0, heightAboveBase / 7.0); // Funnel height 7 units
-
-                    // Logarithmic expanding radius (narrow bottom, wide top)
-                    const funnelRadius = (0.2 + Math.pow(hRatio, 1.4) * 4.2) * (wz.radius / 7.0);
-
-                    // High rotational speed at bottom, easing as funnel widens
-                    const angularSpeed = (4.0 + (1.0 - hRatio) * 6.0) * wz.strength * 0.25;
-                    p.spiralAngle += angularSpeed * deltaTime;
-
-                    const targetX = center[0] + Math.cos(p.spiralAngle) * funnelRadius;
-                    const targetZ = center[2] + Math.sin(p.spiralAngle) * funnelRadius;
-
-                    netVel[0] = (targetX - p.position[0]) * 10.0;
-                    netVel[1] = wz.strength * 2.2 + hRatio * 1.5; // Strong upward draft
-                    netVel[2] = (targetZ - p.position[2]) * 10.0;
-
-                    // Tangent vector around spiral
-                    p.tangent = [
-                        -Math.sin(p.spiralAngle),
-                        0.5,
-                        Math.cos(p.spiralAngle)
-                    ];
-                    p.curvature = 1.2 + hRatio * 1.8; // High curvature along tornado spiral
-                } else if (dist <= wz.radius) {
-                    p.isTornado = false;
-                    const factor = (1.0 - dist / wz.radius) * wz.strength;
-
-                    if (wz.type === 'gust') {
-                        const pulse = (Math.sin(time * 5.0 + p.position[0] * 0.5) * 0.5 + 0.5) * 2.2;
-                        const dir = wz.direction;
-                        netVel[0] += dir[0] * factor * pulse * 3.0;
-                        netVel[1] += dir[1] * factor * pulse;
-                        netVel[2] += dir[2] * factor * pulse * 3.0;
-
-                        // Dynamic bending along gust turbulence waves
-                        const wave = Math.sin(time * 6.0 + p.position[0]);
-                        p.tangent = [dir[0], dir[1] + wave * 0.35, dir[2] + wave * 0.2];
-                        p.curvature = Math.abs(wave) * 0.8;
-                    } else { // 'breeze'
-                        const dir = wz.direction;
-                        const wave = Math.sin(time * 3.0 + p.position[0] * 0.6) * wz.turbulence;
-                        netVel[0] += (dir[0] + wave * 0.2) * factor * 2.2;
-                        netVel[1] += (dir[1] + Math.cos(time * 2.0) * 0.1) * factor;
-                        netVel[2] += (dir[2] + wave * 0.2) * factor * 2.2;
-
-                        // Straight continuous flow with gentle bending
-                        p.tangent = [dir[0], Math.sin(time * 2.5) * 0.15, dir[2]];
-                        p.curvature = Math.abs(wave) * 0.3;
-                    }
+                // Variable Tornado Shape Profile (Bottom, Mid waist, Top)
+                const h = p.heightRatio;
+                let currentRadius;
+                if (h < 0.5) {
+                    const t = h / 0.5;
+                    currentRadius = (1 - t) * wz.tornadoBottomRadius + t * wz.tornadoMidRadius;
+                } else {
+                    const t = (h - 0.5) / 0.5;
+                    currentRadius = (1 - t) * wz.tornadoMidRadius + t * wz.tornadoTopRadius;
                 }
+
+                // Rotational speed along variable waist
+                const angularSpeed = (4.0 + (1.0 - h) * 5.0) * wz.strength * 0.3;
+                p.spiralAngle += angularSpeed * deltaTime;
+
+                const targetX = center[0] + Math.cos(p.spiralAngle) * currentRadius;
+                const targetZ = center[2] + Math.sin(p.spiralAngle) * currentRadius;
+
+                // Upward draft + spiral motion
+                p.position[0] += (targetX - p.position[0]) * 12.0 * deltaTime;
+                p.position[1] += wz.strength * 1.8 * deltaTime;
+                p.position[2] += (targetZ - p.position[2]) * 12.0 * deltaTime;
+
+                p.tangent = [
+                    -Math.sin(p.spiralAngle),
+                    0.6,
+                    Math.cos(p.spiralAngle)
+                ];
+            } else {
+                p.isTornado = false;
+                const dir = wz.direction || [1, 0, 0];
+                const spd = wz.speed || 4.0;
+                const waveFreq = wz.waveFrequency || 2.5;
+                const waveAmp = wz.waveAmplitude || 0.35;
+
+                // Serpentine head-to-tail sine wave undulation (up-down zig-zag smooth curve)
+                const waveX = Math.sin(time * waveFreq + p.progress * 6.0 + p.headOffset) * waveAmp;
+                const waveY = Math.cos(time * waveFreq * 0.8 + p.progress * 5.0) * (waveAmp * 0.6);
+
+                p.headZigZag = [waveX, waveY, 0];
+
+                const vx = dir[0] * spd + waveX;
+                const vy = dir[1] * spd + waveY;
+                const vz = dir[2] * spd;
+
+                p.position[0] += vx * deltaTime;
+                p.position[1] += vy * deltaTime;
+                p.position[2] += vz * deltaTime;
+
+                p.tangent = [dir[0], dir[1] + waveY * 0.2, dir[2]];
             }
 
-            p.position[0] += netVel[0] * deltaTime;
-            p.position[1] += netVel[1] * deltaTime;
-            p.position[2] += netVel[2] * deltaTime;
+            // Respawn particle inside box bounds when lifecycle ends
+            const halfX = size[0] * 0.5;
+            const halfY = size[1];
+            const halfZ = size[2] * 0.5;
 
-            const tLen = Math.hypot(p.tangent[0], p.tangent[1], p.tangent[2]) || 1;
-            p.tangent[0] /= tLen; p.tangent[1] /= tLen; p.tangent[2] /= tLen;
+            const isOutOfBounds =
+                Math.abs(p.position[0] - center[0]) > halfX * 1.3 ||
+                (p.position[1] < center[1] || p.position[1] > center[1] + halfY * 1.2) ||
+                Math.abs(p.position[2] - center[2]) > halfZ * 1.3;
 
-            // Dynamic emission / respawn when particles reach life end or boundary
-            if (p.life > p.maxLife || p.position[1] > 14 || Math.abs(p.position[0]) > 28 || Math.abs(p.position[2]) > 28) {
+            if (p.life >= p.maxLife || isOutOfBounds) {
                 p.life = 0.0;
-                p.maxLife = 1.8 + Math.random() * 2.5;
+                p.maxLife = 1.6 + Math.random() * 1.8;
 
-                if (activeTornado) {
-                    const tc = activeTornado.transform.position;
-                    // Spawn continuously at tornado base funnel opening
+                if (wz.type === 'tornado') {
                     p.spiralAngle = Math.random() * Math.PI * 2;
-                    p.position[0] = tc[0] + (Math.random() - 0.5) * 1.5;
-                    p.position[1] = tc[1] + Math.random() * 0.3;
-                    p.position[2] = tc[2] + (Math.random() - 0.5) * 1.5;
+                    p.heightRatio = 0.0;
+                    p.position[0] = center[0] + (Math.random() - 0.5) * wz.tornadoBottomRadius;
+                    p.position[1] = center[1] + Math.random() * 0.2;
+                    p.position[2] = center[2] + (Math.random() - 0.5) * wz.tornadoBottomRadius;
                 } else {
-                    // Spawn from incoming wind edge
-                    p.position[0] = -16.0 + (Math.random() - 0.5) * 4.0;
-                    p.position[1] = Math.random() * 9.0;
-                    p.position[2] = (Math.random() - 0.5) * 24.0;
+                    // Spawn at entry face of wind box
+                    const dir = wz.direction || [1, 0, 0];
+                    p.position[0] = center[0] - dir[0] * halfX + (Math.random() - 0.5) * (size[0] * 0.2);
+                    p.position[1] = center[1] + Math.random() * size[1];
+                    p.position[2] = center[2] + (Math.random() - 0.5) * size[2];
                 }
             }
         }
@@ -165,12 +216,11 @@ export class WindParticleSystem {
 export function applyWindPhysics(scene, deltaTime, time) {
     if (!scene || !scene.gameObjects) return;
 
-    // Find all Wind Zone objects
     const windZoneObjs = scene.gameObjects.filter(o => o.windZone && o.windZone.enabled);
     if (windZoneObjs.length === 0) return;
 
     for (const target of scene.gameObjects) {
-        if (target.windZone) continue; // Wind zones don't blow themselves
+        if (target.windZone) continue;
 
         const elasticity = target.windElasticity !== undefined ? target.windElasticity : (target.cloudProps ? 0.8 : 0.0);
         if (elasticity <= 0.001) continue;
@@ -181,31 +231,26 @@ export function applyWindPhysics(scene, deltaTime, time) {
         for (const zoneObj of windZoneObjs) {
             const wz = zoneObj.windZone;
             const center = zoneObj.transform.position;
+            const size = wz.size || [8, 6, 8];
 
-            const dx = target.transform.position[0] - center[0];
+            const dx = Math.abs(target.transform.position[0] - center[0]);
             const dy = target.transform.position[1] - center[1];
-            const dz = target.transform.position[2] - center[2];
-            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const dz = Math.abs(target.transform.position[2] - center[2]);
 
-            if (dist > wz.radius) continue;
+            // Check if object is inside wind zone box
+            if (dx > size[0] * 0.5 || dy < 0 || dy > size[1] || dz > size[2] * 0.5) continue;
 
-            const infl = (1.0 - dist / wz.radius) * wz.strength * elasticity;
+            const infl = wz.strength * elasticity;
 
             if (wz.type === 'tornado') {
-                // Orbital spiral lift
-                const angle = Math.atan2(dz, dx) + wz.strength * 0.5 * deltaTime;
+                const angle = Math.atan2(target.transform.position[2] - center[2], target.transform.position[0] - center[0]) + wz.strength * 0.5 * deltaTime;
+                const dist = Math.hypot(target.transform.position[0] - center[0], target.transform.position[2] - center[2]);
                 const orbitR = Math.max(0.5, dist * 0.98);
                 target.transform.position[0] = center[0] + Math.cos(angle) * orbitR;
                 target.transform.position[2] = center[2] + Math.sin(angle) * orbitR;
                 totalForce[1] += infl * 0.8;
                 totalTorque += wz.strength * elasticity * 2.0;
-            } else if (wz.type === 'gust') {
-                const pulse = Math.sin(time * 4.0) * 0.5 + 0.5;
-                totalForce[0] += wz.direction[0] * infl * pulse * 2.0;
-                totalForce[1] += wz.direction[1] * infl * pulse;
-                totalForce[2] += wz.direction[2] * infl * pulse * 2.0;
-                totalTorque += pulse * infl * 0.5;
-            } else { // 'breeze'
+            } else {
                 totalForce[0] += wz.direction[0] * infl;
                 totalForce[1] += wz.direction[1] * infl * 0.2;
                 totalForce[2] += wz.direction[2] * infl;
@@ -213,7 +258,6 @@ export function applyWindPhysics(scene, deltaTime, time) {
             }
         }
 
-        // Apply physical displacement
         target.transform.position[0] += totalForce[0] * deltaTime;
         target.transform.position[1] += totalForce[1] * deltaTime;
         target.transform.position[2] += totalForce[2] * deltaTime;
