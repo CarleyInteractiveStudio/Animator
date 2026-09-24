@@ -584,12 +584,33 @@ export class Mesh {
         const indices = [];
         const colors = [];
 
-        function addBox(cx, cy, cz, sx, sy, sz, r, g, b) {
+        function addThickLine(x1, y1, z1, x2, y2, z2, radius, r, g, b) {
             const start = vertices.length / 3;
-            const hx = sx / 2, hy = sy / 2, hz = sz / 2;
+            const dx = x2 - x1, dy = y2 - y1, dz = z2 - z1;
+            const len = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            if (len < 0.0001) return;
+
+            // Generate a thin box along the segment
+            let nx = -dy, ny = dx, nz = 0;
+            if (Math.abs(nx) < 0.001 && Math.abs(ny) < 0.001) { nx = 1; ny = 0; }
+            const nlen = Math.sqrt(nx*nx + ny*ny + nz*nz);
+            nx = (nx / nlen) * radius; ny = (ny / nlen) * radius; nz = (nz / nlen) * radius;
+
+            const px = (dy * nz - dz * ny) / radius;
+            const py = (dz * nx - dx * nz) / radius;
+            const pz = (dx * ny - dy * nx) / radius;
+            const plen = Math.sqrt(px*px + py*py + pz*pz);
+            const rx = (px / plen) * radius, ry = (py / plen) * radius, rz = (pz / plen) * radius;
+
             vertices.push(
-                cx - hx, cy - hy, cz + hz,   cx + hx, cy - hy, cz + hz,   cx + hx, cy + hy, cz + hz,   cx - hx, cy + hy, cz + hz,
-                cx - hx, cy - hy, cz - hz,   cx + hx, cy - hy, cz - hz,   cx + hx, cy + hy, cz - hz,   cx - hx, cy + hy, cz - hz
+                x1 - nx - rx, y1 - ny - ry, z1 - nz - rz,
+                x1 + nx - rx, y1 + ny - ry, z1 + nz - rz,
+                x1 + nx + rx, y1 + ny + ry, z1 + nz + rz,
+                x1 - nx + rx, y1 - ny + ry, z1 - nz + rz,
+                x2 - nx - rx, y2 - ny - ry, z2 - nz - rz,
+                x2 + nx - rx, y2 + ny - ry, z2 + nz - rz,
+                x2 + nx + rx, y2 + ny + ry, z2 + nz + rz,
+                x2 - nx + rx, y2 - ny + ry, z2 - nz + rz
             );
             const quadIndices = [
                 0, 1, 2, 0, 2, 3,   4, 6, 5, 4, 7, 6,
@@ -600,42 +621,36 @@ export class Mesh {
             for (let i = 0; i < 8; i++) colors.push(r, g, b, 1.0);
         }
 
-        function addCylinder(cx, cy, cz, rad, height, segs, r, g, b) {
-            const start = vertices.length / 3;
-            vertices.push(cx, cy + height / 2, cz);
-            vertices.push(cx, cy - height / 2, cz);
-            colors.push(r, g, b, 1.0, r, g, b, 1.0);
+        const cr = 0.2, cg = 0.7, cb = 1.0; // Clean Cyan Icon vector color
+        const w = 0.35, h = 0.25, d = 0.4;
+        const radius = 0.015;
 
-            for (let i = 0; i <= segs; i++) {
-                const a = (i * Math.PI * 2) / segs;
-                const x = Math.cos(a) * rad;
-                const z = Math.sin(a) * rad;
-                vertices.push(cx + x, cy + height / 2, cz + z);
-                vertices.push(cx + x, cy - height / 2, cz + z);
-                colors.push(r, g, b, 1.0, r, g, b, 1.0);
-            }
-
-            for (let i = 0; i < segs; i++) {
-                const top1 = start + 2 + i * 2;
-                const bot1 = top1 + 1;
-                const top2 = top1 + 2;
-                const bot2 = bot1 + 2;
-                indices.push(top1, bot1, top2, bot1, bot2, top2);
-                indices.push(start, top2, top1);
-                indices.push(start + 1, bot1, bot2);
-            }
+        // Camera wireframe body box
+        const p = [
+            [-w, -h,  d], [ w, -h,  d], [ w,  h,  d], [-w,  h,  d],
+            [-w, -h, -d], [ w, -h, -d], [ w,  h, -d], [-w,  h, -d]
+        ];
+        const lines = [
+            [0,1], [1,2], [2,3], [3,0],
+            [4,5], [5,6], [6,7], [7,4],
+            [0,4], [1,5], [2,6], [3,7]
+        ];
+        for (const [i, j] of lines) {
+            addThickLine(p[i][0], p[i][1], p[i][2], p[j][0], p[j][1], p[j][2], radius, cr, cg, cb);
         }
 
-        // Camera Body (Dark Charcoal)
-        addBox(0, 0, 0, 0.8, 0.6, 1.0, 0.15, 0.15, 0.18);
-        // Lens Cone (Black matte)
-        addCylinder(0, 0, -0.7, 0.28, 0.5, 16, 0.08, 0.08, 0.1);
-        // Lens Ring (Cyan highlight)
-        addCylinder(0, 0, -0.9, 0.32, 0.08, 16, 0.0, 0.8, 1.0);
-        // Film Reel 1 (Golden top left)
-        addCylinder(-0.22, 0.5, 0.15, 0.25, 0.12, 16, 0.85, 0.65, 0.2);
-        // Film Reel 2 (Golden top right)
-        addCylinder(0.22, 0.5, 0.15, 0.25, 0.12, 16, 0.85, 0.65, 0.2);
+        // Camera Lens trapezoid frustum pointing forwards (-Z)
+        const fw = 0.5, fh = 0.35, fz = -0.9;
+        const fp = [[-fw, -fh, fz], [fw, -fh, fz], [fw, fh, fz], [-fw, fh, fz]];
+        for (let i = 0; i < 4; i++) {
+            const next = (i + 1) % 4;
+            addThickLine(fp[i][0], fp[i][1], fp[i][2], fp[next][0], fp[next][1], fp[next][2], radius, cr, cg, cb);
+            addThickLine(p[4 + i][0], p[4 + i][1], p[4 + i][2], fp[i][0], fp[i][1], fp[i][2], radius * 0.8, cr, cg, cb);
+        }
+
+        // Top reel circles (simplified wireframe triangles/diamonds)
+        addThickLine(-w*0.5, h, 0, -w*0.5, h + 0.2, 0, radius, cr, cg, cb);
+        addThickLine(w*0.5, h, 0, w*0.5, h + 0.2, 0, radius, cr, cg, cb);
 
         return new Mesh(gl, vertices, indices, null, colors);
     }
