@@ -459,6 +459,83 @@ export class Mesh {
         return mesh;
     }
 
+    // --- High-Density Roblox 3D Grass Field Generator ---
+    static createRobloxGrassField(gl, terrainMesh, count = 250) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        function rnd(s) {
+            const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        }
+
+        function sampleTerrainHeight(mesh, x, z) {
+            if (!mesh || !mesh.terrainHeights) return 0;
+            const sub = mesh.terrainSubdivisions;
+            const halfW = mesh.terrainWidth / 2;
+            const halfD = mesh.terrainDepth / 2;
+
+            const normX = (x + halfW) / mesh.terrainWidth;
+            const normZ = (z + halfD) / mesh.terrainDepth;
+
+            const gridX = Math.max(0, Math.min(sub, Math.floor(normX * sub)));
+            const gridZ = Math.max(0, Math.min(sub, Math.floor(normZ * sub)));
+
+            const idx = gridZ * (sub + 1) + gridX;
+            return mesh.terrainHeights[idx] || 0;
+        }
+
+        const width = terrainMesh ? terrainMesh.terrainWidth : 36;
+        const depth = terrainMesh ? terrainMesh.terrainDepth : 36;
+        const halfW = width * 0.42;
+        const halfD = depth * 0.42;
+
+        let placed = 0;
+        let seedIter = 100;
+
+        while (placed < count && seedIter < count * 5) {
+            seedIter++;
+            const rx = (rnd(seedIter * 3.1) - 0.5) * (halfW * 2);
+            const rz = (rnd(seedIter * 7.4) - 0.5) * (halfD * 2);
+            const ry = terrainMesh ? sampleTerrainHeight(terrainMesh, rx, rz) : 0;
+
+            if (ry < 0.6 || ry > 8.0) continue; // Only grow grass on lush valley biomes
+
+            placed++;
+            const tuftBlades = 6;
+            for (let b = 0; b < tuftBlades; b++) {
+                const angle = (b / tuftBlades) * Math.PI + rnd(seedIter + b) * 0.5;
+                const h = 0.55 + rnd(seedIter * 2 + b) * 0.35;
+                const w = 0.07;
+
+                const cosA = Math.cos(angle) * w;
+                const sinA = Math.sin(angle) * w;
+
+                const baseIdx = vertices.length / 3;
+
+                const bx = rx + (rnd(seedIter + b) - 0.5) * 0.25;
+                const bz = rz + (rnd(seedIter * 3 + b) - 0.5) * 0.25;
+
+                // Blade Root Left & Right (Dark Green)
+                vertices.push(bx - cosA, ry, bz - sinA);
+                colors.push(0.18, 0.48, 0.12, 1.0);
+
+                vertices.push(bx + cosA, ry, bz + sinA);
+                colors.push(0.18, 0.48, 0.12, 1.0);
+
+                // Blade Tip (Bright Lush Green)
+                const lean = (b % 2 === 0 ? 0.22 : -0.22);
+                vertices.push(bx + sinA * lean, ry + h, bz + cosA * lean);
+                colors.push(0.35, 0.88, 0.22, 1.0);
+
+                indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
     static createTree(gl, seed = 1) {
         const vertices = [];
         const indices = [];

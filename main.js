@@ -965,7 +965,7 @@ function generateSmoothTerrainFromModal() {
 
     const numTrees = parseInt(document.getElementById('slider-tree-density').value) || 16;
     const numRocks = parseInt(document.getElementById('slider-rock-density').value) || 12;
-    const numGrass = parseInt(document.getElementById('slider-grass-density').value) || 25;
+    const grassDensityVal = parseInt(document.getElementById('slider-grass-density').value) || 25;
     const hasWater = document.getElementById('chk-terrain-water').checked;
 
     objectCounters.terrain = (objectCounters.terrain || 0) + 1;
@@ -989,6 +989,13 @@ function generateSmoothTerrainFromModal() {
         const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
         return x - Math.floor(x);
     }
+
+    // High-Density 3D Roblox Grass Field Covering the Terrain
+    objectCounters.grass++;
+    const grassFieldMesh = Mesh.createRobloxGrassField(Engine.gl, terrainMesh, grassDensityVal * 10);
+    const grassFieldObj = new GameObject(`Prado de Césped 3D ${objectCounters.grass}`, grassFieldMesh);
+    grassFieldObj.windElasticity = 0.85; // Bends dynamically with WebGL wind physics
+    Engine.scene.addGameObject(grassFieldObj);
 
     // Scatter Trees
     for (let i = 0; i < numTrees; i++) {
@@ -1021,22 +1028,6 @@ function generateSmoothTerrainFromModal() {
         const scaleVar = 0.6 + rnd(seed + i * 3) * 0.8;
         rockObj.transform.scale = [scaleVar, scaleVar * 0.7, scaleVar];
         Engine.scene.addGameObject(rockObj);
-    }
-
-    // Scatter Grass Tufts
-    for (let i = 0; i < numGrass; i++) {
-        const rx = (rnd(seed * 3 + i * 5.2) - 0.5) * (width * 0.85);
-        const rz = (rnd(seed * 3 + i * 9.3) - 0.5) * (depth * 0.85);
-        const ry = sampleTerrainHeight(terrainMesh, rx, rz);
-
-        if (ry >= waterLevel + 0.2) {
-            objectCounters.grass++;
-            const grassMesh = Mesh.createGrassTuft(Engine.gl, seed + i);
-            const grassObj = new GameObject(`Césped ${objectCounters.grass}`, grassMesh);
-            vec3.set(grassObj.transform.position, rx, ry, rz);
-            grassObj.windElasticity = 0.6;
-            Engine.scene.addGameObject(grassObj);
-        }
     }
 
     // Optional Water Plane
