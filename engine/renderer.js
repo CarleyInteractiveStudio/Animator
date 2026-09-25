@@ -272,6 +272,8 @@ export function initWebGL(canvas) {
         uniform mat4 u_viewMatrix;
         uniform mat4 u_modelMatrix;
         uniform mat3 u_normalMatrix;
+        uniform float u_time;
+        uniform float u_windElasticity;
 
         varying vec3 v_normal;
         varying vec4 v_color;
@@ -279,7 +281,18 @@ export function initWebGL(canvas) {
         varying vec3 v_worldPosition;
 
         void main() {
-            vec4 worldPos = u_modelMatrix * a_position;
+            vec4 pos = a_position;
+
+            // Real-time dynamic Roblox wind sway on grass and tree leaves
+            if (u_windElasticity > 0.01) {
+                float heightFactor = max(0.0, pos.y);
+                float wave = sin(u_time * 3.2 + pos.x * 2.5 + pos.z * 1.8) * 0.12 * u_windElasticity * heightFactor;
+                float wave2 = cos(u_time * 2.1 + pos.z * 3.1) * 0.08 * u_windElasticity * heightFactor;
+                pos.x += wave;
+                pos.z += wave2;
+            }
+
+            vec4 worldPos = u_modelMatrix * pos;
             v_worldPosition = worldPos.xyz;
             gl_Position = u_projectionMatrix * u_viewMatrix * worldPos;
             v_normal = u_normalMatrix * a_normal;
@@ -390,14 +403,12 @@ export function initWebGL(canvas) {
 
         // --- Roblox Smooth Terrain Procedural Splatmap Shading ---
         vec3 getRobloxTerrainMaterial(vec3 pos, vec3 norm) {
-            float slope = 1.0 - abs(norm.y); // 0 = flat ground, 1 = vertical cliff
+            float slope = 1.0 - abs(norm.y);
             float height = pos.y;
 
-            // Procedural surface detail noise
             float microDetail = noise3D(pos * 3.5) * 0.2 + noise3D(pos * 12.0) * 0.1;
             float macroNoise = noise3D(pos * 0.15);
 
-            // Roblox Terrain Material Colors
             vec3 grassBase = vec3(0.22, 0.58, 0.18) + vec3(microDetail * 0.15, microDetail * 0.25, microDetail * 0.05);
             vec3 leafyDirt = vec3(0.38, 0.28, 0.18) + vec3(microDetail * 0.12);
             vec3 sandColor = vec3(0.86, 0.78, 0.52) + vec3(microDetail * 0.08);
@@ -405,27 +416,21 @@ export function initWebGL(canvas) {
             vec3 darkStone = vec3(0.28, 0.29, 0.32) + vec3(microDetail * 0.15);
             vec3 snowCap   = vec3(0.94, 0.96, 0.98) - vec3(microDetail * 0.05);
 
-            // Height-based blending
             vec3 groundMat;
             if (height < 0.8) {
-                // Shoreline sand & dirt mix
                 float sandFactor = smoothstep(1.0, 0.2, height + macroNoise * 0.4);
                 groundMat = mix(grassBase, sandColor, sandFactor);
             } else if (height < 6.0) {
-                // Valley grass & dirt spots
                 float dirtBlend = smoothstep(0.45, 0.75, macroNoise);
                 groundMat = mix(grassBase, leafyDirt, dirtBlend * 0.4);
             } else if (height < 10.0) {
-                // Sub-alpine mountain stone transition
                 float rockBlend = smoothstep(5.5, 9.5, height + macroNoise * 1.5);
                 groundMat = mix(grassBase, darkStone, rockBlend);
             } else {
-                // High peaks snow & rock
                 float snowBlend = smoothstep(9.5, 12.5, height - macroNoise * 1.0);
                 groundMat = mix(darkStone, snowCap, snowBlend);
             }
 
-            // Steep slope cliff face override (Roblox Rock Cliff texture)
             float cliffFactor = smoothstep(0.35, 0.65, slope + microDetail * 0.2);
             vec3 finalTerrain = mix(groundMat, rockCliff, cliffFactor);
 
@@ -578,6 +583,7 @@ export function initWebGL(canvas) {
             lightDirection: gl.getUniformLocation(program, 'u_lightDirection'),
             ambientIntensity: gl.getUniformLocation(program, 'u_ambientIntensity'),
             time: gl.getUniformLocation(program, 'u_time'),
+            windElasticity: gl.getUniformLocation(program, 'u_windElasticity'),
             isUnlit: gl.getUniformLocation(program, 'u_isUnlit'),
             textureType: gl.getUniformLocation(program, 'u_textureType'),
             textureScale: gl.getUniformLocation(program, 'u_textureScale'),
@@ -704,6 +710,8 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
 
         if (!gameObject.mesh) continue;
 
+        gl.uniform1f(programInfo.uniformLocations.windElasticity, gameObject.windElasticity || 0.0);
+
         gl.bindBuffer(gl.ARRAY_BUFFER, gameObject.mesh.vertexBuffer);
         gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
@@ -782,6 +790,7 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.uniform1i(programInfo.uniformLocations.isUnlit, 1);
         gl.uniform1i(programInfo.uniformLocations.isCloud, 0);
         gl.uniform1i(programInfo.uniformLocations.textureType, 0);
+        gl.uniform1f(programInfo.uniformLocations.windElasticity, 0.0);
 
         for (const p of Engine.windParticleSystem.particles) {
             const currentMesh = (p.isTornado && p.isCloudPuff) ? puffMesh : rayMesh;
@@ -832,6 +841,7 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.uniform1i(programInfo.uniformLocations.textureType, 0);
         gl.uniform1i(programInfo.uniformLocations.godRaysEnabled, 0);
         gl.uniform1i(programInfo.uniformLocations.darknessEnabled, 0);
+        gl.uniform1f(programInfo.uniformLocations.windElasticity, 0.0);
         gizmo.render(gl, programInfo, selectedGameObject, viewMatrix, projectionMatrix, mode, tool, brushRadius);
 
         if (mode === 'model' && Engine && Engine.selectedSubElement) {

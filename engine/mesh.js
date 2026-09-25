@@ -366,9 +366,9 @@ export class Mesh {
     }
 
     static createSmoothTerrain(gl, options = {}) {
-        const width = options.width || 36;
-        const depth = options.depth || 36;
-        const heightScale = options.heightScale !== undefined ? options.heightScale : 6.0;
+        const width = options.width || 40;
+        const depth = options.depth || 40;
+        const heightScale = options.heightScale !== undefined ? options.heightScale : 6.5;
         const noiseScale = options.noiseScale || 0.08;
         const seed = options.seed || 1234;
         const subdivisions = options.subdivisions || 64;
@@ -378,12 +378,6 @@ export class Mesh {
         const indices = [];
         const colors = [];
 
-        function rnd(s) {
-            const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
-            return x - Math.floor(x);
-        }
-
-        // Multi-octave FBM Perlin noise algorithm for organic Roblox Studio terrain
         function fbm2D(x, z) {
             let total = 0.0;
             let freq = noiseScale;
@@ -403,10 +397,15 @@ export class Mesh {
             }
 
             let normalized = total / maxAmp;
-            // Valley erosion curve
-            if (normalized < 0.2) {
-                normalized = normalized * 0.5;
+
+            // Riverbed valley carving
+            const riverX = Math.sin(z * 0.12 + (seed % 50)) * 6.0;
+            const distToRiver = Math.abs(x - riverX);
+            if (distToRiver < 5.0) {
+                const riverCarve = Math.pow(1.0 - distToRiver / 5.0, 2.0) * 0.45;
+                normalized = Math.max(-0.2, normalized - riverCarve);
             }
+
             return normalized;
         }
 
@@ -422,11 +421,18 @@ export class Mesh {
             for (let x = 0; x <= subdivisions; x++) {
                 const posX = -halfW + x * stepX;
                 const rawH = fbm2D(posX, posZ);
-                const posY = rawH * heightScale;
+
+                // Edge tapering smooth falloff (prevents boxy cut edge borders)
+                const distFromCenterX = Math.abs(posX) / halfW;
+                const distFromCenterZ = Math.abs(posZ) / halfD;
+                const maxEdgeDist = Math.max(distFromCenterX, distFromCenterZ);
+                const edgeFalloff = Math.pow(Math.cos(Math.min(1.0, maxEdgeDist) * Math.PI * 0.5), 1.8);
+
+                const posY = (rawH * heightScale - 0.2) * edgeFalloff;
 
                 vertices.push(posX, posY, posZ);
                 heights.push(posY);
-                colors.push(1.0, 1.0, 1.0, 1.0); // Base color passed to Splatmap shader
+                colors.push(1.0, 1.0, 1.0, 1.0);
             }
         }
 
@@ -463,22 +469,25 @@ export class Mesh {
             return x - Math.floor(x);
         }
 
-        // Bark Trunk
-        const trunkHeight = 2.2 + rnd(seed * 1.5) * 0.8;
-        const trunkRadiusBottom = 0.28;
-        const trunkRadiusTop = 0.14;
-        const trunkSegs = 10;
+        // Multi-tier Branched Bark Trunk
+        const trunkHeight = 2.5 + rnd(seed * 1.5) * 0.8;
+        const trunkRadiusBottom = 0.32;
+        const trunkRadiusTop = 0.15;
+        const trunkSegs = 12;
 
         for (let i = 0; i <= trunkSegs; i++) {
             const a = (i * Math.PI * 2) / trunkSegs;
             const cosA = Math.cos(a);
             const sinA = Math.sin(a);
 
-            vertices.push(cosA * trunkRadiusBottom, 0, sinA * trunkRadiusBottom);
-            colors.push(0.38, 0.24, 0.14, 1.0);
+            // Trunk flare base
+            const rootFlare = 1.0 + Math.sin(a * 4.0) * 0.15;
+            vertices.push(cosA * trunkRadiusBottom * rootFlare, 0, sinA * trunkRadiusBottom * rootFlare);
+            colors.push(0.36, 0.22, 0.12, 1.0);
 
+            // Trunk top
             vertices.push(cosA * trunkRadiusTop, trunkHeight, sinA * trunkRadiusTop);
-            colors.push(0.32, 0.20, 0.11, 1.0);
+            colors.push(0.30, 0.18, 0.10, 1.0);
         }
 
         for (let i = 0; i < trunkSegs; i++) {
@@ -487,27 +496,32 @@ export class Mesh {
             indices.push(b + 1, b + 3, b + 2);
         }
 
-        // Foliage Canopies
-        const layers = 3;
-        for (let l = 0; l < layers; l++) {
-            const layerY = trunkHeight * 0.65 + l * 0.75;
-            const layerRadius = 1.1 - l * 0.22;
-            const layerHeight = 1.3 - l * 0.18;
-            const fSegs = 12;
+        // Foliage Canopy Clusters (Multiple Organic Spherical/Cone Clusters)
+        const clusters = 5;
+        for (let c = 0; c < clusters; c++) {
+            const offsetY = trunkHeight * 0.6 + (c / clusters) * trunkHeight * 0.6;
+            const angle = (c / clusters) * Math.PI * 2.0;
+            const offsetDist = (c === clusters - 1 ? 0 : 0.45);
 
+            const cx = Math.cos(angle) * offsetDist;
+            const cz = Math.sin(angle) * offsetDist;
+            const cy = offsetY;
+
+            const radius = (c === clusters - 1 ? 1.2 : 0.85);
+            const fSegs = 12;
             const baseIndex = vertices.length / 3;
 
-            vertices.push(0, layerY + layerHeight, 0);
-            colors.push(0.22, 0.68 - l * 0.08, 0.24, 1.0);
+            vertices.push(cx, cy + radius * 1.2, cz);
+            colors.push(0.24, 0.72 - c * 0.06, 0.22, 1.0);
 
             for (let i = 0; i <= fSegs; i++) {
                 const a = (i * Math.PI * 2) / fSegs;
-                const bump = 1.0 + (rnd(seed * (i + l * 10)) - 0.5) * 0.25;
-                const rx = Math.cos(a) * layerRadius * bump;
-                const rz = Math.sin(a) * layerRadius * bump;
+                const bump = 1.0 + (rnd(seed * (i + c * 10)) - 0.5) * 0.3;
+                const rx = cx + Math.cos(a) * radius * bump;
+                const rz = cz + Math.sin(a) * radius * bump;
 
-                vertices.push(rx, layerY, rz);
-                colors.push(0.18, 0.58 - l * 0.06, 0.20, 1.0);
+                vertices.push(rx, cy, rz);
+                colors.push(0.18, 0.58 - c * 0.05, 0.18, 1.0);
             }
 
             for (let i = 0; i < fSegs; i++) {
@@ -573,11 +587,11 @@ export class Mesh {
         const indices = [];
         const colors = [];
 
-        const blades = 6;
+        const blades = 8;
         for (let b = 0; b < blades; b++) {
             const angle = (b / blades) * Math.PI;
-            const height = 0.55 + (b % 3) * 0.18;
-            const width = 0.09;
+            const height = 0.6 + (b % 3) * 0.22;
+            const width = 0.08;
 
             const cosA = Math.cos(angle) * width;
             const sinA = Math.sin(angle) * width;
@@ -590,9 +604,9 @@ export class Mesh {
             vertices.push(cosA, 0, sinA);
             colors.push(0.18, 0.52, 0.14, 1.0);
 
-            const lean = (b % 2 === 0 ? 0.18 : -0.18);
+            const lean = (b % 2 === 0 ? 0.22 : -0.22);
             vertices.push(sinA * lean, height, cosA * lean);
-            colors.push(0.32, 0.82, 0.22, 1.0);
+            colors.push(0.35, 0.88, 0.22, 1.0);
 
             indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
         }
