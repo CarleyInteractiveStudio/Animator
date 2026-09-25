@@ -958,7 +958,7 @@ function sampleTerrainHeight(mesh, x, z) {
 function generateSmoothTerrainFromModal() {
     const width = parseFloat(document.getElementById('slider-terrain-width').value) || 30;
     const depth = parseFloat(document.getElementById('slider-terrain-depth').value) || 30;
-    const heightScale = parseFloat(document.getElementById('slider-terrain-height').value) || 4.5;
+    const heightScale = parseFloat(document.getElementById('slider-terrain-height').value) || 6.0;
     const noiseScale = parseFloat(document.getElementById('slider-terrain-roughness').value) || 0.08;
     const seed = parseInt(document.getElementById('input-terrain-seed').value) || 1234;
     const waterLevel = parseFloat(document.getElementById('slider-terrain-water').value) || 0.5;
@@ -972,9 +972,17 @@ function generateSmoothTerrainFromModal() {
     const terrainName = `Terreno Smooth ${objectCounters.terrain}`;
 
     const terrainMesh = Mesh.createSmoothTerrain(Engine.gl, {
-        width, depth, heightScale, noiseScale, seed, waterLevel, subdivisions: 48
+        width, depth, heightScale, noiseScale, seed, waterLevel, subdivisions: 64
     });
+
     const terrainObj = new GameObject(terrainName, terrainMesh);
+    // Assign Roblox Smooth Terrain Splatmap shader material (textureType = 3)
+    terrainObj.material = {
+        textureType: 3,
+        metallic: 0.1,
+        roughness: 0.75
+    };
+
     Engine.scene.addGameObject(terrainObj);
 
     function rnd(s) {
@@ -988,7 +996,7 @@ function generateSmoothTerrainFromModal() {
         const rz = (rnd(seed + i * 7.4) - 0.5) * (depth * 0.85);
         const ry = sampleTerrainHeight(terrainMesh, rx, rz);
 
-        if (ry >= waterLevel + 0.2) {
+        if (ry >= waterLevel + 0.3) {
             objectCounters.tree++;
             const treeMesh = Mesh.createTree(Engine.gl, seed + i);
             const treeObj = new GameObject(`Árbol ${objectCounters.tree}`, treeMesh);
@@ -1021,7 +1029,7 @@ function generateSmoothTerrainFromModal() {
         const rz = (rnd(seed * 3 + i * 9.3) - 0.5) * (depth * 0.85);
         const ry = sampleTerrainHeight(terrainMesh, rx, rz);
 
-        if (ry >= waterLevel + 0.1) {
+        if (ry >= waterLevel + 0.2) {
             objectCounters.grass++;
             const grassMesh = Mesh.createGrassTuft(Engine.gl, seed + i);
             const grassObj = new GameObject(`Césped ${objectCounters.grass}`, grassMesh);
@@ -1039,9 +1047,9 @@ function generateSmoothTerrainFromModal() {
         vec3.set(waterObj.transform.position, 0, waterLevel, 0);
         waterObj.transform.scale = [width / 2, 1, depth / 2];
         waterObj.material = {
-            color: [0.15, 0.55, 0.85, 0.75],
-            metallic: 0.8,
-            roughness: 0.1
+            textureType: 4, // Real-time animated water shader
+            metallic: 0.9,
+            roughness: 0.05
         };
         Engine.scene.addGameObject(waterObj);
     }
@@ -1054,7 +1062,7 @@ function createPrimitiveMesh(type) {
     switch (type) {
         case 'sphere': return Mesh.createSphere(gl);
         case 'plane': return Mesh.createPlane(gl);
-        case 'deformable_plane': return Mesh.createDeformablePlane(gl, 32, 16);
+        case 'deformable_plane': return Mesh.createDeformablePlane(gl, 48, 20);
         case 'cylinder': return Mesh.createCylinder(gl);
         case 'cone': return Mesh.createCone(gl);
         case 'pyramid': return Mesh.createPyramid(gl);

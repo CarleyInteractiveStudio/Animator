@@ -330,7 +330,7 @@ export class Mesh {
         return new Mesh(gl, vertices, indices);
     }
 
-    static createDeformablePlane(gl, subdivisions = 32, size = 16) {
+    static createDeformablePlane(gl, subdivisions = 48, size = 20) {
         const vertices = [];
         const indices = [];
         const colors = [];
@@ -343,7 +343,7 @@ export class Mesh {
             for (let x = 0; x <= subdivisions; x++) {
                 const posX = -halfSize + x * step;
                 vertices.push(posX, 0.0, posZ);
-                colors.push(0.7, 0.75, 0.8, 1.0);
+                colors.push(0.75, 0.8, 0.82, 1.0);
             }
         }
 
@@ -366,12 +366,12 @@ export class Mesh {
     }
 
     static createSmoothTerrain(gl, options = {}) {
-        const width = options.width || 30;
-        const depth = options.depth || 30;
-        const heightScale = options.heightScale !== undefined ? options.heightScale : 4.0;
-        const noiseScale = options.noiseScale || 0.1;
+        const width = options.width || 36;
+        const depth = options.depth || 36;
+        const heightScale = options.heightScale !== undefined ? options.heightScale : 6.0;
+        const noiseScale = options.noiseScale || 0.08;
         const seed = options.seed || 1234;
-        const subdivisions = options.subdivisions || 48;
+        const subdivisions = options.subdivisions || 64;
         const waterLevel = options.waterLevel !== undefined ? options.waterLevel : 0.5;
 
         const vertices = [];
@@ -383,15 +383,31 @@ export class Mesh {
             return x - Math.floor(x);
         }
 
-        function noise2D(x, z) {
-            const sx = x * noiseScale + (seed % 100) * 1.7;
-            const sz = z * noiseScale + (seed % 100) * 2.3;
+        // Multi-octave FBM Perlin noise algorithm for organic Roblox Studio terrain
+        function fbm2D(x, z) {
+            let total = 0.0;
+            let freq = noiseScale;
+            let amp = 1.0;
+            let maxAmp = 0.0;
 
-            let h = 0.5 * Math.sin(sx) + 0.5 * Math.cos(sz);
-            h += 0.25 * Math.sin(sx * 2.1 + sz * 1.5);
-            h += 0.125 * Math.cos(sx * 4.3 - sz * 3.1);
+            for (let i = 0; i < 4; i++) {
+                const sx = x * freq + (seed % 100) * 2.3;
+                const sz = z * freq + (seed % 100) * 3.7;
 
-            return Math.max(-0.2, h);
+                const n = 0.5 * (Math.sin(sx) + Math.cos(sz) + Math.sin(sx * 1.3 - sz * 0.9));
+                total += n * amp;
+                maxAmp += amp;
+
+                freq *= 2.1;
+                amp *= 0.45;
+            }
+
+            let normalized = total / maxAmp;
+            // Valley erosion curve
+            if (normalized < 0.2) {
+                normalized = normalized * 0.5;
+            }
+            return normalized;
         }
 
         const halfW = width / 2;
@@ -405,31 +421,12 @@ export class Mesh {
             const posZ = -halfD + z * stepZ;
             for (let x = 0; x <= subdivisions; x++) {
                 const posX = -halfW + x * stepX;
-                const rawH = noise2D(posX, posZ);
+                const rawH = fbm2D(posX, posZ);
                 const posY = rawH * heightScale;
 
                 vertices.push(posX, posY, posZ);
                 heights.push(posY);
-
-                // Biome coloring (Beach Sand, Lush Grass, Mountain Rock, Snow Cap)
-                let r = 0.3, g = 0.7, b = 0.3, a = 1.0;
-                if (posY < waterLevel + 0.3) {
-                    // Sand / Beach
-                    r = 0.88; g = 0.82; b = 0.55;
-                } else if (posY < heightScale * 0.5) {
-                    // Grass / Valley
-                    const grassVar = rnd(posX * 10 + posZ * 5) * 0.1;
-                    r = 0.25 + grassVar; g = 0.68 + grassVar; b = 0.28;
-                } else if (posY < heightScale * 0.8) {
-                    // Mountain Stone / Rock
-                    const rockVar = rnd(posX * 8 + posZ * 3) * 0.08;
-                    r = 0.48 + rockVar; g = 0.48 + rockVar; b = 0.52 + rockVar;
-                } else {
-                    // Snow Top
-                    r = 0.92; g = 0.95; b = 0.98;
-                }
-
-                colors.push(r, g, b, a);
+                colors.push(1.0, 1.0, 1.0, 1.0); // Base color passed to Splatmap shader
             }
         }
 
@@ -466,24 +463,22 @@ export class Mesh {
             return x - Math.floor(x);
         }
 
-        // Trunk (Cylinder/Cone)
-        const trunkHeight = 1.8 + rnd(seed * 1.5) * 0.6;
-        const trunkRadiusBottom = 0.22;
-        const trunkRadiusTop = 0.12;
-        const trunkSegs = 8;
+        // Bark Trunk
+        const trunkHeight = 2.2 + rnd(seed * 1.5) * 0.8;
+        const trunkRadiusBottom = 0.28;
+        const trunkRadiusTop = 0.14;
+        const trunkSegs = 10;
 
         for (let i = 0; i <= trunkSegs; i++) {
             const a = (i * Math.PI * 2) / trunkSegs;
             const cosA = Math.cos(a);
             const sinA = Math.sin(a);
 
-            // Bottom vertex
             vertices.push(cosA * trunkRadiusBottom, 0, sinA * trunkRadiusBottom);
-            colors.push(0.42, 0.26, 0.15, 1.0);
+            colors.push(0.38, 0.24, 0.14, 1.0);
 
-            // Top vertex
             vertices.push(cosA * trunkRadiusTop, trunkHeight, sinA * trunkRadiusTop);
-            colors.push(0.38, 0.22, 0.12, 1.0);
+            colors.push(0.32, 0.20, 0.11, 1.0);
         }
 
         for (let i = 0; i < trunkSegs; i++) {
@@ -492,28 +487,27 @@ export class Mesh {
             indices.push(b + 1, b + 3, b + 2);
         }
 
-        // Foliage (3 layered spheres / cones)
+        // Foliage Canopies
         const layers = 3;
         for (let l = 0; l < layers; l++) {
-            const layerY = trunkHeight * 0.7 + l * 0.7;
-            const layerRadius = 0.9 - l * 0.2;
-            const layerHeight = 1.1 - l * 0.15;
-            const fSegs = 10;
+            const layerY = trunkHeight * 0.65 + l * 0.75;
+            const layerRadius = 1.1 - l * 0.22;
+            const layerHeight = 1.3 - l * 0.18;
+            const fSegs = 12;
 
             const baseIndex = vertices.length / 3;
 
-            // Tip
             vertices.push(0, layerY + layerHeight, 0);
-            colors.push(0.18, 0.65 - l * 0.08, 0.22, 1.0);
+            colors.push(0.22, 0.68 - l * 0.08, 0.24, 1.0);
 
             for (let i = 0; i <= fSegs; i++) {
                 const a = (i * Math.PI * 2) / fSegs;
-                const bump = 1.0 + (rnd(seed * (i + l * 10)) - 0.5) * 0.2;
+                const bump = 1.0 + (rnd(seed * (i + l * 10)) - 0.5) * 0.25;
                 const rx = Math.cos(a) * layerRadius * bump;
                 const rz = Math.sin(a) * layerRadius * bump;
 
                 vertices.push(rx, layerY, rz);
-                colors.push(0.15, 0.58 - l * 0.05, 0.2, 1.0);
+                colors.push(0.18, 0.58 - l * 0.06, 0.20, 1.0);
             }
 
             for (let i = 0; i < fSegs; i++) {
@@ -534,9 +528,9 @@ export class Mesh {
             return x - Math.floor(x);
         }
 
-        const latBands = 8;
-        const longBands = 8;
-        const radius = 0.6;
+        const latBands = 10;
+        const longBands = 10;
+        const radius = 0.7;
 
         for (let lat = 0; lat <= latBands; lat++) {
             const theta = (lat * Math.PI) / latBands;
@@ -549,15 +543,15 @@ export class Mesh {
                 const ny = cosTheta;
                 const nz = Math.sin(phi) * sinTheta;
 
-                const deform = 1.0 + (rnd(seed * 3.1 + lat * 2 + lon * 5) - 0.5) * 0.4;
-                const px = nx * radius * deform * 1.2;
-                const py = Math.max(0, ny * radius * deform * 0.8);
+                const deform = 1.0 + (rnd(seed * 3.1 + lat * 2 + lon * 5) - 0.5) * 0.45;
+                const px = nx * radius * deform * 1.25;
+                const py = Math.max(0, ny * radius * deform * 0.85);
                 const pz = nz * radius * deform;
 
                 vertices.push(px, py, pz);
 
-                const cVar = (rnd(seed * 1.7 + lat + lon) - 0.5) * 0.1;
-                colors.push(0.5 + cVar, 0.5 + cVar, 0.54 + cVar, 1.0);
+                const cVar = (rnd(seed * 1.7 + lat + lon) - 0.5) * 0.12;
+                colors.push(0.48 + cVar, 0.48 + cVar, 0.52 + cVar, 1.0);
             }
         }
 
@@ -579,28 +573,26 @@ export class Mesh {
         const indices = [];
         const colors = [];
 
-        const blades = 5;
+        const blades = 6;
         for (let b = 0; b < blades; b++) {
             const angle = (b / blades) * Math.PI;
-            const height = 0.5 + (b % 3) * 0.15;
-            const width = 0.08;
+            const height = 0.55 + (b % 3) * 0.18;
+            const width = 0.09;
 
             const cosA = Math.cos(angle) * width;
             const sinA = Math.sin(angle) * width;
 
             const baseIdx = vertices.length / 3;
 
-            // Base left & right
             vertices.push(-cosA, 0, -sinA);
-            colors.push(0.2, 0.55, 0.15, 1.0);
+            colors.push(0.18, 0.52, 0.14, 1.0);
 
             vertices.push(cosA, 0, sinA);
-            colors.push(0.2, 0.55, 0.15, 1.0);
+            colors.push(0.18, 0.52, 0.14, 1.0);
 
-            // Tip
-            const lean = (b % 2 === 0 ? 0.15 : -0.15);
+            const lean = (b % 2 === 0 ? 0.18 : -0.18);
             vertices.push(sinA * lean, height, cosA * lean);
-            colors.push(0.35, 0.8, 0.25, 1.0);
+            colors.push(0.32, 0.82, 0.22, 1.0);
 
             indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
         }

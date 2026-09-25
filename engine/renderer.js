@@ -299,10 +299,11 @@ export function initWebGL(canvas) {
         uniform vec4 u_tintColor;
         uniform vec3 u_lightDirection;
         uniform float u_ambientIntensity;
+        uniform float u_time;
         uniform bool u_isUnlit;
 
         // Texture and Procedural uniforms
-        uniform int u_textureType;
+        uniform int u_textureType; // 0 = Solid, 1 = Checker, 2 = Noise, 3 = Roblox Terrain Splatmap, 4 = Water Surface
         uniform float u_textureScale;
         uniform float u_metallic;
         uniform float u_roughness;
@@ -331,16 +332,22 @@ export function initWebGL(canvas) {
             return fract((p.x + p.y) * p.z);
         }
 
+        float hash31(vec3 p) {
+            p = fract(p * vec3(443.897, 441.423, 437.195));
+            p += dot(p, p.yzx + 19.19);
+            return fract((p.x + p.y) * p.z);
+        }
+
         float noise3D(vec3 p) {
             vec3 i = floor(p);
             vec3 f = fract(p);
             f = f * f * (3.0 - 2.0 * f);
 
             return mix(
-                mix(mix(hash3D(i + vec3(0,0,0)), hash3D(i + vec3(1,0,0)), f.x),
-                    mix(hash3D(i + vec3(0,1,0)), hash3D(i + vec3(1,1,0)), f.x), f.y),
-                mix(mix(hash3D(i + vec3(0,0,1)), hash3D(i + vec3(1,0,1)), f.x),
-                    mix(hash3D(i + vec3(0,1,1)), hash3D(i + vec3(1,1,1)), f.x), f.y), f.z);
+                mix(mix(hash31(i + vec3(0,0,0)), hash31(i + vec3(1,0,0)), f.x),
+                    mix(hash31(i + vec3(0,1,0)), hash31(i + vec3(1,1,0)), f.x), f.y),
+                mix(mix(hash31(i + vec3(0,0,1)), hash31(i + vec3(1,0,1)), f.x),
+                    mix(hash31(i + vec3(0,1,1)), hash31(i + vec3(1,1,1)), f.x), f.y), f.z);
         }
 
         float noise(vec2 p) {
@@ -381,8 +388,75 @@ export function initWebGL(canvas) {
             return nX * blending.x + nY * blending.y + nZ * blending.z;
         }
 
+        // --- Roblox Smooth Terrain Procedural Splatmap Shading ---
+        vec3 getRobloxTerrainMaterial(vec3 pos, vec3 norm) {
+            float slope = 1.0 - abs(norm.y); // 0 = flat ground, 1 = vertical cliff
+            float height = pos.y;
+
+            // Procedural surface detail noise
+            float microDetail = noise3D(pos * 3.5) * 0.2 + noise3D(pos * 12.0) * 0.1;
+            float macroNoise = noise3D(pos * 0.15);
+
+            // Roblox Terrain Material Colors
+            vec3 grassBase = vec3(0.22, 0.58, 0.18) + vec3(microDetail * 0.15, microDetail * 0.25, microDetail * 0.05);
+            vec3 leafyDirt = vec3(0.38, 0.28, 0.18) + vec3(microDetail * 0.12);
+            vec3 sandColor = vec3(0.86, 0.78, 0.52) + vec3(microDetail * 0.08);
+            vec3 rockCliff = vec3(0.42, 0.42, 0.46) + vec3(microDetail * 0.2);
+            vec3 darkStone = vec3(0.28, 0.29, 0.32) + vec3(microDetail * 0.15);
+            vec3 snowCap   = vec3(0.94, 0.96, 0.98) - vec3(microDetail * 0.05);
+
+            // Height-based blending
+            vec3 groundMat;
+            if (height < 0.8) {
+                // Shoreline sand & dirt mix
+                float sandFactor = smoothstep(1.0, 0.2, height + macroNoise * 0.4);
+                groundMat = mix(grassBase, sandColor, sandFactor);
+            } else if (height < 6.0) {
+                // Valley grass & dirt spots
+                float dirtBlend = smoothstep(0.45, 0.75, macroNoise);
+                groundMat = mix(grassBase, leafyDirt, dirtBlend * 0.4);
+            } else if (height < 10.0) {
+                // Sub-alpine mountain stone transition
+                float rockBlend = smoothstep(5.5, 9.5, height + macroNoise * 1.5);
+                groundMat = mix(grassBase, darkStone, rockBlend);
+            } else {
+                // High peaks snow & rock
+                float snowBlend = smoothstep(9.5, 12.5, height - macroNoise * 1.0);
+                groundMat = mix(darkStone, snowCap, snowBlend);
+            }
+
+            // Steep slope cliff face override (Roblox Rock Cliff texture)
+            float cliffFactor = smoothstep(0.35, 0.65, slope + microDetail * 0.2);
+            vec3 finalTerrain = mix(groundMat, rockCliff, cliffFactor);
+
+            return finalTerrain;
+        }
+
         void main() {
             vec4 baseColor = v_color * u_tintColor;
+            vec3 normNorm = normalize(v_normal);
+
+            if (u_textureType == 4) {
+                // Realistic Animated Water Shader
+                vec3 viewDir = normalize(-v_worldPosition);
+                vec3 lightDir = normalize(u_lightDirection);
+
+                vec2 waveUV = v_worldPosition.xz * 0.8 + vec2(u_time * 0.6, u_time * 0.4);
+                float wave = noise(waveUV) * 0.5 + noise(waveUV * 2.2 - vec2(u_time * 0.5)) * 0.5;
+
+                vec3 shallowWater = vec3(0.18, 0.65, 0.88);
+                vec3 deepWater = vec3(0.04, 0.22, 0.45);
+
+                float fresnel = pow(1.0 - max(0.0, dot(normNorm, viewDir)), 3.0);
+                vec3 waterCol = mix(deepWater, shallowWater, 0.6 + wave * 0.4);
+
+                vec3 halfDir = normalize(lightDir + viewDir);
+                float spec = pow(max(0.0, dot(normNorm, halfDir)), 128.0) * 1.8;
+
+                vec3 finalWater = mix(waterCol, vec3(0.9, 0.98, 1.0), fresnel * 0.5) + vec3(spec);
+                gl_FragColor = vec4(finalWater, 0.82);
+                return;
+            }
 
             if (u_isCloud) {
                 vec3 normal = normalize(v_normal);
@@ -409,8 +483,6 @@ export function initWebGL(canvas) {
                 return;
             }
 
-            vec3 normNorm = normalize(v_normal);
-
             if (u_textureType == 1) {
                 if (v_texcoord.x != 0.0 || v_texcoord.y != 0.0) {
                     vec2 chk = floor(v_texcoord * u_textureScale);
@@ -422,6 +494,10 @@ export function initWebGL(canvas) {
             } else if (u_textureType == 2) {
                 float n = getTriplanarNoise(v_worldPosition, normNorm, u_textureScale);
                 baseColor *= vec4(vec3(n), 1.0);
+            } else if (u_textureType == 3) {
+                // Roblox Smooth Terrain Splatmap Mode
+                vec3 robloxCol = getRobloxTerrainMaterial(v_worldPosition, normNorm);
+                baseColor = vec4(robloxCol, 1.0);
             }
 
             if (u_isUnlit) {
@@ -501,6 +577,7 @@ export function initWebGL(canvas) {
             tintColor: gl.getUniformLocation(program, 'u_tintColor'),
             lightDirection: gl.getUniformLocation(program, 'u_lightDirection'),
             ambientIntensity: gl.getUniformLocation(program, 'u_ambientIntensity'),
+            time: gl.getUniformLocation(program, 'u_time'),
             isUnlit: gl.getUniformLocation(program, 'u_isUnlit'),
             textureType: gl.getUniformLocation(program, 'u_textureType'),
             textureScale: gl.getUniformLocation(program, 'u_textureScale'),
@@ -539,6 +616,8 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+    const currentTime = (Engine && typeof Engine.time === 'number') ? Engine.time : 0.0;
+
     // --- 1. RENDER 3D SKYBOX ---
     const env = Engine ? Engine.environment : null;
     const timeOfDay = env ? env.timeOfDay : 12.0;
@@ -568,7 +647,7 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.uniform1f(skyProgramInfo.uniformLocations.timeOfDay, timeOfDay);
         gl.uniform1f(skyProgramInfo.uniformLocations.sunIntensity, env ? env.sunIntensity : 1.0);
         gl.uniform1f(skyProgramInfo.uniformLocations.starIntensity, env ? env.starIntensity : 1.0);
-        gl.uniform1f(skyProgramInfo.uniformLocations.time, Engine ? Engine.time : 0.0);
+        gl.uniform1f(skyProgramInfo.uniformLocations.time, currentTime);
         gl.uniform1f(skyProgramInfo.uniformLocations.cloudCoverage, env ? env.cloudCoverage : 0.55);
         gl.uniform1f(skyProgramInfo.uniformLocations.cloudDensity, env ? env.cloudDensity : 1.0);
         gl.uniform1f(skyProgramInfo.uniformLocations.cloudAltitude, env ? env.cloudAltitude : 1.0);
@@ -615,13 +694,13 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
 
     gl.uniform3fv(programInfo.uniformLocations.lightDirection, activeLightDir);
     gl.uniform1f(programInfo.uniformLocations.ambientIntensity, env ? env.ambientIntensity : 0.35);
+    gl.uniform1f(programInfo.uniformLocations.time, currentTime);
 
     gl.uniform1i(programInfo.uniformLocations.isUnlit, 0);
 
     for (const gameObject of scene.gameObjects) {
-        // Hide pure wind zone objects in mesh render pass (they are rendered as Gizmo in edit mode, or particles in play mode)
         if (gameObject.windZone && !gameObject.mesh) continue;
-        if (gameObject.windZone) continue; // Wind zone object itself is invisible in edit mode except for its area box gizmo
+        if (gameObject.windZone) continue;
 
         if (!gameObject.mesh) continue;
 
@@ -711,7 +790,7 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
             gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
             gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
 
-            if (currentMesh.colorBuffer) {
+            if (currentMesh.colorBuffer && programInfo.attribLocations.vertexColor !== -1) {
                 gl.bindBuffer(gl.ARRAY_BUFFER, currentMesh.colorBuffer);
                 gl.vertexAttribPointer(programInfo.attribLocations.vertexColor, 4, gl.FLOAT, false, 0, 0);
                 gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
