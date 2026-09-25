@@ -296,25 +296,22 @@ export class Mesh {
         const hw = width * 0.5;
         const hh = height;
         const hd = depth * 0.5;
-        const rad = 0.012; // Fine, precise game engine gizmo lines
-        const r = 0.2, g = 0.95, b = 0.3, a = 0.95; // Vibrant game engine green
+        const rad = 0.012;
+        const r = 0.2, g = 0.95, b = 0.3, a = 0.95;
 
         const corners = [
             [-hw, 0,  hd], [ hw, 0,  hd], [ hw, 0, -hd], [-hw, 0, -hd],
             [-hw, hh, hd], [ hw, hh, hd], [ hw, hh, -hd], [-hw, hh, -hd]
         ];
 
-        // Bottom quad lines
         for (let i = 0; i < 4; i++) {
             const next = (i + 1) % 4;
             addThickLine(corners[i][0], corners[i][1], corners[i][2], corners[next][0], corners[next][1], corners[next][2], rad, r, g, b, a);
         }
-        // Top quad lines
         for (let i = 0; i < 4; i++) {
             const next = (i + 1) % 4 + 4;
             addThickLine(corners[i + 4][0], corners[i + 4][1], corners[i + 4][2], corners[next][0], corners[next][1], corners[next][2], rad, r, g, b, a);
         }
-        // Vertical pillar lines
         for (let i = 0; i < 4; i++) {
             addThickLine(corners[i][0], corners[i][1], corners[i][2], corners[i + 4][0], corners[i + 4][1], corners[i + 4][2], rad, r, g, b, a);
         }
@@ -331,6 +328,367 @@ export class Mesh {
         ];
         const indices = [0, 1, 2, 0, 2, 3];
         return new Mesh(gl, vertices, indices);
+    }
+
+    static createDeformablePlane(gl, subdivisions = 48, size = 20) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        const halfSize = size / 2;
+        const step = size / subdivisions;
+
+        for (let z = 0; z <= subdivisions; z++) {
+            const posZ = -halfSize + z * step;
+            for (let x = 0; x <= subdivisions; x++) {
+                const posX = -halfSize + x * step;
+                vertices.push(posX, 0.0, posZ);
+                colors.push(0.75, 0.8, 0.82, 1.0);
+            }
+        }
+
+        for (let z = 0; z < subdivisions; z++) {
+            for (let x = 0; x < subdivisions; x++) {
+                const row1 = z * (subdivisions + 1);
+                const row2 = (z + 1) * (subdivisions + 1);
+
+                const i1 = row1 + x;
+                const i2 = row1 + x + 1;
+                const i3 = row2 + x;
+                const i4 = row2 + x + 1;
+
+                indices.push(i1, i3, i2);
+                indices.push(i2, i3, i4);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
+    static createSmoothTerrain(gl, options = {}) {
+        const width = options.width || 40;
+        const depth = options.depth || 40;
+        const heightScale = options.heightScale !== undefined ? options.heightScale : 6.5;
+        const noiseScale = options.noiseScale || 0.08;
+        const seed = options.seed || 1234;
+        const subdivisions = options.subdivisions || 64;
+        const waterLevel = options.waterLevel !== undefined ? options.waterLevel : 0.5;
+
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        function fbm2D(x, z) {
+            let total = 0.0;
+            let freq = noiseScale;
+            let amp = 1.0;
+            let maxAmp = 0.0;
+
+            for (let i = 0; i < 4; i++) {
+                const sx = x * freq + (seed % 100) * 2.3;
+                const sz = z * freq + (seed % 100) * 3.7;
+
+                const n = 0.5 * (Math.sin(sx) + Math.cos(sz) + Math.sin(sx * 1.3 - sz * 0.9));
+                total += n * amp;
+                maxAmp += amp;
+
+                freq *= 2.1;
+                amp *= 0.45;
+            }
+
+            let normalized = total / maxAmp;
+
+            // Riverbed valley carving
+            const riverX = Math.sin(z * 0.12 + (seed % 50)) * 6.0;
+            const distToRiver = Math.abs(x - riverX);
+            if (distToRiver < 5.0) {
+                const riverCarve = Math.pow(1.0 - distToRiver / 5.0, 2.0) * 0.45;
+                normalized = Math.max(-0.2, normalized - riverCarve);
+            }
+
+            return normalized;
+        }
+
+        const halfW = width / 2;
+        const halfD = depth / 2;
+        const stepX = width / subdivisions;
+        const stepZ = depth / subdivisions;
+
+        const heights = [];
+
+        for (let z = 0; z <= subdivisions; z++) {
+            const posZ = -halfD + z * stepZ;
+            for (let x = 0; x <= subdivisions; x++) {
+                const posX = -halfW + x * stepX;
+                const rawH = fbm2D(posX, posZ);
+
+                // Edge tapering smooth falloff (prevents boxy cut edge borders)
+                const distFromCenterX = Math.abs(posX) / halfW;
+                const distFromCenterZ = Math.abs(posZ) / halfD;
+                const maxEdgeDist = Math.max(distFromCenterX, distFromCenterZ);
+                const edgeFalloff = Math.pow(Math.cos(Math.min(1.0, maxEdgeDist) * Math.PI * 0.5), 1.8);
+
+                const posY = (rawH * heightScale - 0.2) * edgeFalloff;
+
+                vertices.push(posX, posY, posZ);
+                heights.push(posY);
+                colors.push(1.0, 1.0, 1.0, 1.0);
+            }
+        }
+
+        for (let z = 0; z < subdivisions; z++) {
+            for (let x = 0; x < subdivisions; x++) {
+                const row1 = z * (subdivisions + 1);
+                const row2 = (z + 1) * (subdivisions + 1);
+
+                const i1 = row1 + x;
+                const i2 = row1 + x + 1;
+                const i3 = row2 + x;
+                const i4 = row2 + x + 1;
+
+                indices.push(i1, i3, i2);
+                indices.push(i2, i3, i4);
+            }
+        }
+
+        const mesh = new Mesh(gl, vertices, indices, null, colors);
+        mesh.terrainHeights = heights;
+        mesh.terrainSubdivisions = subdivisions;
+        mesh.terrainWidth = width;
+        mesh.terrainDepth = depth;
+        return mesh;
+    }
+
+    // --- High-Density Roblox 3D Grass Field Generator ---
+    static createRobloxGrassField(gl, terrainMesh, count = 250) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        function rnd(s) {
+            const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        }
+
+        function sampleTerrainHeight(mesh, x, z) {
+            if (!mesh || !mesh.terrainHeights) return 0;
+            const sub = mesh.terrainSubdivisions;
+            const halfW = mesh.terrainWidth / 2;
+            const halfD = mesh.terrainDepth / 2;
+
+            const normX = (x + halfW) / mesh.terrainWidth;
+            const normZ = (z + halfD) / mesh.terrainDepth;
+
+            const gridX = Math.max(0, Math.min(sub, Math.floor(normX * sub)));
+            const gridZ = Math.max(0, Math.min(sub, Math.floor(normZ * sub)));
+
+            const idx = gridZ * (sub + 1) + gridX;
+            return mesh.terrainHeights[idx] || 0;
+        }
+
+        const width = terrainMesh ? terrainMesh.terrainWidth : 36;
+        const depth = terrainMesh ? terrainMesh.terrainDepth : 36;
+        const halfW = width * 0.42;
+        const halfD = depth * 0.42;
+
+        let placed = 0;
+        let seedIter = 100;
+
+        while (placed < count && seedIter < count * 5) {
+            seedIter++;
+            const rx = (rnd(seedIter * 3.1) - 0.5) * (halfW * 2);
+            const rz = (rnd(seedIter * 7.4) - 0.5) * (halfD * 2);
+            const ry = terrainMesh ? sampleTerrainHeight(terrainMesh, rx, rz) : 0;
+
+            if (ry < 0.6 || ry > 8.0) continue; // Only grow grass on lush valley biomes
+
+            placed++;
+            const tuftBlades = 6;
+            for (let b = 0; b < tuftBlades; b++) {
+                const angle = (b / tuftBlades) * Math.PI + rnd(seedIter + b) * 0.5;
+                const h = 0.55 + rnd(seedIter * 2 + b) * 0.35;
+                const w = 0.07;
+
+                const cosA = Math.cos(angle) * w;
+                const sinA = Math.sin(angle) * w;
+
+                const baseIdx = vertices.length / 3;
+
+                const bx = rx + (rnd(seedIter + b) - 0.5) * 0.25;
+                const bz = rz + (rnd(seedIter * 3 + b) - 0.5) * 0.25;
+
+                // Blade Root Left & Right (Dark Green)
+                vertices.push(bx - cosA, ry, bz - sinA);
+                colors.push(0.18, 0.48, 0.12, 1.0);
+
+                vertices.push(bx + cosA, ry, bz + sinA);
+                colors.push(0.18, 0.48, 0.12, 1.0);
+
+                // Blade Tip (Bright Lush Green)
+                const lean = (b % 2 === 0 ? 0.22 : -0.22);
+                vertices.push(bx + sinA * lean, ry + h, bz + cosA * lean);
+                colors.push(0.35, 0.88, 0.22, 1.0);
+
+                indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
+    static createTree(gl, seed = 1) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        function rnd(s) {
+            const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        }
+
+        // Multi-tier Branched Bark Trunk
+        const trunkHeight = 2.5 + rnd(seed * 1.5) * 0.8;
+        const trunkRadiusBottom = 0.32;
+        const trunkRadiusTop = 0.15;
+        const trunkSegs = 12;
+
+        for (let i = 0; i <= trunkSegs; i++) {
+            const a = (i * Math.PI * 2) / trunkSegs;
+            const cosA = Math.cos(a);
+            const sinA = Math.sin(a);
+
+            // Trunk flare base
+            const rootFlare = 1.0 + Math.sin(a * 4.0) * 0.15;
+            vertices.push(cosA * trunkRadiusBottom * rootFlare, 0, sinA * trunkRadiusBottom * rootFlare);
+            colors.push(0.36, 0.22, 0.12, 1.0);
+
+            // Trunk top
+            vertices.push(cosA * trunkRadiusTop, trunkHeight, sinA * trunkRadiusTop);
+            colors.push(0.30, 0.18, 0.10, 1.0);
+        }
+
+        for (let i = 0; i < trunkSegs; i++) {
+            const b = i * 2;
+            indices.push(b, b + 1, b + 2);
+            indices.push(b + 1, b + 3, b + 2);
+        }
+
+        // Foliage Canopy Clusters (Multiple Organic Spherical/Cone Clusters)
+        const clusters = 5;
+        for (let c = 0; c < clusters; c++) {
+            const offsetY = trunkHeight * 0.6 + (c / clusters) * trunkHeight * 0.6;
+            const angle = (c / clusters) * Math.PI * 2.0;
+            const offsetDist = (c === clusters - 1 ? 0 : 0.45);
+
+            const cx = Math.cos(angle) * offsetDist;
+            const cz = Math.sin(angle) * offsetDist;
+            const cy = offsetY;
+
+            const radius = (c === clusters - 1 ? 1.2 : 0.85);
+            const fSegs = 12;
+            const baseIndex = vertices.length / 3;
+
+            vertices.push(cx, cy + radius * 1.2, cz);
+            colors.push(0.24, 0.72 - c * 0.06, 0.22, 1.0);
+
+            for (let i = 0; i <= fSegs; i++) {
+                const a = (i * Math.PI * 2) / fSegs;
+                const bump = 1.0 + (rnd(seed * (i + c * 10)) - 0.5) * 0.3;
+                const rx = cx + Math.cos(a) * radius * bump;
+                const rz = cz + Math.sin(a) * radius * bump;
+
+                vertices.push(rx, cy, rz);
+                colors.push(0.18, 0.58 - c * 0.05, 0.18, 1.0);
+            }
+
+            for (let i = 0; i < fSegs; i++) {
+                indices.push(baseIndex, baseIndex + 1 + i, baseIndex + 2 + i);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
+    static createRock(gl, seed = 1) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        function rnd(s) {
+            const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        }
+
+        const latBands = 10;
+        const longBands = 10;
+        const radius = 0.7;
+
+        for (let lat = 0; lat <= latBands; lat++) {
+            const theta = (lat * Math.PI) / latBands;
+            const sinTheta = Math.sin(theta);
+            const cosTheta = Math.cos(theta);
+
+            for (let lon = 0; lon <= longBands; lon++) {
+                const phi = (lon * 2 * Math.PI) / longBands;
+                const nx = Math.cos(phi) * sinTheta;
+                const ny = cosTheta;
+                const nz = Math.sin(phi) * sinTheta;
+
+                const deform = 1.0 + (rnd(seed * 3.1 + lat * 2 + lon * 5) - 0.5) * 0.45;
+                const px = nx * radius * deform * 1.25;
+                const py = Math.max(0, ny * radius * deform * 0.85);
+                const pz = nz * radius * deform;
+
+                vertices.push(px, py, pz);
+
+                const cVar = (rnd(seed * 1.7 + lat + lon) - 0.5) * 0.12;
+                colors.push(0.48 + cVar, 0.48 + cVar, 0.52 + cVar, 1.0);
+            }
+        }
+
+        for (let lat = 0; lat < latBands; lat++) {
+            for (let lon = 0; lon < longBands; lon++) {
+                const first = lat * (longBands + 1) + lon;
+                const second = first + longBands + 1;
+
+                indices.push(first, first + 1, second);
+                indices.push(second, first + 1, second + 1);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
+    static createGrassTuft(gl, seed = 1) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        const blades = 8;
+        for (let b = 0; b < blades; b++) {
+            const angle = (b / blades) * Math.PI;
+            const height = 0.6 + (b % 3) * 0.22;
+            const width = 0.08;
+
+            const cosA = Math.cos(angle) * width;
+            const sinA = Math.sin(angle) * width;
+
+            const baseIdx = vertices.length / 3;
+
+            vertices.push(-cosA, 0, -sinA);
+            colors.push(0.18, 0.52, 0.14, 1.0);
+
+            vertices.push(cosA, 0, sinA);
+            colors.push(0.18, 0.52, 0.14, 1.0);
+
+            const lean = (b % 2 === 0 ? 0.22 : -0.22);
+            vertices.push(sinA * lean, height, cosA * lean);
+            colors.push(0.35, 0.88, 0.22, 1.0);
+
+            indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors);
     }
 
     static createSphere(gl, radius = 0.5, latBands = 16, longBands = 16) {
@@ -658,8 +1016,6 @@ export class Mesh {
     }
 
     static createCinemaCamera(gl) {
-        // Professional AAA Game Engine Camera Visualizer (Unreal / Unity style)
-        // Green fine wireframe lines with rectangular body, lens frustum frame, and view pyramid
         const vertices = [];
         const indices = [];
         const colors = [];
@@ -700,16 +1056,14 @@ export class Mesh {
             for (let i = 0; i < 8; i++) colors.push(r, g, b, a);
         }
 
-        const cr = 0.2, cg = 0.95, cb = 0.3; // Game engine vibrant green
-        const rad = 0.012; // Finer thickness
+        const cr = 0.2, cg = 0.95, cb = 0.3;
+        const rad = 0.012;
 
-        // 1. Camera Body Box (Back Z = +0.5 to Front Z = 0.0)
         const bw = 0.4, bh = 0.28, bd = 0.5;
         const bCorners = [
             [-bw, -bh, 0.0], [ bw, -bh, 0.0], [ bw,  bh, 0.0], [-bw,  bh, 0.0],
             [-bw, -bh, bd ], [ bw, -bh, bd ], [ bw,  bh, bd ], [-bw,  bh, bd ]
         ];
-        // Front & back quads of camera body
         for (let i = 0; i < 4; i++) {
             const next = (i + 1) % 4;
             addThickLine(bCorners[i][0], bCorners[i][1], bCorners[i][2], bCorners[next][0], bCorners[next][1], bCorners[next][2], rad, cr, cg, cb);
@@ -717,7 +1071,6 @@ export class Mesh {
             addThickLine(bCorners[i][0], bCorners[i][1], bCorners[i][2], bCorners[i+4][0], bCorners[i+4][1], bCorners[i+4][2], rad, cr, cg, cb);
         }
 
-        // 2. Camera Front Lens Cone / Box extending slightly forward to Z = -0.2
         const lw = 0.22, lh = 0.16, lz = -0.2;
         const lCorners = [
             [-lw, -lh, lz], [ lw, -lh, lz], [ lw,  lh, lz], [-lw,  lh, lz]
@@ -728,19 +1081,16 @@ export class Mesh {
             addThickLine(bCorners[i][0] * 0.6, bCorners[i][1] * 0.6, 0.0, lCorners[i][0], lCorners[i][1], lCorners[i][2], rad, cr, cg, cb);
         }
 
-        // 3. Game Engine View Frustum Pyramid extending from lens corners to large view plane (-Z = -2.5)
         const fw = 1.3, fh = 0.85, fz = -2.5;
         const fCorners = [
             [-fw, -fh, fz], [ fw, -fh, fz], [ fw,  fh, fz], [-fw,  fh, fz]
         ];
-        // 4 pyramid lines from lens corners to view frame
         for (let i = 0; i < 4; i++) {
             const next = (i + 1) % 4;
             addThickLine(lCorners[i][0], lCorners[i][1], lCorners[i][2], fCorners[i][0], fCorners[i][1], fCorners[i][2], rad, cr, cg, cb);
             addThickLine(fCorners[i][0], fCorners[i][1], fCorners[i][2], fCorners[next][0], fCorners[next][1], fCorners[next][2], rad, cr, cg, cb);
         }
 
-        // 4. Top orientation marker pyramid on top of camera
         addThickLine(0, bh, bd * 0.5, 0, bh + 0.3, bd * 0.5, rad, cr, cg, cb);
         addThickLine(-bw * 0.4, bh, bd * 0.5, 0, bh + 0.3, bd * 0.5, rad, cr, cg, cb);
         addThickLine(bw * 0.4, bh, bd * 0.5, 0, bh + 0.3, bd * 0.5, rad, cr, cg, cb);
