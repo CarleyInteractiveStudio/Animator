@@ -36,6 +36,7 @@ export function initWebGL(canvas) {
 
     // 1. Procedural 3D Skybox Shader Program
     const skyVertexShaderSource = `
+        precision mediump float;
         attribute vec2 a_position;
         varying vec2 v_uv;
         void main() {
@@ -54,7 +55,7 @@ export function initWebGL(canvas) {
         uniform float u_timeOfDay;
         uniform float u_sunIntensity;
         uniform float u_starIntensity;
-        uniform float u_time;
+        uniform mediump float u_time;
         uniform float u_cloudCoverage;
         uniform float u_cloudDensity;
         uniform float u_cloudAltitude;
@@ -263,6 +264,8 @@ export function initWebGL(canvas) {
 
     // 2. Main Mesh Shader Program
     const vertexShaderSource = `
+        precision mediump float;
+
         attribute vec4 a_position;
         attribute vec3 a_normal;
         attribute vec4 a_color;
@@ -272,8 +275,8 @@ export function initWebGL(canvas) {
         uniform mat4 u_viewMatrix;
         uniform mat4 u_modelMatrix;
         uniform mat3 u_normalMatrix;
-        uniform float u_time;
-        uniform float u_windElasticity;
+        uniform mediump float u_time;
+        uniform mediump float u_windElasticity;
 
         varying vec3 v_normal;
         varying vec4 v_color;
@@ -312,7 +315,7 @@ export function initWebGL(canvas) {
         uniform vec4 u_tintColor;
         uniform vec3 u_lightDirection;
         uniform float u_ambientIntensity;
-        uniform float u_time;
+        uniform mediump float u_time;
         uniform bool u_isUnlit;
 
         // Texture and Procedural uniforms
