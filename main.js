@@ -15,6 +15,10 @@ let objectCounters = {
     plane: 0,
     deformable_plane: 0,
     terrain: 0,
+    map: 0,
+    ocean: 0,
+    river: 0,
+    lake: 0,
     cylinder: 0,
     cone: 0,
     pyramid: 0,
@@ -77,18 +81,47 @@ function updateHierarchyPanel() {
     const ul = document.createElement('ul');
     ul.className = 'hierarchy-list';
 
+    function renderGameObjectTree(gameObject, container) {
+        const li = document.createElement('li');
+        li.className = 'hierarchy-item';
+        if (Engine.selectedGameObject === gameObject) {
+            li.classList.add('selected');
+        }
+
+        const hasChildren = gameObject.children && gameObject.children.length > 0;
+        const iconSvg = hasChildren ?
+            `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2" style="margin-right: 6px; flex-shrink: 0;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>` :
+            `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; flex-shrink: 0;"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`;
+
+        const titleSpan = document.createElement('span');
+        titleSpan.innerHTML = iconSvg + gameObject.name;
+        titleSpan.style.display = 'flex';
+        titleSpan.style.alignItems = 'center';
+        li.appendChild(titleSpan);
+
+        li.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectObject(gameObject);
+        });
+
+        container.appendChild(li);
+
+        if (hasChildren) {
+            const childUl = document.createElement('ul');
+            childUl.className = 'hierarchy-list child-list';
+            childUl.style.paddingLeft = '16px';
+            for (const child of gameObject.children) {
+                renderGameObjectTree(child, childUl);
+            }
+            container.appendChild(childUl);
+        }
+    }
+
     if (Engine.scene && Engine.scene.gameObjects) {
         for (const gameObject of Engine.scene.gameObjects) {
-            const li = document.createElement('li');
-            li.className = 'hierarchy-item';
-            if (Engine.selectedGameObject === gameObject) {
-                li.classList.add('selected');
+            if (!gameObject.parent) {
+                renderGameObjectTree(gameObject, ul);
             }
-            li.textContent = gameObject.name;
-            li.addEventListener('click', () => {
-                selectObject(gameObject);
-            });
-            ul.appendChild(li);
         }
     }
     jerarquiaContent.appendChild(ul);
@@ -1092,7 +1125,14 @@ async function generateSmoothTerrainFromModal() {
     const grassDensityVal = parseInt(document.getElementById('slider-grass-density').value) || 35;
     const texQualitySelect = document.getElementById('select-terrain-texture-quality');
     const textureQuality = parseFloat(texQualitySelect ? texQualitySelect.value : 1.0) || 1.0;
-    const hasWater = document.getElementById('chk-terrain-water').checked;
+
+    const chkOcean = document.getElementById('chk-terrain-ocean');
+    const chkRiver = document.getElementById('chk-terrain-river');
+    const chkLake = document.getElementById('chk-terrain-lake');
+
+    const hasOcean = chkOcean ? chkOcean.checked : true;
+    const hasRiver = chkRiver ? chkRiver.checked : true;
+    const hasLake  = chkLake ? chkLake.checked : true;
 
     const progressContainer = document.getElementById('terrain-progress-container');
     const progressStatus = document.getElementById('terrain-progress-status');
@@ -1112,6 +1152,11 @@ async function generateSmoothTerrainFromModal() {
 
     await updateProgress('Calculando elevaciones y faldón de horizonte 3D...', 15);
 
+    objectCounters.map = (objectCounters.map || 0) + 1;
+    const mapName = `Mapa ${objectCounters.map}`;
+    const mapParentObj = new GameObject(mapName);
+    Engine.scene.addGameObject(mapParentObj);
+
     objectCounters.terrain = (objectCounters.terrain || 0) + 1;
     const terrainName = `Terreno Smooth ${objectCounters.terrain}`;
 
@@ -1121,7 +1166,7 @@ async function generateSmoothTerrainFromModal() {
         width, depth, heightScale, noiseScale, seed, waterLevel, subdivisions
     });
 
-    await updateProgress('Aplicando sombreado PBR triplanar de alta resolución...', 40);
+    await updateProgress('Aplicando sombreado PBR triplanar de alta resolución...', 35);
 
     const terrainObj = new GameObject(terrainName, terrainMesh);
     terrainObj.material = {
@@ -1131,6 +1176,7 @@ async function generateSmoothTerrainFromModal() {
         roughness: 0.75
     };
 
+    mapParentObj.addChild(terrainObj);
     Engine.scene.addGameObject(terrainObj);
 
     function rnd(s) {
@@ -1138,17 +1184,105 @@ async function generateSmoothTerrainFromModal() {
         return x - Math.floor(x);
     }
 
+    // --- 1. Generar Mar / Océano (Olas 3D Trocoidales + Espuma) ---
+    if (hasOcean) {
+        await updateProgress('Generando Mar 3D con olas trocoidales y espuma de orilla...', 48);
+        objectCounters.ocean = (objectCounters.ocean || 0) + 1;
+        const oceanMesh = Mesh.createOceanMesh(Engine.gl, width * 1.6, depth * 1.6, 64);
+        const oceanObj = new GameObject(`Mar / Océano ${objectCounters.ocean}`, oceanMesh);
+        vec3.set(oceanObj.transform.position, 0, waterLevel, 0);
+        oceanObj.material = {
+            textureType: 4,
+            waterType: 0,
+            metallic: 0.9,
+            roughness: 0.05
+        };
+        oceanObj.tideProps = {
+            enabled: true,
+            amplitude: 1.2,
+            speed: 0.4,
+            baseY: waterLevel
+        };
+        mapParentObj.addChild(oceanObj);
+        Engine.scene.addGameObject(oceanObj);
+    }
+
+    // --- Calculate emergent land area above sea level (Y > waterLevel) ---
+    let landAreaAboveSea = 0;
+    if (terrainMesh && terrainMesh.terrainHeights) {
+        const sub = terrainMesh.terrainSubdivisions;
+        const cellArea = (width / sub) * (depth / sub);
+        for (let idx = 0; idx < terrainMesh.terrainHeights.length; idx++) {
+            if (terrainMesh.terrainHeights[idx] > waterLevel + 0.1) {
+                landAreaAboveSea += cellArea;
+            }
+        }
+    }
+
+    // --- 2. Generar Río de Terreno/Montaña a Mar (Estricto: Área emergida >= 500m²) ---
+    const isLandSufficient = (landAreaAboveSea >= 500.0);
+    if (hasRiver && isLandSufficient) {
+        await updateProgress(`Trazando Río serpentino (Área emergida: ${landAreaAboveSea.toFixed(0)}m²)...`, 58);
+        objectCounters.river = (objectCounters.river || 0) + 1;
+
+        // River originates on elevated hill slope (not top peak) and winds downhill with serpentine zig-zag
+        const p0 = [width * 0.22, -depth * 0.18];  // Start high on inland slope
+        const p1 = [width * 0.18, -depth * 0.08];  // Zig 1
+        const p2 = [width * 0.10, depth * 0.02];   // Zag 1
+        const p3 = [width * 0.02, depth * 0.12];   // Zig 2
+        const p4 = [-width * 0.12, depth * 0.22];  // Zag 2
+        const p5 = [-width * 0.26, depth * 0.32];  // Outfall into Ocean shore
+
+        const points2D = [p0, p1, p2, p3, p4, p5];
+        const riverPath = points2D.map(([px, pz]) => {
+            const groundY = sampleTerrainHeight(terrainMesh, px, pz);
+            const riverY = Math.max(waterLevel + 0.02, groundY - 0.02);
+            return [px, riverY, pz];
+        });
+
+        const riverMesh = Mesh.createRiverMesh(Engine.gl, riverPath, Math.min(3.5, width * 0.07));
+        const riverObj = new GameObject(`Río de Terreno a Mar ${objectCounters.river}`, riverMesh);
+        riverObj.material = {
+            textureType: 4,
+            waterType: 1,
+            metallic: 0.85,
+            roughness: 0.08
+        };
+        mapParentObj.addChild(riverObj);
+        Engine.scene.addGameObject(riverObj);
+    } else if (hasRiver && !isLandSufficient) {
+        await updateProgress(`Superficie emergida insuficiente (${landAreaAboveSea.toFixed(0)}m² < 500m²: río omitido)...`, 58);
+    }
+
+    // --- 3. Generar Lago Tranquilo ---
+    if (hasLake) {
+        await updateProgress('Modelando Lago 3D tranquilo con cáusticas suaves...', 68);
+        objectCounters.lake = (objectCounters.lake || 0) + 1;
+        const lakeMesh = Mesh.createLakeMesh(Engine.gl, width * 0.14, depth * 0.14, 32);
+        const lakeObj = new GameObject(`Lago Tranquilo ${objectCounters.lake}`, lakeMesh);
+        vec3.set(lakeObj.transform.position, width * 0.22, waterLevel + 0.1, depth * 0.15);
+        lakeObj.material = {
+            textureType: 4,
+            waterType: 2,
+            metallic: 0.88,
+            roughness: 0.05
+        };
+        mapParentObj.addChild(lakeObj);
+        Engine.scene.addGameObject(lakeObj);
+    }
+
     if (grassDensityVal > 0) {
-        await updateProgress('Sembrando prado de césped 3D fijado a la superficie...', 65);
+        await updateProgress('Sembrando prado de césped 3D fijado a la superficie...', 78);
         objectCounters.grass++;
         const totalGrassBlades = grassDensityVal * 12;
         const grassFieldMesh = Mesh.createRobloxGrassField(Engine.gl, terrainMesh, totalGrassBlades);
         const grassFieldObj = new GameObject(`Prado de Césped 3D ${objectCounters.grass}`, grassFieldMesh);
         grassFieldObj.windElasticity = 0.85;
+        mapParentObj.addChild(grassFieldObj);
         Engine.scene.addGameObject(grassFieldObj);
     }
 
-    await updateProgress('Poblando bioma con vegetación y rocas 3D...', 85);
+    await updateProgress('Poblando bioma con vegetación y rocas 3D...', 88);
 
     // Scatter Trees
     for (let i = 0; i < numTrees; i++) {
@@ -1164,6 +1298,7 @@ async function generateSmoothTerrainFromModal() {
             const scaleVar = 0.8 + rnd(seed + i * 2) * 0.5;
             treeObj.transform.scale = [scaleVar, scaleVar, scaleVar];
             treeObj.windElasticity = 0.4;
+            mapParentObj.addChild(treeObj);
             Engine.scene.addGameObject(treeObj);
         }
     }
@@ -1180,32 +1315,11 @@ async function generateSmoothTerrainFromModal() {
         vec3.set(rockObj.transform.position, rx, ry, rz);
         const scaleVar = 0.6 + rnd(seed + i * 3) * 0.8;
         rockObj.transform.scale = [scaleVar, scaleVar * 0.7, scaleVar];
+        mapParentObj.addChild(rockObj);
         Engine.scene.addGameObject(rockObj);
     }
 
-    // Subdivided Water Plane for Physical 3D Waves and Tidal Shoreline Inundation
-    if (hasWater) {
-        objectCounters.water++;
-        const waterMesh = Mesh.createDeformablePlane(Engine.gl, 48, 20);
-        const waterObj = new GameObject(`Lago / Agua ${objectCounters.water}`, waterMesh);
-        vec3.set(waterObj.transform.position, 0, waterLevel, 0);
-        waterObj.transform.scale = [width / 2, 1, depth / 2];
-        waterObj.material = {
-            textureType: 4,
-            waterType: 0,
-            metallic: 0.9,
-            roughness: 0.05
-        };
-        waterObj.tideProps = {
-            enabled: true,
-            amplitude: 1.2,
-            speed: 0.4,
-            baseY: waterLevel
-        };
-        Engine.scene.addGameObject(waterObj);
-    }
-
-    await updateProgress('¡Mapa Roblox completado con éxito!', 100);
+    await updateProgress('¡Mapa Completo con Jerarquía y Aguas Realistas!', 100);
 
     setTimeout(() => {
         if (progressContainer) progressContainer.style.display = 'none';
@@ -1214,7 +1328,7 @@ async function generateSmoothTerrainFromModal() {
         if (modalTerrain) modalTerrain.style.display = 'none';
     }, 350);
 
-    selectObject(terrainObj);
+    selectObject(mapParentObj);
 }
 
 function createPrimitiveMesh(type) {
@@ -1223,6 +1337,9 @@ function createPrimitiveMesh(type) {
         case 'sphere': return Mesh.createSphere(gl);
         case 'plane': return Mesh.createPlane(gl);
         case 'deformable_plane': return Mesh.createDeformablePlane(gl, 48, 20);
+        case 'ocean': return Mesh.createOceanMesh(gl, 80, 80, 64);
+        case 'river': return Mesh.createRiverMesh(gl);
+        case 'lake': return Mesh.createLakeMesh(gl, 12, 12, 32);
         case 'cylinder': return Mesh.createCylinder(gl);
         case 'cone': return Mesh.createCone(gl);
         case 'pyramid': return Mesh.createPyramid(gl);
@@ -1244,6 +1361,9 @@ function getPrimitiveName(type) {
         case 'sphere': return `Esfera ${num}`;
         case 'plane': return `Plano ${num}`;
         case 'deformable_plane': return `Plano Deformable ${num}`;
+        case 'ocean': return `Mar / Océano ${num}`;
+        case 'river': return `Río ${num}`;
+        case 'lake': return `Lago ${num}`;
         case 'cylinder': return `Cilindro ${num}`;
         case 'cone': return `Cono ${num}`;
         case 'pyramid': return `Pirámide ${num}`;
@@ -1264,7 +1384,13 @@ function spawnPrimitive(type) {
     const name = getPrimitiveName(type);
     const obj = new GameObject(name, mesh);
 
-    if (type === 'cloud') {
+    if (type === 'ocean') {
+        obj.material = { textureType: 4, waterType: 0, metallic: 0.9, roughness: 0.05 };
+    } else if (type === 'river') {
+        obj.material = { textureType: 4, waterType: 1, metallic: 0.85, roughness: 0.08 };
+    } else if (type === 'lake') {
+        obj.material = { textureType: 4, waterType: 2, metallic: 0.88, roughness: 0.05 };
+    } else if (type === 'cloud') {
         obj.cloudProps = {
             seed: seed,
             preset: 'white',
@@ -1325,11 +1451,21 @@ function setupContextMenuEvents() {
     if (ctxDelete) {
         ctxDelete.addEventListener('click', () => {
             if (Engine.selectedGameObject && Engine.scene) {
-                const idx = Engine.scene.gameObjects.indexOf(Engine.selectedGameObject);
-                if (idx !== -1) {
-                    Engine.scene.gameObjects.splice(idx, 1);
-                    selectObject(null);
+                const target = Engine.selectedGameObject;
+                if (target.parent) {
+                    target.parent.removeChild(target);
                 }
+                const removeRecursive = (obj) => {
+                    for (const child of [...obj.children]) {
+                        removeRecursive(child);
+                    }
+                    const idx = Engine.scene.gameObjects.indexOf(obj);
+                    if (idx !== -1) {
+                        Engine.scene.gameObjects.splice(idx, 1);
+                    }
+                };
+                removeRecursive(target);
+                selectObject(null);
             }
         });
     }
@@ -1621,6 +1757,70 @@ function setupToolbarEvents() {
     });
 }
 
+let globalTextures = null;
+
+function initGlobalTextures(gl) {
+    if (globalTextures) return globalTextures;
+
+    function createProceduralTexture(width, height, drawFn) {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        drawFn(ctx, width, height);
+
+        const tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+        return tex;
+    }
+
+    // 1. Photorealistic Grass Texture Pattern
+    const grassTex = createProceduralTexture(256, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#2d8a1e';
+        ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 4000; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? '#38b025' : '#1e6313';
+            ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+        }
+    });
+
+    // 2. Photorealistic Sand Texture Pattern
+    const sandTex = createProceduralTexture(256, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#e6c885';
+        ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 3000; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? '#f5dc9e' : '#c9a563';
+            ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+        }
+    });
+
+    // 3. Photorealistic Rock Texture Pattern
+    const rockTex = createProceduralTexture(256, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#6b6b73';
+        ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 3500; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? '#8f8f99' : '#47474d';
+            ctx.fillRect(Math.random() * w, Math.random() * h, 3, 3);
+        }
+    });
+
+    globalTextures = {
+        grass: grassTex,
+        sand: sandTex,
+        rock: rockTex
+    };
+    window.globalTextures = globalTextures;
+
+    return globalTextures;
+}
+
 function main() {
     try {
         setupResizers();
@@ -1631,6 +1831,7 @@ function main() {
         visorContent.appendChild(canvas);
 
         if (Engine.initialize(canvas)) {
+            initGlobalTextures(Engine.gl);
             setupContextMenuEvents();
             setupCreateMenuEvents();
             setupFileImportExportEvents();
