@@ -265,6 +265,7 @@ export function initWebGL(canvas) {
     // 2. Main Mesh Shader Program
     const vertexShaderSource = `
         precision mediump float;
+        precision mediump int;
 
         attribute vec4 a_position;
         attribute vec3 a_normal;
@@ -318,6 +319,7 @@ export function initWebGL(canvas) {
 
     const fragmentShaderSource = `
         precision mediump float;
+        precision mediump int;
 
         varying vec3 v_normal;
         varying vec4 v_color;
