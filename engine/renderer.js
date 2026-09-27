@@ -286,6 +286,13 @@ export function initWebGL(canvas) {
         void main() {
             vec4 pos = a_position;
 
+            // Real 3D liquid wave vertex displacement for water meshes
+            if (u_textureType == 4) {
+                float wave1 = sin(pos.x * 0.8 + u_time * 2.2) * cos(pos.z * 0.6 + u_time * 1.8) * 0.18;
+                float wave2 = sin(pos.x * 2.2 - u_time * 3.1 + pos.z * 1.5) * 0.08;
+                pos.y += wave1 + wave2;
+            }
+
             // Real-time dynamic grass & foliage wind animation (root base v=0.0 stays 100% fixed, tip v=1.0 sways)
             float tipFactor = clamp(a_texcoord.y, 0.0, 1.0);
             if (u_windElasticity > 0.01 && tipFactor > 0.01) {
@@ -475,48 +482,51 @@ export function initWebGL(canvas) {
             vec3 normNorm = normalize(v_normal);
 
             if (u_textureType == 4) {
-                // Multi-Mode Realistic WebGL Animated Water Shader with Realistic Shoreline Waves & Dynamic Tides
+                // Photorealistic Translucent Liquid Water Shader (Clean, Smooth Water Optics without noise artifacts)
                 vec3 viewDir = normalize(-v_worldPosition);
                 vec3 lightDir = normalize(u_lightDirection);
 
-                vec3 shallowCol;
-                vec3 deepCol;
-                float wave = 0.0;
-                float foam = 0.0;
+                // High-fidelity liquid color tones
+                vec3 shallowCol = vec3(0.12, 0.72, 0.85); // Pure crystalline turquoise
+                vec3 deepCol    = vec3(0.01, 0.18, 0.42); // Rich deep ocean navy blue
 
                 if (u_waterType == 1) {
-                    // Río con Corriente (Unidirectional fast current)
-                    vec2 flowUV = v_worldPosition.xz * 1.2 + vec2(u_time * 1.4, u_time * 0.35);
-                    wave = noise(flowUV) * 0.6 + noise(flowUV * 3.0 - vec2(u_time * 1.8)) * 0.4;
-                    shallowCol = vec3(0.12, 0.72, 0.78);
-                    deepCol = vec3(0.02, 0.32, 0.48);
+                    // River
+                    shallowCol = vec3(0.10, 0.65, 0.72);
+                    deepCol    = vec3(0.02, 0.28, 0.38);
                 } else if (u_waterType == 2) {
-                    // Lago Tranquilo (Gentle concentric ripples)
-                    vec2 lakeUV = v_worldPosition.xz * 0.5 + vec2(sin(u_time * 0.4), cos(u_time * 0.4)) * 0.2;
-                    wave = noise(lakeUV * 1.8) * 0.5 + noise(lakeUV * 4.0 + vec2(u_time * 0.2)) * 0.3;
-                    shallowCol = vec3(0.15, 0.68, 0.62);
-                    deepCol = vec3(0.03, 0.28, 0.38);
-                } else {
-                    // Mar u Océano con Mareas Reales (Trochoidal ocean waves, tidal surge & realistic shore foam)
-                    vec2 oceanUV = v_worldPosition.xz * 0.4 + vec2(u_time * 0.8, u_time * 0.5);
-                    float tideSurge = sin(u_time * 0.35) * 0.15; // Dynamic wave surge matching tidal flux
-                    float trochoidal = sin(v_worldPosition.x * 0.8 + u_time * 2.2 + tideSurge) * cos(v_worldPosition.z * 0.6 + u_time * 1.8);
-                    wave = noise(oceanUV) * 0.35 + trochoidal * 0.45 + noise(oceanUV * 3.5 - vec2(u_time * 0.9)) * 0.2;
-
-                    // Shoreline wave crest foam calculation
-                    foam = smoothstep(0.52, 0.80, wave + tideSurge * 0.5) * 0.8;
-                    shallowCol = vec3(0.18, 0.78, 0.92);
-                    deepCol = vec3(0.02, 0.16, 0.38);
+                    // Lake
+                    shallowCol = vec3(0.14, 0.62, 0.58);
+                    deepCol    = vec3(0.03, 0.22, 0.32);
                 }
 
-                float fresnel = pow(1.0 - max(0.0, dot(normNorm, viewDir)), 3.5);
-                vec3 waterCol = mix(deepCol, shallowCol, 0.5 + wave * 0.5);
+                // Procedural normal perturbation for liquid surface micro-ripples
+                vec2 waveSpeed = vec2(u_time * 0.4, u_time * 0.25);
+                vec3 waveNormalGrad = vec3(
+                    sin(v_worldPosition.x * 2.5 + waveSpeed.x) * 0.12 + cos(v_worldPosition.z * 3.1 + waveSpeed.y) * 0.08,
+                    1.0,
+                    cos(v_worldPosition.x * 1.8 - waveSpeed.y) * 0.10 + sin(v_worldPosition.z * 2.2 + waveSpeed.x) * 0.12
+                );
+                vec3 liquidNormal = normalize(normNorm + waveNormalGrad);
 
+                // Physical Fresnel reflectance calculation (viewing angle reflectivity)
+                float NdotV = max(0.0, dot(liquidNormal, viewDir));
+                float fresnel = pow(1.0 - NdotV, 4.0);
+
+                // Depth tinting and liquid refraction tone
+                vec3 baseLiquid = mix(deepCol, shallowCol, clamp(NdotV * 1.2, 0.0, 1.0));
+
+                // Physical specular sun glint (sharp liquid reflections)
                 vec3 halfDir = normalize(lightDir + viewDir);
-                float spec = pow(max(0.0, dot(normNorm, halfDir)), 128.0) * (u_waterType == 0 ? 2.5 : 1.5);
+                float NdotH = max(0.0, dot(liquidNormal, halfDir));
+                float specularGlint = pow(NdotH, 160.0) * 2.8;
 
-                vec3 finalWater = mix(waterCol, vec3(0.92, 0.98, 1.0), fresnel * 0.5) + vec3(spec) + vec3(foam);
-                gl_FragColor = vec4(finalWater, u_waterType == 0 ? 0.88 : 0.80);
+                // Sky reflection blend via Fresnel
+                vec3 skyReflection = mix(vec3(0.6, 0.8, 1.0), vec3(0.95, 0.98, 1.0), fresnel);
+                vec3 finalLiquidRGB = mix(baseLiquid, skyReflection, fresnel * 0.6) + vec3(specularGlint);
+
+                // Translucent liquid alpha
+                gl_FragColor = vec4(finalLiquidRGB, 0.82);
                 return;
             }
 

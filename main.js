@@ -1183,10 +1183,10 @@ async function generateSmoothTerrainFromModal() {
         Engine.scene.addGameObject(rockObj);
     }
 
-    // Optional Water Plane
+    // Subdivided Water Plane for Physical 3D Waves and Tidal Shoreline Inundation
     if (hasWater) {
         objectCounters.water++;
-        const waterMesh = Mesh.createPlane(Engine.gl);
+        const waterMesh = Mesh.createDeformablePlane(Engine.gl, 48, 20);
         const waterObj = new GameObject(`Lago / Agua ${objectCounters.water}`, waterMesh);
         vec3.set(waterObj.transform.position, 0, waterLevel, 0);
         waterObj.transform.scale = [width / 2, 1, depth / 2];
