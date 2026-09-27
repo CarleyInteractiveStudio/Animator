@@ -473,6 +473,7 @@ export class Mesh {
         const vertices = [];
         const indices = [];
         const colors = [];
+        const texcoords = [];
 
         function rnd(s) {
             const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
@@ -554,25 +555,28 @@ export class Mesh {
 
                 const baseIdx = vertices.length / 3;
 
-                // Blade Root Left & Right (Root is 100% fixed at ground level y = bladeRy)
+                // Blade Root Left & Right (Root is 100% fixed at ground level y = bladeRy, v=0.0)
                 vertices.push(bx - cosA, bladeRy, bz - sinA);
                 colors.push(0.12, 0.38, 0.08, 1.0);
+                texcoords.push(0.0, 0.0);
 
                 vertices.push(bx + cosA, bladeRy, bz + sinA);
                 colors.push(0.12, 0.38, 0.08, 1.0);
+                texcoords.push(1.0, 0.0);
 
-                // Blade Tip (Upper portion sways in wind)
-                const leanX = (rnd(seedIter * 5 + b) - 0.5) * 0.4;
-                const leanZ = (rnd(seedIter * 7 + b) - 0.5) * 0.4;
+                // Blade Tip (Upper portion sways in wind, v=1.0)
+                const leanX = (rnd(seedIter * 5 + b) - 0.5) * 0.3;
+                const leanZ = (rnd(seedIter * 7 + b) - 0.5) * 0.3;
                 vertices.push(bx + leanX, bladeRy + bladeH, bz + leanZ);
                 colors.push(0.38, 0.88, 0.20, 1.0);
+                texcoords.push(0.5, 1.0);
 
                 indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
                 indices.push(baseIdx + 2, baseIdx + 1, baseIdx);
             }
         }
 
-        return new Mesh(gl, vertices, indices, null, colors);
+        return new Mesh(gl, vertices, indices, null, colors, texcoords);
     }
 
     static createTree(gl, seed = 1) {
@@ -702,6 +706,7 @@ export class Mesh {
         const vertices = [];
         const indices = [];
         const colors = [];
+        const texcoords = [];
 
         const blades = 8;
         for (let b = 0; b < blades; b++) {
@@ -716,18 +721,21 @@ export class Mesh {
 
             vertices.push(-cosA, 0, -sinA);
             colors.push(0.18, 0.52, 0.14, 1.0);
+            texcoords.push(0.0, 0.0);
 
             vertices.push(cosA, 0, sinA);
             colors.push(0.18, 0.52, 0.14, 1.0);
+            texcoords.push(1.0, 0.0);
 
             const lean = (b % 2 === 0 ? 0.22 : -0.22);
             vertices.push(sinA * lean, height, cosA * lean);
             colors.push(0.35, 0.88, 0.22, 1.0);
+            texcoords.push(0.5, 1.0);
 
             indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
         }
 
-        return new Mesh(gl, vertices, indices, null, colors);
+        return new Mesh(gl, vertices, indices, null, colors, texcoords);
     }
 
     static createSphere(gl, radius = 0.5, latBands = 16, longBands = 16) {

@@ -286,20 +286,17 @@ export function initWebGL(canvas) {
         void main() {
             vec4 pos = a_position;
 
-            // Real-time dynamic grass & foliage wind animation (base stays 100% fixed)
-            if (u_windElasticity > 0.01 && pos.y > 0.001) {
-                float heightFactor = pos.y; // Height strictly above blade root base
+            // Real-time dynamic grass & foliage wind animation (root base v=0.0 stays 100% fixed, tip v=1.0 sways)
+            float tipFactor = clamp(a_texcoord.y, 0.0, 1.0);
+            if (u_windElasticity > 0.01 && tipFactor > 0.01) {
+                float heightFactor = tipFactor * tipFactor; // Quadratic tip curve for realistic blade bending
 
-                // Upper tip organic idle breeze
-                float idleSway = sin(u_time * 1.8 + pos.x * 1.5 + pos.z * 1.2) * 0.035 * u_windElasticity * heightFactor;
-                float idleSwayZ = cos(u_time * 1.4 + pos.z * 1.8) * 0.025 * u_windElasticity * heightFactor;
+                // Gentle breeze wave sway
+                float activeSway = sin(u_time * 2.8 + pos.x * 2.2 + pos.z * 1.8) * 0.12 * u_windElasticity * heightFactor;
+                float activeSwayZ = cos(u_time * 2.1 + pos.z * 2.4) * 0.08 * u_windElasticity * heightFactor;
 
-                // Stronger dynamic wind wave sway
-                float activeSway = sin(u_time * 3.8 + pos.x * 2.8 + pos.z * 2.2) * 0.14 * u_windElasticity * heightFactor;
-                float activeSwayZ = cos(u_time * 2.6 + pos.z * 3.4) * 0.10 * u_windElasticity * heightFactor;
-
-                pos.x += idleSway + activeSway;
-                pos.z += idleSwayZ + activeSwayZ;
+                pos.x += activeSway;
+                pos.z += activeSwayZ;
             }
 
             vec4 worldPos = u_modelMatrix * pos;
