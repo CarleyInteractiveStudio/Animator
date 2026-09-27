@@ -1207,27 +1207,40 @@ async function generateSmoothTerrainFromModal() {
         Engine.scene.addGameObject(oceanObj);
     }
 
-    // --- 2. Generar Río de Terreno/Montaña a Mar (Con verificación inteligente de área) ---
-    const isLandSufficient = (width >= 35.0 && depth >= 35.0);
+    // --- Calculate emergent land area above sea level (Y > waterLevel) ---
+    let landAreaAboveSea = 0;
+    if (terrainMesh && terrainMesh.terrainHeights) {
+        const sub = terrainMesh.terrainSubdivisions;
+        const cellArea = (width / sub) * (depth / sub);
+        for (let idx = 0; idx < terrainMesh.terrainHeights.length; idx++) {
+            if (terrainMesh.terrainHeights[idx] > waterLevel + 0.1) {
+                landAreaAboveSea += cellArea;
+            }
+        }
+    }
+
+    // --- 2. Generar Río de Terreno/Montaña a Mar (Estricto: Área emergida >= 500m²) ---
+    const isLandSufficient = (landAreaAboveSea >= 500.0);
     if (hasRiver && isLandSufficient) {
-        await updateProgress('Trazando cauce del Río desde el terreno hasta el mar...', 58);
+        await updateProgress(`Trazando Río serpentino (Área emergida: ${landAreaAboveSea.toFixed(0)}m²)...`, 58);
         objectCounters.river = (objectCounters.river || 0) + 1;
 
-        const p0 = [width * 0.28, -depth * 0.28];
-        const p1 = [width * 0.14, -depth * 0.14];
-        const p2 = [0.0, 0.0];
-        const p3 = [-width * 0.14, depth * 0.14];
-        const p4 = [-width * 0.35, depth * 0.35];
+        // River originates on elevated hill slope (not top peak) and winds downhill with serpentine zig-zag
+        const p0 = [width * 0.22, -depth * 0.18];  // Start high on inland slope
+        const p1 = [width * 0.18, -depth * 0.08];  // Zig 1
+        const p2 = [width * 0.10, depth * 0.02];   // Zag 1
+        const p3 = [width * 0.02, depth * 0.12];   // Zig 2
+        const p4 = [-width * 0.12, depth * 0.22];  // Zag 2
+        const p5 = [-width * 0.26, depth * 0.32];  // Outfall into Ocean shore
 
-        const points2D = [p0, p1, p2, p3, p4];
+        const points2D = [p0, p1, p2, p3, p4, p5];
         const riverPath = points2D.map(([px, pz]) => {
             const groundY = sampleTerrainHeight(terrainMesh, px, pz);
-            // Fit river mesh directly inside carved riverbed channel
-            const riverY = Math.max(waterLevel + 0.05, groundY + 0.08);
+            const riverY = Math.max(waterLevel + 0.02, groundY - 0.02);
             return [px, riverY, pz];
         });
 
-        const riverMesh = Mesh.createRiverMesh(Engine.gl, riverPath, Math.min(4.0, width * 0.08));
+        const riverMesh = Mesh.createRiverMesh(Engine.gl, riverPath, Math.min(3.5, width * 0.07));
         const riverObj = new GameObject(`Río de Terreno a Mar ${objectCounters.river}`, riverMesh);
         riverObj.material = {
             textureType: 4,
@@ -1238,7 +1251,7 @@ async function generateSmoothTerrainFromModal() {
         mapParentObj.addChild(riverObj);
         Engine.scene.addGameObject(riverObj);
     } else if (hasRiver && !isLandSufficient) {
-        await updateProgress('Superficie del terreno pequeña (río omitido por realismo)...', 58);
+        await updateProgress(`Superficie emergida insuficiente (${landAreaAboveSea.toFixed(0)}m² < 500m²: río omitido)...`, 58);
     }
 
     // --- 3. Generar Lago Tranquilo ---

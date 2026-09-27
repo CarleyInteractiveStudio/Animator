@@ -473,19 +473,19 @@ export function initWebGL(canvas) {
             );
             perturbedNormal = normalize(norm + bumpGrad * 0.28);
 
-            // Photorealistic Micro-texture generators
-            float fineGrassGrain = noise3D(pos * 12.0 * scale) * 0.30 + noise3D(pos * 32.0 * scale) * 0.15;
-            float sandRipples = sin(pos.x * 14.0 * scale + pos.z * 14.0 * scale + noise3D(pos * 3.0) * 3.0) * 0.12 + noise3D(pos * 18.0) * 0.12;
-            float rockStrata = sin(pos.y * 4.5 * scale + noise3D(pos * 2.0) * 5.0) * 0.22 + noise3D(pos * 14.0 * scale) * 0.28;
-            float macroNoise = noise3D(pos * 0.06);
+            // High-detail procedural photorealistic micro-texture generators
+            float fineGrassGrain = noise3D(pos * 16.0 * scale) * 0.35 + noise3D(pos * 48.0 * scale) * 0.20;
+            float sandRipples = sin(pos.x * 18.0 * scale + pos.z * 18.0 * scale + noise3D(pos * 4.0) * 4.0) * 0.15 + noise3D(pos * 24.0) * 0.15;
+            float rockStrata = sin(pos.y * 6.0 * scale + noise3D(pos * 2.5) * 6.0) * 0.28 + noise3D(pos * 18.0 * scale) * 0.32;
+            float macroNoise = noise3D(pos * 0.05);
 
-            // Ultra-realistic Photorealistic Color Gradients
-            vec3 grassLush = vec3(0.18, 0.48, 0.14) + vec3(fineGrassGrain * 0.12, fineGrassGrain * 0.25, fineGrassGrain * 0.06);
-            vec3 goldenSand = vec3(0.88, 0.78, 0.54) + vec3(sandRipples * 0.10, sandRipples * 0.08, sandRipples * 0.04);
-            vec3 leafyDirt = vec3(0.35, 0.24, 0.15) + vec3(fineGrassGrain * 0.10);
-            vec3 rockCliff = vec3(0.42, 0.41, 0.44) + vec3(rockStrata * 0.22);
-            vec3 darkStone = vec3(0.26, 0.26, 0.29) + vec3(rockStrata * 0.18);
-            vec3 snowCap   = vec3(0.96, 0.98, 1.0)  + vec3(fineGrassGrain * 0.04);
+            // High-resolution PBR Color Gradients
+            vec3 grassLush = vec3(0.16, 0.52, 0.12) + vec3(fineGrassGrain * 0.15, fineGrassGrain * 0.28, fineGrassGrain * 0.08);
+            vec3 goldenSand = vec3(0.92, 0.82, 0.58) + vec3(sandRipples * 0.12, sandRipples * 0.10, sandRipples * 0.05);
+            vec3 leafyDirt = vec3(0.32, 0.22, 0.12) + vec3(fineGrassGrain * 0.12);
+            vec3 rockCliff = vec3(0.45, 0.44, 0.48) + vec3(rockStrata * 0.25);
+            vec3 darkStone = vec3(0.24, 0.24, 0.28) + vec3(rockStrata * 0.20);
+            vec3 snowCap   = vec3(0.98, 0.99, 1.0)  + vec3(fineGrassGrain * 0.05);
 
             vec3 groundMat;
             if (height < 1.4) {
