@@ -277,6 +277,7 @@ export function initWebGL(canvas) {
         uniform mat3 u_normalMatrix;
         uniform mediump float u_time;
         uniform mediump float u_windElasticity;
+        uniform int u_textureType;
 
         varying vec3 v_normal;
         varying vec4 v_color;
