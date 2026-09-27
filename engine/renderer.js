@@ -475,7 +475,7 @@ export function initWebGL(canvas) {
             vec3 normNorm = normalize(v_normal);
 
             if (u_textureType == 4) {
-                // Multi-Mode Realistic WebGL Animated Water Shader
+                // Multi-Mode Realistic WebGL Animated Water Shader with Realistic Shoreline Waves & Dynamic Tides
                 vec3 viewDir = normalize(-v_worldPosition);
                 vec3 lightDir = normalize(u_lightDirection);
 
@@ -497,20 +497,23 @@ export function initWebGL(canvas) {
                     shallowCol = vec3(0.15, 0.68, 0.62);
                     deepCol = vec3(0.03, 0.28, 0.38);
                 } else {
-                    // Mar con Olas (Trochoidal ocean waves & foam)
+                    // Mar u Océano con Mareas Reales (Trochoidal ocean waves, tidal surge & realistic shore foam)
                     vec2 oceanUV = v_worldPosition.xz * 0.4 + vec2(u_time * 0.8, u_time * 0.5);
-                    float trochoidal = sin(v_worldPosition.x * 0.8 + u_time * 2.2) * cos(v_worldPosition.z * 0.6 + u_time * 1.8);
-                    wave = noise(oceanUV) * 0.4 + trochoidal * 0.4 + noise(oceanUV * 3.5 - vec2(u_time * 0.9)) * 0.2;
-                    foam = smoothstep(0.55, 0.82, wave) * 0.7;
-                    shallowCol = vec3(0.18, 0.75, 0.92);
-                    deepCol = vec3(0.02, 0.18, 0.42);
+                    float tideSurge = sin(u_time * 0.35) * 0.15; // Dynamic wave surge matching tidal flux
+                    float trochoidal = sin(v_worldPosition.x * 0.8 + u_time * 2.2 + tideSurge) * cos(v_worldPosition.z * 0.6 + u_time * 1.8);
+                    wave = noise(oceanUV) * 0.35 + trochoidal * 0.45 + noise(oceanUV * 3.5 - vec2(u_time * 0.9)) * 0.2;
+
+                    // Shoreline wave crest foam calculation
+                    foam = smoothstep(0.52, 0.80, wave + tideSurge * 0.5) * 0.8;
+                    shallowCol = vec3(0.18, 0.78, 0.92);
+                    deepCol = vec3(0.02, 0.16, 0.38);
                 }
 
                 float fresnel = pow(1.0 - max(0.0, dot(normNorm, viewDir)), 3.5);
                 vec3 waterCol = mix(deepCol, shallowCol, 0.5 + wave * 0.5);
 
                 vec3 halfDir = normalize(lightDir + viewDir);
-                float spec = pow(max(0.0, dot(normNorm, halfDir)), 128.0) * (u_waterType == 0 ? 2.2 : 1.5);
+                float spec = pow(max(0.0, dot(normNorm, halfDir)), 128.0) * (u_waterType == 0 ? 2.5 : 1.5);
 
                 vec3 finalWater = mix(waterCol, vec3(0.92, 0.98, 1.0), fresnel * 0.5) + vec3(spec) + vec3(foam);
                 gl_FragColor = vec4(finalWater, u_waterType == 0 ? 0.88 : 0.80);

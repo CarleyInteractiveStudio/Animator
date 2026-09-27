@@ -214,11 +214,15 @@ function updateInspectorPanel() {
 
     if (isWater) {
         const wType = selectedObject.material.waterType || 0;
+        const tideEnabled = selectedObject.tideProps ? selectedObject.tideProps.enabled : true;
+        const tideAmplitude = selectedObject.tideProps ? selectedObject.tideProps.amplitude : 1.2;
+        const tideSpeed = selectedObject.tideProps ? selectedObject.tideProps.speed : 0.4;
+
         html += `
         <div class="inspector-section" style="border: 1px solid #00d2ff44; background: #00d2ff0a; padding: 10px; border-radius: 6px; margin-top: 10px;">
             <div class="inspector-section-title" style="color: #00d2ff; display: flex; align-items: center; gap: 6px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00d2ff" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
-                <span>Simulación de Superficie de Agua</span>
+                <span>Simulación de Agua y Mareas Reales</span>
             </div>
             <div style="margin-top: 8px;">
                 <label style="font-size: 11px; color: #ccc;">Tipo de Cuerpo de Agua:</label>
@@ -227,6 +231,23 @@ function updateInspectorPanel() {
                     <option value="1" ${wType === 1 ? 'selected' : ''}>Río (Corriente y Flujo Unidireccional)</option>
                     <option value="2" ${wType === 2 ? 'selected' : ''}>Lago Tranquilo (Cáusticas Suaves)</option>
                 </select>
+            </div>
+
+            <div style="margin-top: 10px; border-top: 1px dashed #00d2ff44; padding-top: 8px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <label style="font-size: 11px; color: #00d2ff; font-weight: bold;">Simulación de Marea Real (Subida/Bajada):</label>
+                    <input type="checkbox" id="chk-tide-enabled" ${tideEnabled ? 'checked' : ''} style="cursor: pointer; accent-color: #00d2ff;">
+                </div>
+
+                <div style="margin-top: 6px;">
+                    <label style="font-size: 10px; color: #aaa;">Amplitud de Marea (Metros de Pleamar/Bajamar): <span id="val-tide-amp" style="color: #00d2ff; font-weight: bold;">${tideAmplitude.toFixed(1)}m</span></label>
+                    <input type="range" id="slider-tide-amp" min="0.1" max="4.0" step="0.1" value="${tideAmplitude}" class="modern-range" style="width: 100%; margin-top: 2px;">
+                </div>
+
+                <div style="margin-top: 6px;">
+                    <label style="font-size: 10px; color: #aaa;">Velocidad del Ciclo de Marea: <span id="val-tide-speed" style="color: #00d2ff; font-weight: bold;">${tideSpeed.toFixed(2)}x</span></label>
+                    <input type="range" id="slider-tide-speed" min="0.05" max="2.0" step="0.05" value="${tideSpeed}" class="modern-range" style="width: 100%; margin-top: 2px;">
+                </div>
             </div>
         </div>
         `;
@@ -599,12 +620,49 @@ function updateInspectorPanel() {
     }
 
     const waterTypeSelect = inspectorContent.querySelector('#water-type-select');
+    const chkTideEnabled = inspectorContent.querySelector('#chk-tide-enabled');
+    const sliderTideAmp = inspectorContent.querySelector('#slider-tide-amp');
+    const sliderTideSpeed = inspectorContent.querySelector('#slider-tide-speed');
+
+    if (!selectedObject.tideProps && selectedObject.material && selectedObject.material.textureType === 4) {
+        selectedObject.tideProps = {
+            enabled: true,
+            amplitude: 1.2,
+            speed: 0.4,
+            baseY: selectedObject.transform.position[1]
+        };
+    }
+
     if (waterTypeSelect) {
         waterTypeSelect.addEventListener('change', (e) => {
             const val = parseInt(e.target.value) || 0;
             if (selectedObject.material) {
                 selectedObject.material.waterType = val;
             }
+        });
+    }
+
+    if (chkTideEnabled) {
+        chkTideEnabled.addEventListener('change', (e) => {
+            selectedObject.tideProps.enabled = e.target.checked;
+        });
+    }
+
+    if (sliderTideAmp) {
+        sliderTideAmp.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            selectedObject.tideProps.amplitude = val;
+            const lbl = inspectorContent.querySelector('#val-tide-amp');
+            if (lbl) lbl.textContent = `${val.toFixed(1)}m`;
+        });
+    }
+
+    if (sliderTideSpeed) {
+        sliderTideSpeed.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            selectedObject.tideProps.speed = val;
+            const lbl = inspectorContent.querySelector('#val-tide-speed');
+            if (lbl) lbl.textContent = `${val.toFixed(2)}x`;
         });
     }
 
@@ -1134,8 +1192,15 @@ async function generateSmoothTerrainFromModal() {
         waterObj.transform.scale = [width / 2, 1, depth / 2];
         waterObj.material = {
             textureType: 4,
+            waterType: 0,
             metallic: 0.9,
             roughness: 0.05
+        };
+        waterObj.tideProps = {
+            enabled: true,
+            amplitude: 1.2,
+            speed: 0.4,
+            baseY: waterLevel
         };
         Engine.scene.addGameObject(waterObj);
     }

@@ -335,7 +335,7 @@ const Engine = {
                 }
             }
 
-            // Wind Physics & Particle Updates (pass Engine.isPlaying explicitly)
+            // Wind Physics, Tide Simulation & Particle Updates
             if (Engine.scene) {
                 const windZones = Engine.scene.gameObjects.filter(o => o.windZone && o.windZone.enabled);
                 if (Engine.windParticleSystem) {
@@ -343,6 +343,17 @@ const Engine = {
                 }
                 if (Engine.isPlaying) {
                     applyWindPhysics(Engine.scene, deltaTime, Engine.time);
+
+                    // Dynamic Real 3D Tide Oscillation for Water Bodies
+                    for (const obj of Engine.scene.gameObjects) {
+                        if (obj.tideProps && obj.tideProps.enabled) {
+                            if (obj.tideProps.baseY === undefined) {
+                                obj.tideProps.baseY = obj.transform.position[1];
+                            }
+                            const tideOffset = Math.sin(Engine.time * obj.tideProps.speed) * obj.tideProps.amplitude;
+                            obj.transform.position[1] = obj.tideProps.baseY + tideOffset;
+                        }
+                    }
                 }
             }
 
