@@ -372,6 +372,12 @@ export function initWebGL(canvas) {
         uniform float u_metallic;
         uniform float u_roughness;
 
+        uniform sampler2D u_grassTexture;
+        uniform sampler2D u_sandTexture;
+        uniform sampler2D u_rockTexture;
+        uniform sampler2D u_waterNormalTexture;
+        uniform bool u_useImageTextures;
+
         // Volumetric God Rays & Raymarching Shafts
         uniform bool u_godRaysEnabled;
         uniform float u_godRaysDensity;
@@ -488,18 +494,35 @@ export function initWebGL(canvas) {
             vec3 snowCap   = vec3(0.98, 0.99, 1.0)  + vec3(fineGrassGrain * 0.05);
 
             vec3 groundMat;
-            if (height < 1.4) {
-                float sandFactor = smoothstep(1.6, 0.1, height + macroNoise * 0.5);
-                groundMat = mix(grassLush, goldenSand, sandFactor);
-            } else if (height < 7.5) {
-                float dirtBlend = smoothstep(0.4, 0.8, macroNoise);
-                groundMat = mix(grassLush, leafyDirt, dirtBlend * 0.40);
-            } else if (height < 12.0) {
-                float rockBlend = smoothstep(7.0, 11.5, height + macroNoise * 2.0);
-                groundMat = mix(grassLush, darkStone, rockBlend);
+            if (u_useImageTextures) {
+                vec2 uv = pos.xz * scale * 0.1;
+                vec3 gTex = texture2D(u_grassTexture, uv).rgb;
+                vec3 sTex = texture2D(u_sandTexture, uv).rgb;
+                vec3 rTex = texture2D(u_rockTexture, uv).rgb;
+
+                if (height < 1.4) {
+                    float sandFactor = smoothstep(1.6, 0.1, height + macroNoise * 0.5);
+                    groundMat = mix(gTex, sTex, sandFactor);
+                } else if (height < 7.5) {
+                    groundMat = mix(gTex, leafyDirt, 0.25);
+                } else {
+                    float rockBlend = smoothstep(7.0, 11.5, height + macroNoise * 2.0);
+                    groundMat = mix(gTex, rTex, rockBlend);
+                }
             } else {
-                float snowBlend = smoothstep(11.5, 15.0, height - macroNoise * 1.5);
-                groundMat = mix(darkStone, snowCap, snowBlend);
+                if (height < 1.4) {
+                    float sandFactor = smoothstep(1.6, 0.1, height + macroNoise * 0.5);
+                    groundMat = mix(grassLush, goldenSand, sandFactor);
+                } else if (height < 7.5) {
+                    float dirtBlend = smoothstep(0.4, 0.8, macroNoise);
+                    groundMat = mix(grassLush, leafyDirt, dirtBlend * 0.40);
+                } else if (height < 12.0) {
+                    float rockBlend = smoothstep(7.0, 11.5, height + macroNoise * 2.0);
+                    groundMat = mix(grassLush, darkStone, rockBlend);
+                } else {
+                    float snowBlend = smoothstep(11.5, 15.0, height - macroNoise * 1.5);
+                    groundMat = mix(darkStone, snowCap, snowBlend);
+                }
             }
 
             float cliffFactor = smoothstep(0.26, 0.56, slope + rockStrata * 0.15);
@@ -745,6 +768,12 @@ export function initWebGL(canvas) {
             isCloud: gl.getUniformLocation(program, 'u_isCloud'),
             cloudTranslucency: gl.getUniformLocation(program, 'u_cloudTranslucency'),
             cloudTint: gl.getUniformLocation(program, 'u_cloudTint'),
+
+            grassTexture: gl.getUniformLocation(program, 'u_grassTexture'),
+            sandTexture: gl.getUniformLocation(program, 'u_sandTexture'),
+            rockTexture: gl.getUniformLocation(program, 'u_rockTexture'),
+            waterNormalTexture: gl.getUniformLocation(program, 'u_waterNormalTexture'),
+            useImageTextures: gl.getUniformLocation(program, 'u_useImageTextures'),
         },
     };
 
@@ -846,10 +875,9 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     gl.uniform1i(programInfo.uniformLocations.isUnlit, 0);
 
     for (const gameObject of scene.gameObjects) {
+        if (!gameObject.mesh) continue;
         if (gameObject.windZone && !gameObject.mesh) continue;
         if (gameObject.windZone) continue;
-
-        if (!gameObject.mesh) continue;
 
         gl.uniform1f(programInfo.uniformLocations.windElasticity, gameObject.windElasticity || 0.0);
 
@@ -916,6 +944,24 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
             gl.uniform4f(programInfo.uniformLocations.tintColor, 0.6, 0.6, 0.7, 1.0);
         } else {
             gl.uniform4f(programInfo.uniformLocations.tintColor, 1.0, 1.0, 1.0, 1.0);
+        }
+
+        if (window.globalTextures) {
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, window.globalTextures.grass);
+            gl.uniform1i(programInfo.uniformLocations.grassTexture, 1);
+
+            gl.activeTexture(gl.TEXTURE2);
+            gl.bindTexture(gl.TEXTURE_2D, window.globalTextures.sand);
+            gl.uniform1i(programInfo.uniformLocations.sandTexture, 2);
+
+            gl.activeTexture(gl.TEXTURE3);
+            gl.bindTexture(gl.TEXTURE_2D, window.globalTextures.rock);
+            gl.uniform1i(programInfo.uniformLocations.rockTexture, 3);
+
+            gl.uniform1i(programInfo.uniformLocations.useImageTextures, 1);
+        } else {
+            gl.uniform1i(programInfo.uniformLocations.useImageTextures, 0);
         }
 
         gl.drawElements(gl.TRIANGLES, gameObject.mesh.vertexCount, gl.UNSIGNED_SHORT, 0);

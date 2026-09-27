@@ -1757,6 +1757,70 @@ function setupToolbarEvents() {
     });
 }
 
+let globalTextures = null;
+
+function initGlobalTextures(gl) {
+    if (globalTextures) return globalTextures;
+
+    function createProceduralTexture(width, height, drawFn) {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        drawFn(ctx, width, height);
+
+        const tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+        return tex;
+    }
+
+    // 1. Photorealistic Grass Texture Pattern
+    const grassTex = createProceduralTexture(256, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#2d8a1e';
+        ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 4000; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? '#38b025' : '#1e6313';
+            ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+        }
+    });
+
+    // 2. Photorealistic Sand Texture Pattern
+    const sandTex = createProceduralTexture(256, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#e6c885';
+        ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 3000; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? '#f5dc9e' : '#c9a563';
+            ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+        }
+    });
+
+    // 3. Photorealistic Rock Texture Pattern
+    const rockTex = createProceduralTexture(256, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#6b6b73';
+        ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 3500; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? '#8f8f99' : '#47474d';
+            ctx.fillRect(Math.random() * w, Math.random() * h, 3, 3);
+        }
+    });
+
+    globalTextures = {
+        grass: grassTex,
+        sand: sandTex,
+        rock: rockTex
+    };
+    window.globalTextures = globalTextures;
+
+    return globalTextures;
+}
+
 function main() {
     try {
         setupResizers();
@@ -1767,6 +1831,7 @@ function main() {
         visorContent.appendChild(canvas);
 
         if (Engine.initialize(canvas)) {
+            initGlobalTextures(Engine.gl);
             setupContextMenuEvents();
             setupCreateMenuEvents();
             setupFileImportExportEvents();
