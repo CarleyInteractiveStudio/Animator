@@ -277,6 +277,7 @@ export function initWebGL(canvas) {
         uniform mat3 u_normalMatrix;
         uniform mediump float u_time;
         uniform mediump float u_windElasticity;
+        uniform int u_textureType;
 
         varying vec3 v_normal;
         varying vec4 v_color;
@@ -286,13 +287,24 @@ export function initWebGL(canvas) {
         void main() {
             vec4 pos = a_position;
 
-            // Real-time dynamic Roblox wind sway on grass and tree leaves
-            if (u_windElasticity > 0.01) {
-                float heightFactor = max(0.0, pos.y);
-                float wave = sin(u_time * 3.2 + pos.x * 2.5 + pos.z * 1.8) * 0.12 * u_windElasticity * heightFactor;
-                float wave2 = cos(u_time * 2.1 + pos.z * 3.1) * 0.08 * u_windElasticity * heightFactor;
-                pos.x += wave;
-                pos.z += wave2;
+            // Real 3D liquid wave vertex displacement for water meshes
+            if (u_textureType == 4) {
+                float wave1 = sin(pos.x * 0.8 + u_time * 2.2) * cos(pos.z * 0.6 + u_time * 1.8) * 0.18;
+                float wave2 = sin(pos.x * 2.2 - u_time * 3.1 + pos.z * 1.5) * 0.08;
+                pos.y += wave1 + wave2;
+            }
+
+            // Real-time dynamic grass & foliage wind animation (root base v=0.0 stays 100% fixed, tip v=1.0 sways)
+            float tipFactor = clamp(a_texcoord.y, 0.0, 1.0);
+            if (u_windElasticity > 0.01 && tipFactor > 0.01) {
+                float heightFactor = tipFactor * tipFactor; // Quadratic tip curve for realistic blade bending
+
+                // Gentle breeze wave sway
+                float activeSway = sin(u_time * 2.8 + pos.x * 2.2 + pos.z * 1.8) * 0.12 * u_windElasticity * heightFactor;
+                float activeSwayZ = cos(u_time * 2.1 + pos.z * 2.4) * 0.08 * u_windElasticity * heightFactor;
+
+                pos.x += activeSway;
+                pos.z += activeSwayZ;
             }
 
             vec4 worldPos = u_modelMatrix * pos;
@@ -320,6 +332,7 @@ export function initWebGL(canvas) {
 
         // Texture and Procedural uniforms
         uniform int u_textureType; // 0 = Solid, 1 = Checker, 2 = Noise, 3 = Roblox Terrain Splatmap, 4 = Water Surface
+        uniform int u_waterType;   // 0 = Mar con Olas (Ocean), 1 = Río con Corriente (River), 2 = Lago Tranquilo (Lake)
         uniform float u_textureScale;
         uniform float u_metallic;
         uniform float u_roughness;
@@ -404,37 +417,62 @@ export function initWebGL(canvas) {
             return nX * blending.x + nY * blending.y + nZ * blending.z;
         }
 
-        // --- Roblox Smooth Terrain Procedural Splatmap Shading ---
-        vec3 getRobloxTerrainMaterial(vec3 pos, vec3 norm) {
+        // --- Realistic High-Detail Triplanar PBR Smooth Terrain Shading ---
+        vec3 getRobloxTerrainMaterial(vec3 pos, vec3 norm, out vec3 perturbedNormal) {
+            float scale = max(0.2, u_textureScale);
+            vec3 scaledPos = pos * scale;
+
             float slope = 1.0 - abs(norm.y);
             float height = pos.y;
 
-            float microDetail = noise3D(pos * 3.5) * 0.2 + noise3D(pos * 12.0) * 0.1;
-            float macroNoise = noise3D(pos * 0.15);
+            // Triplanar blending weights based on surface normal direction
+            vec3 blendWeights = pow(abs(norm), vec3(4.0));
+            blendWeights = max(blendWeights, 0.00001);
+            blendWeights /= (blendWeights.x + blendWeights.y + blendWeights.z);
 
-            vec3 grassBase = vec3(0.22, 0.58, 0.18) + vec3(microDetail * 0.15, microDetail * 0.25, microDetail * 0.05);
-            vec3 leafyDirt = vec3(0.38, 0.28, 0.18) + vec3(microDetail * 0.12);
-            vec3 sandColor = vec3(0.86, 0.78, 0.52) + vec3(microDetail * 0.08);
-            vec3 rockCliff = vec3(0.42, 0.42, 0.46) + vec3(microDetail * 0.2);
-            vec3 darkStone = vec3(0.28, 0.29, 0.32) + vec3(microDetail * 0.15);
-            vec3 snowCap   = vec3(0.94, 0.96, 0.98) - vec3(microDetail * 0.05);
+            // Multi-octave triplanar noise for organic micro-details and normal map perturbations
+            float nX = noise3D(scaledPos.yzx * 2.5);
+            float nY = noise3D(scaledPos.xzy * 2.5 + vec3(17.1, 31.4, 9.2));
+            float nZ = noise3D(scaledPos.xyz * 2.5 + vec3(5.3, 88.2, 12.8));
+            float microTriplanar = nX * blendWeights.x + nY * blendWeights.y + nZ * blendWeights.z;
+
+            // High frequency micro-grain textures (grass blades, rock crevices, sand ripples, snow crystals)
+            float fineGrassGrain = noise3D(pos * 8.0 * scale) * 0.35 + noise3D(pos * 24.0 * scale) * 0.15;
+            float rockStrata = sin(pos.y * 3.5 * scale + noise3D(pos * 1.5) * 4.0) * 0.2 + noise3D(pos * 12.0 * scale) * 0.3;
+            float macroNoise = noise3D(pos * 0.08);
+
+            // Calculate procedural perturbed surface normal for realistic PBR bump highlights
+            vec3 bumpGrad = vec3(
+                noise3D(pos * 6.0 + vec3(0.05, 0.0, 0.0)) - noise3D(pos * 6.0 - vec3(0.05, 0.0, 0.0)),
+                noise3D(pos * 6.0 + vec3(0.0, 0.05, 0.0)) - noise3D(pos * 6.0 - vec3(0.0, 0.05, 0.0)),
+                noise3D(pos * 6.0 + vec3(0.0, 0.0, 0.05)) - noise3D(pos * 6.0 - vec3(0.0, 0.0, 0.05))
+            );
+            perturbedNormal = normalize(norm + bumpGrad * 0.35);
+
+            // Photorealistic Biome Materials
+            vec3 grassLush = vec3(0.18, 0.52, 0.12) + vec3(fineGrassGrain * 0.14, fineGrassGrain * 0.28, fineGrassGrain * 0.05);
+            vec3 leafyDirt = vec3(0.32, 0.22, 0.14) + vec3(microTriplanar * 0.12);
+            vec3 wetSand   = vec3(0.82, 0.74, 0.52) + vec3(microTriplanar * 0.06);
+            vec3 rockCliff = vec3(0.38, 0.38, 0.42) + vec3(rockStrata * 0.25);
+            vec3 darkStone = vec3(0.24, 0.25, 0.28) + vec3(rockStrata * 0.18);
+            vec3 snowCap   = vec3(0.95, 0.97, 1.0)  + vec3(microTriplanar * 0.04);
 
             vec3 groundMat;
-            if (height < 0.8) {
-                float sandFactor = smoothstep(1.0, 0.2, height + macroNoise * 0.4);
-                groundMat = mix(grassBase, sandColor, sandFactor);
-            } else if (height < 6.0) {
-                float dirtBlend = smoothstep(0.45, 0.75, macroNoise);
-                groundMat = mix(grassBase, leafyDirt, dirtBlend * 0.4);
-            } else if (height < 10.0) {
-                float rockBlend = smoothstep(5.5, 9.5, height + macroNoise * 1.5);
-                groundMat = mix(grassBase, darkStone, rockBlend);
+            if (height < 1.2) {
+                float sandFactor = smoothstep(1.4, 0.1, height + macroNoise * 0.6);
+                groundMat = mix(grassLush, wetSand, sandFactor);
+            } else if (height < 7.5) {
+                float dirtBlend = smoothstep(0.4, 0.8, macroNoise);
+                groundMat = mix(grassLush, leafyDirt, dirtBlend * 0.45);
+            } else if (height < 12.0) {
+                float rockBlend = smoothstep(7.0, 11.5, height + macroNoise * 2.0);
+                groundMat = mix(grassLush, darkStone, rockBlend);
             } else {
-                float snowBlend = smoothstep(9.5, 12.5, height - macroNoise * 1.0);
+                float snowBlend = smoothstep(11.5, 15.0, height - macroNoise * 1.5);
                 groundMat = mix(darkStone, snowCap, snowBlend);
             }
 
-            float cliffFactor = smoothstep(0.35, 0.65, slope + microDetail * 0.2);
+            float cliffFactor = smoothstep(0.28, 0.58, slope + rockStrata * 0.15);
             vec3 finalTerrain = mix(groundMat, rockCliff, cliffFactor);
 
             return finalTerrain;
@@ -445,24 +483,51 @@ export function initWebGL(canvas) {
             vec3 normNorm = normalize(v_normal);
 
             if (u_textureType == 4) {
-                // Realistic Animated Water Shader
+                // Photorealistic Translucent Liquid Water Shader (Clean, Smooth Water Optics without noise artifacts)
                 vec3 viewDir = normalize(-v_worldPosition);
                 vec3 lightDir = normalize(u_lightDirection);
 
-                vec2 waveUV = v_worldPosition.xz * 0.8 + vec2(u_time * 0.6, u_time * 0.4);
-                float wave = noise(waveUV) * 0.5 + noise(waveUV * 2.2 - vec2(u_time * 0.5)) * 0.5;
+                // High-fidelity liquid color tones
+                vec3 shallowCol = vec3(0.12, 0.72, 0.85); // Pure crystalline turquoise
+                vec3 deepCol    = vec3(0.01, 0.18, 0.42); // Rich deep ocean navy blue
 
-                vec3 shallowWater = vec3(0.18, 0.65, 0.88);
-                vec3 deepWater = vec3(0.04, 0.22, 0.45);
+                if (u_waterType == 1) {
+                    // River
+                    shallowCol = vec3(0.10, 0.65, 0.72);
+                    deepCol    = vec3(0.02, 0.28, 0.38);
+                } else if (u_waterType == 2) {
+                    // Lake
+                    shallowCol = vec3(0.14, 0.62, 0.58);
+                    deepCol    = vec3(0.03, 0.22, 0.32);
+                }
 
-                float fresnel = pow(1.0 - max(0.0, dot(normNorm, viewDir)), 3.0);
-                vec3 waterCol = mix(deepWater, shallowWater, 0.6 + wave * 0.4);
+                // Procedural normal perturbation for liquid surface micro-ripples
+                vec2 waveSpeed = vec2(u_time * 0.4, u_time * 0.25);
+                vec3 waveNormalGrad = vec3(
+                    sin(v_worldPosition.x * 2.5 + waveSpeed.x) * 0.12 + cos(v_worldPosition.z * 3.1 + waveSpeed.y) * 0.08,
+                    1.0,
+                    cos(v_worldPosition.x * 1.8 - waveSpeed.y) * 0.10 + sin(v_worldPosition.z * 2.2 + waveSpeed.x) * 0.12
+                );
+                vec3 liquidNormal = normalize(normNorm + waveNormalGrad);
 
+                // Physical Fresnel reflectance calculation (viewing angle reflectivity)
+                float NdotV = max(0.0, dot(liquidNormal, viewDir));
+                float fresnel = pow(1.0 - NdotV, 4.0);
+
+                // Depth tinting and liquid refraction tone
+                vec3 baseLiquid = mix(deepCol, shallowCol, clamp(NdotV * 1.2, 0.0, 1.0));
+
+                // Physical specular sun glint (sharp liquid reflections)
                 vec3 halfDir = normalize(lightDir + viewDir);
-                float spec = pow(max(0.0, dot(normNorm, halfDir)), 128.0) * 1.8;
+                float NdotH = max(0.0, dot(liquidNormal, halfDir));
+                float specularGlint = pow(NdotH, 160.0) * 2.8;
 
-                vec3 finalWater = mix(waterCol, vec3(0.9, 0.98, 1.0), fresnel * 0.5) + vec3(spec);
-                gl_FragColor = vec4(finalWater, 0.82);
+                // Sky reflection blend via Fresnel
+                vec3 skyReflection = mix(vec3(0.6, 0.8, 1.0), vec3(0.95, 0.98, 1.0), fresnel);
+                vec3 finalLiquidRGB = mix(baseLiquid, skyReflection, fresnel * 0.6) + vec3(specularGlint);
+
+                // Translucent liquid alpha
+                gl_FragColor = vec4(finalLiquidRGB, 0.82);
                 return;
             }
 
@@ -504,14 +569,16 @@ export function initWebGL(canvas) {
                 baseColor *= vec4(vec3(n), 1.0);
             } else if (u_textureType == 3) {
                 // Roblox Smooth Terrain Splatmap Mode
-                vec3 robloxCol = getRobloxTerrainMaterial(v_worldPosition, normNorm);
+                vec3 perturbedN;
+                vec3 robloxCol = getRobloxTerrainMaterial(v_worldPosition, normNorm, perturbedN);
                 baseColor = vec4(robloxCol, 1.0);
+                normNorm = perturbedN;
             }
 
             if (u_isUnlit) {
                 gl_FragColor = baseColor;
             } else {
-                vec3 normal = normalize(v_normal);
+                vec3 normal = normNorm;
                 vec3 lightDir = normalize(u_lightDirection);
 
                 float diff = max(dot(normal, lightDir), 0.0);
@@ -589,6 +656,7 @@ export function initWebGL(canvas) {
             windElasticity: gl.getUniformLocation(program, 'u_windElasticity'),
             isUnlit: gl.getUniformLocation(program, 'u_isUnlit'),
             textureType: gl.getUniformLocation(program, 'u_textureType'),
+            waterType: gl.getUniformLocation(program, 'u_waterType'),
             textureScale: gl.getUniformLocation(program, 'u_textureScale'),
             metallic: gl.getUniformLocation(program, 'u_metallic'),
             roughness: gl.getUniformLocation(program, 'u_roughness'),
@@ -750,6 +818,7 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
 
         const mat = gameObject.material || {};
         gl.uniform1i(programInfo.uniformLocations.textureType, mat.textureType || 0);
+        gl.uniform1i(programInfo.uniformLocations.waterType, mat.waterType || 0);
         gl.uniform1f(programInfo.uniformLocations.textureScale, mat.textureScale || 5.0);
         gl.uniform1f(programInfo.uniformLocations.metallic, mat.metallic !== undefined ? mat.metallic : 0.2);
         gl.uniform1f(programInfo.uniformLocations.roughness, mat.roughness !== undefined ? mat.roughness : 0.5);
