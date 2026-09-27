@@ -294,27 +294,20 @@ export function initWebGL(canvas) {
             // Real 3D liquid wave vertex displacement for water meshes
             if (u_textureType == 4) {
                 if (u_waterType == 0) {
-                    // Mar / Océano: 3D Gerstner / Trochoidal waves heading towards shore
-                    vec2 d1 = normalize(vec2(0.8, 0.6));
-                    vec2 d2 = normalize(vec2(0.6, 0.8));
-                    vec2 d3 = normalize(vec2(0.9, 0.3));
+                    // Mar / Océano: Waves refracting and wrapping naturally around shorelines
+                    float distFromCenter = length(pos.xz);
+                    vec2 shoreDir = distFromCenter > 0.001 ? -pos.xz / distFromCenter : vec2(0.0, -1.0);
 
-                    float t = u_time * 2.2;
+                    float t = u_time * 1.5;
 
-                    float f1 = dot(d1, pos.xz) * 0.35 + t;
-                    float a1 = 0.32;
+                    // Coastline-conforming radial swells
+                    float wave1 = sin(distFromCenter * 0.45 - t) * 0.12;
+                    float wave2 = sin(pos.x * 0.25 + pos.z * 0.35 + t * 0.8) * 0.05;
+                    float wave3 = cos(distFromCenter * 0.8 - t * 1.2) * 0.03;
 
-                    float f2 = dot(d2, pos.xz) * 0.65 - t * 1.3;
-                    float a2 = 0.16;
-
-                    float f3 = dot(d3, pos.xz) * 1.1 + t * 1.7;
-                    float a3 = 0.07;
-
-                    // Trochoidal horizontal displacement creating sharp wave crests
-                    pos.x += (d1.x * cos(f1) * a1 + d2.x * cos(f2) * a2) * 0.5;
-                    pos.z += (d1.y * cos(f1) * a1 + d2.y * cos(f2) * a2) * 0.5;
-
-                    float dispY = sin(f1) * a1 + sin(f2) * a2 + sin(f3) * a3;
+                    pos.x += shoreDir.x * cos(distFromCenter * 0.45 - t) * 0.06;
+                    pos.z += shoreDir.y * cos(distFromCenter * 0.45 - t) * 0.06;
+                    float dispY = wave1 + wave2 + wave3;
                     pos.y += dispY;
                     waveHeightAcc = dispY;
                 } else if (u_waterType == 1) {
@@ -472,40 +465,35 @@ export function initWebGL(canvas) {
             blendWeights = max(blendWeights, 0.00001);
             blendWeights /= (blendWeights.x + blendWeights.y + blendWeights.z);
 
-            // Multi-octave triplanar noise for organic micro-details and normal map perturbations
-            float nX = noise3D(scaledPos.yzx * 2.5);
-            float nY = noise3D(scaledPos.xzy * 2.5 + vec3(17.1, 31.4, 9.2));
-            float nZ = noise3D(scaledPos.xyz * 2.5 + vec3(5.3, 88.2, 12.8));
-            float microTriplanar = nX * blendWeights.x + nY * blendWeights.y + nZ * blendWeights.z;
-
-            // High frequency micro-grain textures (grass blades, rock crevices, sand ripples, snow crystals)
-            float fineGrassGrain = noise3D(pos * 8.0 * scale) * 0.35 + noise3D(pos * 24.0 * scale) * 0.15;
-            float rockStrata = sin(pos.y * 3.5 * scale + noise3D(pos * 1.5) * 4.0) * 0.2 + noise3D(pos * 12.0 * scale) * 0.3;
-            float macroNoise = noise3D(pos * 0.08);
-
-            // Calculate procedural perturbed surface normal for realistic PBR bump highlights
+            // Per-pixel procedural normal bump map calculation
             vec3 bumpGrad = vec3(
-                noise3D(pos * 6.0 + vec3(0.05, 0.0, 0.0)) - noise3D(pos * 6.0 - vec3(0.05, 0.0, 0.0)),
-                noise3D(pos * 6.0 + vec3(0.0, 0.05, 0.0)) - noise3D(pos * 6.0 - vec3(0.0, 0.05, 0.0)),
-                noise3D(pos * 6.0 + vec3(0.0, 0.0, 0.05)) - noise3D(pos * 6.0 - vec3(0.0, 0.0, 0.05))
+                noise3D(pos * 8.0 + vec3(0.04, 0.0, 0.0)) - noise3D(pos * 8.0 - vec3(0.04, 0.0, 0.0)),
+                noise3D(pos * 8.0 + vec3(0.0, 0.04, 0.0)) - noise3D(pos * 8.0 - vec3(0.0, 0.04, 0.0)),
+                noise3D(pos * 8.0 + vec3(0.0, 0.0, 0.04)) - noise3D(pos * 8.0 - vec3(0.0, 0.0, 0.04))
             );
-            perturbedNormal = normalize(norm + bumpGrad * 0.35);
+            perturbedNormal = normalize(norm + bumpGrad * 0.28);
 
-            // Photorealistic Biome Materials
-            vec3 grassLush = vec3(0.18, 0.52, 0.12) + vec3(fineGrassGrain * 0.14, fineGrassGrain * 0.28, fineGrassGrain * 0.05);
-            vec3 leafyDirt = vec3(0.32, 0.22, 0.14) + vec3(microTriplanar * 0.12);
-            vec3 wetSand   = vec3(0.82, 0.74, 0.52) + vec3(microTriplanar * 0.06);
-            vec3 rockCliff = vec3(0.38, 0.38, 0.42) + vec3(rockStrata * 0.25);
-            vec3 darkStone = vec3(0.24, 0.25, 0.28) + vec3(rockStrata * 0.18);
-            vec3 snowCap   = vec3(0.95, 0.97, 1.0)  + vec3(microTriplanar * 0.04);
+            // Photorealistic Micro-texture generators
+            float fineGrassGrain = noise3D(pos * 12.0 * scale) * 0.30 + noise3D(pos * 32.0 * scale) * 0.15;
+            float sandRipples = sin(pos.x * 14.0 * scale + pos.z * 14.0 * scale + noise3D(pos * 3.0) * 3.0) * 0.12 + noise3D(pos * 18.0) * 0.12;
+            float rockStrata = sin(pos.y * 4.5 * scale + noise3D(pos * 2.0) * 5.0) * 0.22 + noise3D(pos * 14.0 * scale) * 0.28;
+            float macroNoise = noise3D(pos * 0.06);
+
+            // Ultra-realistic Photorealistic Color Gradients
+            vec3 grassLush = vec3(0.18, 0.48, 0.14) + vec3(fineGrassGrain * 0.12, fineGrassGrain * 0.25, fineGrassGrain * 0.06);
+            vec3 goldenSand = vec3(0.88, 0.78, 0.54) + vec3(sandRipples * 0.10, sandRipples * 0.08, sandRipples * 0.04);
+            vec3 leafyDirt = vec3(0.35, 0.24, 0.15) + vec3(fineGrassGrain * 0.10);
+            vec3 rockCliff = vec3(0.42, 0.41, 0.44) + vec3(rockStrata * 0.22);
+            vec3 darkStone = vec3(0.26, 0.26, 0.29) + vec3(rockStrata * 0.18);
+            vec3 snowCap   = vec3(0.96, 0.98, 1.0)  + vec3(fineGrassGrain * 0.04);
 
             vec3 groundMat;
-            if (height < 1.2) {
-                float sandFactor = smoothstep(1.4, 0.1, height + macroNoise * 0.6);
-                groundMat = mix(grassLush, wetSand, sandFactor);
+            if (height < 1.4) {
+                float sandFactor = smoothstep(1.6, 0.1, height + macroNoise * 0.5);
+                groundMat = mix(grassLush, goldenSand, sandFactor);
             } else if (height < 7.5) {
                 float dirtBlend = smoothstep(0.4, 0.8, macroNoise);
-                groundMat = mix(grassLush, leafyDirt, dirtBlend * 0.45);
+                groundMat = mix(grassLush, leafyDirt, dirtBlend * 0.40);
             } else if (height < 12.0) {
                 float rockBlend = smoothstep(7.0, 11.5, height + macroNoise * 2.0);
                 groundMat = mix(grassLush, darkStone, rockBlend);
@@ -514,7 +502,7 @@ export function initWebGL(canvas) {
                 groundMat = mix(darkStone, snowCap, snowBlend);
             }
 
-            float cliffFactor = smoothstep(0.28, 0.58, slope + rockStrata * 0.15);
+            float cliffFactor = smoothstep(0.26, 0.56, slope + rockStrata * 0.15);
             vec3 finalTerrain = mix(groundMat, rockCliff, cliffFactor);
 
             return finalTerrain;

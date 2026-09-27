@@ -1207,19 +1207,26 @@ async function generateSmoothTerrainFromModal() {
         Engine.scene.addGameObject(oceanObj);
     }
 
-    // --- 2. Generar Río de Montaña a Mar ---
-    if (hasRiver) {
-        await updateProgress('Trazando cauce del Río desde la montaña hasta el mar...', 58);
+    // --- 2. Generar Río de Terreno/Montaña a Mar (Con verificación inteligente de área) ---
+    const isLandSufficient = (width >= 35.0 && depth >= 35.0);
+    if (hasRiver && isLandSufficient) {
+        await updateProgress('Trazando cauce del Río desde el terreno hasta el mar...', 58);
         objectCounters.river = (objectCounters.river || 0) + 1;
+
+        const startY = Math.max(waterLevel + 0.8, sampleTerrainHeight(terrainMesh, width * 0.28, -depth * 0.28));
+        const midY1  = Math.max(waterLevel + 0.5, sampleTerrainHeight(terrainMesh, width * 0.14, -depth * 0.14));
+        const midY2  = Math.max(waterLevel + 0.3, sampleTerrainHeight(terrainMesh, 0.0, 0.0));
+        const midY3  = Math.max(waterLevel + 0.15, sampleTerrainHeight(terrainMesh, -width * 0.14, depth * 0.14));
+
         const riverPath = [
-            [width * 0.32, heightScale * 0.72, -depth * 0.35],
-            [width * 0.18, heightScale * 0.48, -depth * 0.18],
-            [width * 0.02, heightScale * 0.28, 0.0],
-            [-width * 0.18, heightScale * 0.14, depth * 0.18],
-            [-width * 0.38, waterLevel + 0.05, depth * 0.38]
+            [width * 0.28, startY + 0.05, -depth * 0.28],
+            [width * 0.14, midY1 + 0.04, -depth * 0.14],
+            [0.0, midY2 + 0.03, 0.0],
+            [-width * 0.14, midY3 + 0.02, depth * 0.14],
+            [-width * 0.35, waterLevel + 0.02, depth * 0.35]
         ];
-        const riverMesh = Mesh.createRiverMesh(Engine.gl, riverPath, 3.8);
-        const riverObj = new GameObject(`Río de Montaña a Mar ${objectCounters.river}`, riverMesh);
+        const riverMesh = Mesh.createRiverMesh(Engine.gl, riverPath, Math.min(4.0, width * 0.08));
+        const riverObj = new GameObject(`Río de Terreno a Mar ${objectCounters.river}`, riverMesh);
         riverObj.material = {
             textureType: 4,
             waterType: 1,
@@ -1228,6 +1235,8 @@ async function generateSmoothTerrainFromModal() {
         };
         mapParentObj.addChild(riverObj);
         Engine.scene.addGameObject(riverObj);
+    } else if (hasRiver && !isLandSufficient) {
+        await updateProgress('Superficie del terreno pequeña (río omitido por realismo)...', 58);
     }
 
     // --- 3. Generar Lago Tranquilo ---
