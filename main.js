@@ -1222,25 +1222,44 @@ async function generateSmoothTerrainFromModal() {
     // --- 2. Generar Río de Terreno/Montaña a Mar (Estricto: Área emergida >= 500m²) ---
     const isLandSufficient = (landAreaAboveSea >= 500.0);
     if (hasRiver && isLandSufficient) {
-        await updateProgress(`Trazando Río serpentino (Área emergida: ${landAreaAboveSea.toFixed(0)}m²)...`, 58);
+        await updateProgress(`Trazando Río desde montaña hasta la orilla del mar...`, 58);
         objectCounters.river = (objectCounters.river || 0) + 1;
 
-        // River originates on elevated hill slope (not top peak) and winds downhill with serpentine zig-zag
-        const p0 = [width * 0.22, -depth * 0.18];  // Start high on inland slope
-        const p1 = [width * 0.18, -depth * 0.08];  // Zig 1
-        const p2 = [width * 0.10, depth * 0.02];   // Zag 1
-        const p3 = [width * 0.02, depth * 0.12];   // Zig 2
-        const p4 = [-width * 0.12, depth * 0.22];  // Zag 2
-        const p5 = [-width * 0.26, depth * 0.32];  // Outfall into Ocean shore
+        // Origin: Inland elevated mountain slope (high ground inside the island)
+        const originX = width * 0.18;
+        const originZ = -depth * 0.15;
 
-        const points2D = [p0, p1, p2, p3, p4, p5];
+        // Outfall: Directly at shoreline boundary (where land meets sea level waterLevel)
+        const mouthX = -width * 0.22;
+        const mouthZ = depth * 0.22;
+
+        // Build 6-point winding serpentine river path strictly contained on land
+        const steps = 6;
+        const points2D = [];
+        for (let i = 0; i < steps; i++) {
+            const t = i / (steps - 1);
+            let px = originX * (1 - t) + mouthX * t;
+            let pz = originZ * (1 - t) + mouthZ * t;
+
+            // Natural serpentine zig-zag curve perpendicular to flow direction
+            if (i > 0 && i < steps - 1) {
+                const perpX = -(mouthZ - originZ);
+                const perpZ = (mouthX - originX);
+                const perpLen = Math.hypot(perpX, perpZ) || 1.0;
+                const waveSway = Math.sin(t * Math.PI * 2.5) * (width * 0.06);
+                px += (perpX / perpLen) * waveSway;
+                pz += (perpZ / perpLen) * waveSway;
+            }
+            points2D.push([px, pz]);
+        }
+
         const riverPath = points2D.map(([px, pz]) => {
             const groundY = sampleTerrainHeight(terrainMesh, px, pz);
             const riverY = Math.max(waterLevel + 0.02, groundY - 0.02);
             return [px, riverY, pz];
         });
 
-        const riverMesh = Mesh.createRiverMesh(Engine.gl, riverPath, Math.min(3.5, width * 0.07));
+        const riverMesh = Mesh.createRiverMesh(Engine.gl, riverPath, Math.min(3.2, width * 0.06));
         const riverObj = new GameObject(`Río de Terreno a Mar ${objectCounters.river}`, riverMesh);
         riverObj.material = {
             textureType: 4,
