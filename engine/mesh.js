@@ -436,7 +436,7 @@ export class Mesh {
 
                 // Deep edge skirt dropping seamlessly underwater/below horizon at the outermost perimeter ring
                 if (isEdgeX || isEdgeZ) {
-                    posY = Math.min(posY, -1.5);
+                    posY = Math.min(posY, -2.5);
                 }
 
                 vertices.push(posX, posY, posZ);
@@ -468,8 +468,8 @@ export class Mesh {
         return mesh;
     }
 
-    // --- High-Density Roblox 3D Grass Field Generator ---
-    static createRobloxGrassField(gl, terrainMesh, count = 250) {
+    // --- High-Density Clustered Roblox 3D Grass Field Generator ---
+    static createRobloxGrassField(gl, terrainMesh, count = 300) {
         const vertices = [];
         const indices = [];
         const colors = [];
@@ -477,6 +477,10 @@ export class Mesh {
         function rnd(s) {
             const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
             return x - Math.floor(x);
+        }
+
+        function organicDensityNoise(x, z) {
+            return 0.5 * (Math.sin(x * 0.22) + Math.cos(z * 0.28) + Math.sin((x + z) * 0.15));
         }
 
         function sampleTerrainHeightAndBilinear(mesh, x, z) {
@@ -512,54 +516,59 @@ export class Mesh {
 
         const width = terrainMesh ? terrainMesh.terrainWidth : 36;
         const depth = terrainMesh ? terrainMesh.terrainDepth : 36;
-        const halfW = width * 0.46;
-        const halfD = depth * 0.46;
+        const halfW = width * 0.45;
+        const halfD = depth * 0.45;
 
-        let placed = 0;
+        let placedClusters = 0;
         let seedIter = 100;
 
-        while (placed < count && seedIter < count * 8) {
+        // Generate dense grass tufts grouped tightly in organic patches/clusters
+        while (placedClusters < count && seedIter < count * 10) {
             seedIter++;
-            const rx = (rnd(seedIter * 3.1) - 0.5) * (halfW * 2);
-            const rz = (rnd(seedIter * 7.4) - 0.5) * (halfD * 2);
-            const baseRy = terrainMesh ? sampleTerrainHeightAndBilinear(terrainMesh, rx, rz) : 0;
+            const clusterX = (rnd(seedIter * 3.1) - 0.5) * (halfW * 2);
+            const clusterZ = (rnd(seedIter * 7.4) - 0.5) * (halfD * 2);
 
-            // Grow grass across valley and mid-slope biomes, avoiding underwater sand and top snow caps
+            // Group grass tightly using organic patch density noise thresholding
+            if (organicDensityNoise(clusterX, clusterZ) < -0.15) continue;
+
+            const baseRy = terrainMesh ? sampleTerrainHeightAndBilinear(terrainMesh, clusterX, clusterZ) : 0;
             if (baseRy < 0.8 || baseRy > 11.0) continue;
 
-            placed++;
-            const tuftBlades = 5;
-            for (let b = 0; b < tuftBlades; b++) {
-                const angle = (b / tuftBlades) * Math.PI + rnd(seedIter + b) * 0.6;
-                const bladeH = 0.45 + rnd(seedIter * 2 + b) * 0.4;
-                const bladeW = 0.065;
+            placedClusters++;
+
+            // Create 8-12 closely packed blade tufts per cluster
+            const bladesInTuft = 10;
+            for (let b = 0; b < bladesInTuft; b++) {
+                const angle = (b / bladesInTuft) * Math.PI * 2.0 + rnd(seedIter + b) * 0.5;
+                const bladeH = 0.50 + rnd(seedIter * 2 + b) * 0.45;
+                const bladeW = 0.07;
 
                 const cosA = Math.cos(angle) * bladeW;
                 const sinA = Math.sin(angle) * bladeW;
 
-                const bx = rx + (rnd(seedIter + b * 1.3) - 0.5) * 0.3;
-                const bz = rz + (rnd(seedIter * 3 + b * 1.7) - 0.5) * 0.3;
+                // Tight 0.15m dispersion so blades are packed together into dense, realistic clumps
+                const bx = clusterX + (rnd(seedIter + b * 1.3) - 0.5) * 0.35;
+                const bz = clusterZ + (rnd(seedIter * 3 + b * 1.7) - 0.5) * 0.35;
 
-                // Accurately sample the precise terrain elevation at the individual blade root coordinate
                 const bladeRy = terrainMesh ? sampleTerrainHeightAndBilinear(terrainMesh, bx, bz) : baseRy;
 
                 const baseIdx = vertices.length / 3;
 
-                // Blade Root Left & Right (Deep organic soil green - anchored firmly on ground surface)
+                // Blade Root Left & Right (Root is 100% fixed at ground level y = bladeRy)
                 vertices.push(bx - cosA, bladeRy, bz - sinA);
                 colors.push(0.12, 0.38, 0.08, 1.0);
 
                 vertices.push(bx + cosA, bladeRy, bz + sinA);
                 colors.push(0.12, 0.38, 0.08, 1.0);
 
-                // Blade Tip (Vibrant realistic sunny green - curved outwards)
-                const leanX = (rnd(seedIter * 5 + b) - 0.5) * 0.35;
-                const leanZ = (rnd(seedIter * 7 + b) - 0.5) * 0.35;
+                // Blade Tip (Upper portion sways in wind)
+                const leanX = (rnd(seedIter * 5 + b) - 0.5) * 0.4;
+                const leanZ = (rnd(seedIter * 7 + b) - 0.5) * 0.4;
                 vertices.push(bx + leanX, bladeRy + bladeH, bz + leanZ);
-                colors.push(0.38, 0.85, 0.22, 1.0);
+                colors.push(0.38, 0.88, 0.20, 1.0);
 
                 indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
-                indices.push(baseIdx + 2, baseIdx + 1, baseIdx); // Double-sided blade face rendering
+                indices.push(baseIdx + 2, baseIdx + 1, baseIdx);
             }
         }
 

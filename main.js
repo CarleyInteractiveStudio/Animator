@@ -116,6 +116,7 @@ function updateInspectorPanel() {
     }
 
     const isTerrain = selectedObject.material && selectedObject.material.textureType === 3;
+    const isWater   = selectedObject.material && selectedObject.material.textureType === 4;
     const hasGodRays = !!selectedObject.volumetricLight;
     const hasDarkness = !!selectedObject.darknessZone;
     const hasWind = !!selectedObject.windZone;
@@ -206,6 +207,26 @@ function updateInspectorPanel() {
             <div style="margin-top: 8px;">
                 <label style="font-size: 11px; color: #ccc;">Escala / Detalle de Micro-Texturas PBR: <span id="val-terrain-texscale" style="color: #2ecc71; font-weight: bold;">${matScale.toFixed(2)}x</span></label>
                 <input type="range" id="slider-terrain-texscale" min="0.1" max="5.0" step="0.05" value="${matScale}" class="modern-range" style="width: 100%; margin-top: 4px;">
+            </div>
+        </div>
+        `;
+    }
+
+    if (isWater) {
+        const wType = selectedObject.material.waterType || 0;
+        html += `
+        <div class="inspector-section" style="border: 1px solid #00d2ff44; background: #00d2ff0a; padding: 10px; border-radius: 6px; margin-top: 10px;">
+            <div class="inspector-section-title" style="color: #00d2ff; display: flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00d2ff" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+                <span>Simulación de Superficie de Agua</span>
+            </div>
+            <div style="margin-top: 8px;">
+                <label style="font-size: 11px; color: #ccc;">Tipo de Cuerpo de Agua:</label>
+                <select id="water-type-select" style="width: 100%; padding: 5px; background: #222; color: #00d2ff; border: 1px solid #444; border-radius: 4px; font-weight: bold; font-size: 11px; margin-top: 4px;">
+                    <option value="0" ${wType === 0 ? 'selected' : ''}>Mar u Océano (Olas Trocoidales + Espuma)</option>
+                    <option value="1" ${wType === 1 ? 'selected' : ''}>Río (Corriente y Flujo Unidireccional)</option>
+                    <option value="2" ${wType === 2 ? 'selected' : ''}>Lago Tranquilo (Cáusticas Suaves)</option>
+                </select>
             </div>
         </div>
         `;
@@ -574,6 +595,16 @@ function updateInspectorPanel() {
             }
             const valLbl = inspectorContent.querySelector('#val-terrain-texscale');
             if (valLbl) valLbl.textContent = `${val.toFixed(2)}x`;
+        });
+    }
+
+    const waterTypeSelect = inspectorContent.querySelector('#water-type-select');
+    if (waterTypeSelect) {
+        waterTypeSelect.addEventListener('change', (e) => {
+            const val = parseInt(e.target.value) || 0;
+            if (selectedObject.material) {
+                selectedObject.material.waterType = val;
+            }
         });
     }
 

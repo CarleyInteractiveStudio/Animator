@@ -286,15 +286,15 @@ export function initWebGL(canvas) {
         void main() {
             vec4 pos = a_position;
 
-            // Real-time dynamic Roblox grass & foliage wind animation
-            if (u_windElasticity > 0.01) {
-                float heightFactor = max(0.0, pos.y);
+            // Real-time dynamic grass & foliage wind animation (base stays 100% fixed)
+            if (u_windElasticity > 0.01 && pos.y > 0.001) {
+                float heightFactor = pos.y; // Height strictly above blade root base
 
-                // Subtle organic idle breeze micro-sway (always present)
+                // Upper tip organic idle breeze
                 float idleSway = sin(u_time * 1.8 + pos.x * 1.5 + pos.z * 1.2) * 0.035 * u_windElasticity * heightFactor;
                 float idleSwayZ = cos(u_time * 1.4 + pos.z * 1.8) * 0.025 * u_windElasticity * heightFactor;
 
-                // Stronger dynamic wave sway when active wind velocity / turbulence is applied
+                // Stronger dynamic wind wave sway
                 float activeSway = sin(u_time * 3.8 + pos.x * 2.8 + pos.z * 2.2) * 0.14 * u_windElasticity * heightFactor;
                 float activeSwayZ = cos(u_time * 2.6 + pos.z * 3.4) * 0.10 * u_windElasticity * heightFactor;
 
@@ -327,6 +327,7 @@ export function initWebGL(canvas) {
 
         // Texture and Procedural uniforms
         uniform int u_textureType; // 0 = Solid, 1 = Checker, 2 = Noise, 3 = Roblox Terrain Splatmap, 4 = Water Surface
+        uniform int u_waterType;   // 0 = Mar con Olas (Ocean), 1 = Río con Corriente (River), 2 = Lago Tranquilo (Lake)
         uniform float u_textureScale;
         uniform float u_metallic;
         uniform float u_roughness;
@@ -477,24 +478,45 @@ export function initWebGL(canvas) {
             vec3 normNorm = normalize(v_normal);
 
             if (u_textureType == 4) {
-                // Realistic Animated Water Shader
+                // Multi-Mode Realistic WebGL Animated Water Shader
                 vec3 viewDir = normalize(-v_worldPosition);
                 vec3 lightDir = normalize(u_lightDirection);
 
-                vec2 waveUV = v_worldPosition.xz * 0.8 + vec2(u_time * 0.6, u_time * 0.4);
-                float wave = noise(waveUV) * 0.5 + noise(waveUV * 2.2 - vec2(u_time * 0.5)) * 0.5;
+                vec3 shallowCol;
+                vec3 deepCol;
+                float wave = 0.0;
+                float foam = 0.0;
 
-                vec3 shallowWater = vec3(0.18, 0.65, 0.88);
-                vec3 deepWater = vec3(0.04, 0.22, 0.45);
+                if (u_waterType == 1) {
+                    // Río con Corriente (Unidirectional fast current)
+                    vec2 flowUV = v_worldPosition.xz * 1.2 + vec2(u_time * 1.4, u_time * 0.35);
+                    wave = noise(flowUV) * 0.6 + noise(flowUV * 3.0 - vec2(u_time * 1.8)) * 0.4;
+                    shallowCol = vec3(0.12, 0.72, 0.78);
+                    deepCol = vec3(0.02, 0.32, 0.48);
+                } else if (u_waterType == 2) {
+                    // Lago Tranquilo (Gentle concentric ripples)
+                    vec2 lakeUV = v_worldPosition.xz * 0.5 + vec2(sin(u_time * 0.4), cos(u_time * 0.4)) * 0.2;
+                    wave = noise(lakeUV * 1.8) * 0.5 + noise(lakeUV * 4.0 + vec2(u_time * 0.2)) * 0.3;
+                    shallowCol = vec3(0.15, 0.68, 0.62);
+                    deepCol = vec3(0.03, 0.28, 0.38);
+                } else {
+                    // Mar con Olas (Trochoidal ocean waves & foam)
+                    vec2 oceanUV = v_worldPosition.xz * 0.4 + vec2(u_time * 0.8, u_time * 0.5);
+                    float trochoidal = sin(v_worldPosition.x * 0.8 + u_time * 2.2) * cos(v_worldPosition.z * 0.6 + u_time * 1.8);
+                    wave = noise(oceanUV) * 0.4 + trochoidal * 0.4 + noise(oceanUV * 3.5 - vec2(u_time * 0.9)) * 0.2;
+                    foam = smoothstep(0.55, 0.82, wave) * 0.7;
+                    shallowCol = vec3(0.18, 0.75, 0.92);
+                    deepCol = vec3(0.02, 0.18, 0.42);
+                }
 
-                float fresnel = pow(1.0 - max(0.0, dot(normNorm, viewDir)), 3.0);
-                vec3 waterCol = mix(deepWater, shallowWater, 0.6 + wave * 0.4);
+                float fresnel = pow(1.0 - max(0.0, dot(normNorm, viewDir)), 3.5);
+                vec3 waterCol = mix(deepCol, shallowCol, 0.5 + wave * 0.5);
 
                 vec3 halfDir = normalize(lightDir + viewDir);
-                float spec = pow(max(0.0, dot(normNorm, halfDir)), 128.0) * 1.8;
+                float spec = pow(max(0.0, dot(normNorm, halfDir)), 128.0) * (u_waterType == 0 ? 2.2 : 1.5);
 
-                vec3 finalWater = mix(waterCol, vec3(0.9, 0.98, 1.0), fresnel * 0.5) + vec3(spec);
-                gl_FragColor = vec4(finalWater, 0.82);
+                vec3 finalWater = mix(waterCol, vec3(0.92, 0.98, 1.0), fresnel * 0.5) + vec3(spec) + vec3(foam);
+                gl_FragColor = vec4(finalWater, u_waterType == 0 ? 0.88 : 0.80);
                 return;
             }
 
@@ -623,6 +645,7 @@ export function initWebGL(canvas) {
             windElasticity: gl.getUniformLocation(program, 'u_windElasticity'),
             isUnlit: gl.getUniformLocation(program, 'u_isUnlit'),
             textureType: gl.getUniformLocation(program, 'u_textureType'),
+            waterType: gl.getUniformLocation(program, 'u_waterType'),
             textureScale: gl.getUniformLocation(program, 'u_textureScale'),
             metallic: gl.getUniformLocation(program, 'u_metallic'),
             roughness: gl.getUniformLocation(program, 'u_roughness'),
@@ -784,6 +807,7 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
 
         const mat = gameObject.material || {};
         gl.uniform1i(programInfo.uniformLocations.textureType, mat.textureType || 0);
+        gl.uniform1i(programInfo.uniformLocations.waterType, mat.waterType || 0);
         gl.uniform1f(programInfo.uniformLocations.textureScale, mat.textureScale || 5.0);
         gl.uniform1f(programInfo.uniformLocations.metallic, mat.metallic !== undefined ? mat.metallic : 0.2);
         gl.uniform1f(programInfo.uniformLocations.roughness, mat.roughness !== undefined ? mat.roughness : 0.5);
