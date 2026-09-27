@@ -115,6 +115,7 @@ function updateInspectorPanel() {
         selectedObject.material = { textureType: 0, textureScale: 5.0, metallic: 0.2, roughness: 0.5 };
     }
 
+    const isTerrain = selectedObject.material && selectedObject.material.textureType === 3;
     const hasGodRays = !!selectedObject.volumetricLight;
     const hasDarkness = !!selectedObject.darknessZone;
     const hasWind = !!selectedObject.windZone;
@@ -192,6 +193,25 @@ function updateInspectorPanel() {
                 <input type="range" id="slider-elasticity" min="0.0" max="2.0" step="0.05" value="${elasticity}" class="modern-range" style="width: 100%; margin-top: 4px;">
             </div>
         </div>
+    `;
+
+    if (isTerrain) {
+        const matScale = selectedObject.material.textureScale !== undefined ? selectedObject.material.textureScale : 1.0;
+        html += `
+        <div class="inspector-section" style="border: 1px solid #2ecc7144; background: #2ecc710a; padding: 10px; border-radius: 6px; margin-top: 10px;">
+            <div class="inspector-section-title" style="color: #2ecc71; display: flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <span>Material PBR Terreno Roblox</span>
+            </div>
+            <div style="margin-top: 8px;">
+                <label style="font-size: 11px; color: #ccc;">Escala / Detalle de Micro-Texturas PBR: <span id="val-terrain-texscale" style="color: #2ecc71; font-weight: bold;">${matScale.toFixed(2)}x</span></label>
+                <input type="range" id="slider-terrain-texscale" min="0.1" max="5.0" step="0.05" value="${matScale}" class="modern-range" style="width: 100%; margin-top: 4px;">
+            </div>
+        </div>
+        `;
+    }
+
+    html += `
     `;
 
     if (isCameraObj) {
@@ -545,6 +565,18 @@ function updateInspectorPanel() {
         });
     }
 
+    const sliderTexScale = inspectorContent.querySelector('#slider-terrain-texscale');
+    if (sliderTexScale) {
+        sliderTexScale.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            if (selectedObject.material) {
+                selectedObject.material.textureScale = val;
+            }
+            const valLbl = inspectorContent.querySelector('#val-terrain-texscale');
+            if (valLbl) valLbl.textContent = `${val.toFixed(2)}x`;
+        });
+    }
+
     const windTypeSelect = inspectorContent.querySelector('#wind-type-select');
     const windSizeX = inspectorContent.querySelector('#wind-size-x');
     const windSizeY = inspectorContent.querySelector('#wind-size-y');
@@ -739,9 +771,8 @@ function setupModals() {
     }
 
     if (btnGenerateTerrain) {
-        btnGenerateTerrain.addEventListener('click', () => {
-            generateSmoothTerrainFromModal();
-            if (modalTerrain) modalTerrain.style.display = 'none';
+        btnGenerateTerrain.addEventListener('click', async () => {
+            await generateSmoothTerrainFromModal();
         });
     }
 
@@ -955,9 +986,13 @@ function sampleTerrainHeight(mesh, x, z) {
     return mesh.terrainHeights[idx] || 0;
 }
 
-function generateSmoothTerrainFromModal() {
-    const width = parseFloat(document.getElementById('slider-terrain-width').value) || 30;
-    const depth = parseFloat(document.getElementById('slider-terrain-depth').value) || 30;
+async function generateSmoothTerrainFromModal() {
+    const widthInput = document.getElementById('input-terrain-width');
+    const depthInput = document.getElementById('input-terrain-depth');
+
+    const width = Math.max(10, parseFloat(widthInput ? widthInput.value : 40) || 40);
+    const depth = Math.max(10, parseFloat(depthInput ? depthInput.value : 40) || 40);
+
     const heightScale = parseFloat(document.getElementById('slider-terrain-height').value) || 6.0;
     const noiseScale = parseFloat(document.getElementById('slider-terrain-roughness').value) || 0.08;
     const seed = parseInt(document.getElementById('input-terrain-seed').value) || 1234;
@@ -965,20 +1000,44 @@ function generateSmoothTerrainFromModal() {
 
     const numTrees = parseInt(document.getElementById('slider-tree-density').value) || 16;
     const numRocks = parseInt(document.getElementById('slider-rock-density').value) || 12;
-    const grassDensityVal = parseInt(document.getElementById('slider-grass-density').value) || 25;
+    const grassDensityVal = parseInt(document.getElementById('slider-grass-density').value) || 35;
+    const texQualitySelect = document.getElementById('select-terrain-texture-quality');
+    const textureQuality = parseFloat(texQualitySelect ? texQualitySelect.value : 1.0) || 1.0;
     const hasWater = document.getElementById('chk-terrain-water').checked;
+
+    const progressContainer = document.getElementById('terrain-progress-container');
+    const progressStatus = document.getElementById('terrain-progress-status');
+    const progressPercent = document.getElementById('terrain-progress-percent');
+    const progressBar = document.getElementById('terrain-progress-bar');
+    const btnGenerate = document.getElementById('btn-generate-terrain');
+
+    if (progressContainer) progressContainer.style.display = 'block';
+    if (btnGenerate) btnGenerate.disabled = true;
+
+    const updateProgress = async (text, pct) => {
+        if (progressStatus) progressStatus.textContent = text;
+        if (progressPercent) progressPercent.textContent = `${pct.toFixed(0)}%`;
+        if (progressBar) progressBar.style.width = `${pct}%`;
+        await new Promise(resolve => setTimeout(resolve, 40));
+    };
+
+    await updateProgress('Calculando elevaciones y faldón de horizonte 3D...', 15);
 
     objectCounters.terrain = (objectCounters.terrain || 0) + 1;
     const terrainName = `Terreno Smooth ${objectCounters.terrain}`;
 
+    const subdivisions = Math.min(128, Math.max(48, Math.floor(Math.max(width, depth) * 1.5)));
+
     const terrainMesh = Mesh.createSmoothTerrain(Engine.gl, {
-        width, depth, heightScale, noiseScale, seed, waterLevel, subdivisions: 64
+        width, depth, heightScale, noiseScale, seed, waterLevel, subdivisions
     });
 
+    await updateProgress('Aplicando sombreado PBR triplanar de alta resolución...', 40);
+
     const terrainObj = new GameObject(terrainName, terrainMesh);
-    // Assign Roblox Smooth Terrain Splatmap shader material (textureType = 3)
     terrainObj.material = {
         textureType: 3,
+        textureScale: textureQuality,
         metallic: 0.1,
         roughness: 0.75
     };
@@ -990,12 +1049,17 @@ function generateSmoothTerrainFromModal() {
         return x - Math.floor(x);
     }
 
-    // High-Density 3D Roblox Grass Field Covering the Terrain
-    objectCounters.grass++;
-    const grassFieldMesh = Mesh.createRobloxGrassField(Engine.gl, terrainMesh, grassDensityVal * 10);
-    const grassFieldObj = new GameObject(`Prado de Césped 3D ${objectCounters.grass}`, grassFieldMesh);
-    grassFieldObj.windElasticity = 0.85; // Bends dynamically with WebGL wind physics
-    Engine.scene.addGameObject(grassFieldObj);
+    if (grassDensityVal > 0) {
+        await updateProgress('Sembrando prado de césped 3D fijado a la superficie...', 65);
+        objectCounters.grass++;
+        const totalGrassBlades = grassDensityVal * 12;
+        const grassFieldMesh = Mesh.createRobloxGrassField(Engine.gl, terrainMesh, totalGrassBlades);
+        const grassFieldObj = new GameObject(`Prado de Césped 3D ${objectCounters.grass}`, grassFieldMesh);
+        grassFieldObj.windElasticity = 0.85;
+        Engine.scene.addGameObject(grassFieldObj);
+    }
+
+    await updateProgress('Poblando bioma con vegetación y rocas 3D...', 85);
 
     // Scatter Trees
     for (let i = 0; i < numTrees; i++) {
@@ -1038,12 +1102,21 @@ function generateSmoothTerrainFromModal() {
         vec3.set(waterObj.transform.position, 0, waterLevel, 0);
         waterObj.transform.scale = [width / 2, 1, depth / 2];
         waterObj.material = {
-            textureType: 4, // Real-time animated water shader
+            textureType: 4,
             metallic: 0.9,
             roughness: 0.05
         };
         Engine.scene.addGameObject(waterObj);
     }
+
+    await updateProgress('¡Mapa Roblox completado con éxito!', 100);
+
+    setTimeout(() => {
+        if (progressContainer) progressContainer.style.display = 'none';
+        if (btnGenerate) btnGenerate.disabled = false;
+        const modalTerrain = document.getElementById('modal-terrain');
+        if (modalTerrain) modalTerrain.style.display = 'none';
+    }, 350);
 
     selectObject(terrainObj);
 }

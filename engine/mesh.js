@@ -418,8 +418,12 @@ export class Mesh {
 
         for (let z = 0; z <= subdivisions; z++) {
             const posZ = -halfD + z * stepZ;
+            const isEdgeZ = (z === 0 || z === subdivisions);
+
             for (let x = 0; x <= subdivisions; x++) {
                 const posX = -halfW + x * stepX;
+                const isEdgeX = (x === 0 || x === subdivisions);
+
                 const rawH = fbm2D(posX, posZ);
 
                 // Edge tapering smooth falloff (prevents boxy cut edge borders)
@@ -428,7 +432,12 @@ export class Mesh {
                 const maxEdgeDist = Math.max(distFromCenterX, distFromCenterZ);
                 const edgeFalloff = Math.pow(Math.cos(Math.min(1.0, maxEdgeDist) * Math.PI * 0.5), 1.8);
 
-                const posY = (rawH * heightScale - 0.2) * edgeFalloff;
+                let posY = (rawH * heightScale - 0.2) * edgeFalloff;
+
+                // Deep edge skirt dropping seamlessly underwater/below horizon at the outermost perimeter ring
+                if (isEdgeX || isEdgeZ) {
+                    posY = Math.min(posY, -1.5);
+                }
 
                 vertices.push(posX, posY, posZ);
                 heights.push(posY);
@@ -470,66 +479,87 @@ export class Mesh {
             return x - Math.floor(x);
         }
 
-        function sampleTerrainHeight(mesh, x, z) {
+        function sampleTerrainHeightAndBilinear(mesh, x, z) {
             if (!mesh || !mesh.terrainHeights) return 0;
             const sub = mesh.terrainSubdivisions;
             const halfW = mesh.terrainWidth / 2;
             const halfD = mesh.terrainDepth / 2;
 
-            const normX = (x + halfW) / mesh.terrainWidth;
-            const normZ = (z + halfD) / mesh.terrainDepth;
+            const normX = Math.max(0, Math.min(1, (x + halfW) / mesh.terrainWidth));
+            const normZ = Math.max(0, Math.min(1, (z + halfD) / mesh.terrainDepth));
 
-            const gridX = Math.max(0, Math.min(sub, Math.floor(normX * sub)));
-            const gridZ = Math.max(0, Math.min(sub, Math.floor(normZ * sub)));
+            const floatX = normX * sub;
+            const floatZ = normZ * sub;
 
-            const idx = gridZ * (sub + 1) + gridX;
-            return mesh.terrainHeights[idx] || 0;
+            const x0 = Math.floor(floatX);
+            const z0 = Math.floor(floatZ);
+            const x1 = Math.min(sub, x0 + 1);
+            const z1 = Math.min(sub, z0 + 1);
+
+            const tx = floatX - x0;
+            const tz = floatZ - z0;
+
+            const h00 = mesh.terrainHeights[z0 * (sub + 1) + x0] || 0;
+            const h10 = mesh.terrainHeights[z0 * (sub + 1) + x1] || 0;
+            const h01 = mesh.terrainHeights[z1 * (sub + 1) + x0] || 0;
+            const h11 = mesh.terrainHeights[z1 * (sub + 1) + x1] || 0;
+
+            const h0 = h00 * (1 - tx) + h10 * tx;
+            const h1 = h01 * (1 - tx) + h11 * tx;
+
+            return h0 * (1 - tz) + h1 * tz;
         }
 
         const width = terrainMesh ? terrainMesh.terrainWidth : 36;
         const depth = terrainMesh ? terrainMesh.terrainDepth : 36;
-        const halfW = width * 0.42;
-        const halfD = depth * 0.42;
+        const halfW = width * 0.46;
+        const halfD = depth * 0.46;
 
         let placed = 0;
         let seedIter = 100;
 
-        while (placed < count && seedIter < count * 5) {
+        while (placed < count && seedIter < count * 8) {
             seedIter++;
             const rx = (rnd(seedIter * 3.1) - 0.5) * (halfW * 2);
             const rz = (rnd(seedIter * 7.4) - 0.5) * (halfD * 2);
-            const ry = terrainMesh ? sampleTerrainHeight(terrainMesh, rx, rz) : 0;
+            const baseRy = terrainMesh ? sampleTerrainHeightAndBilinear(terrainMesh, rx, rz) : 0;
 
-            if (ry < 0.6 || ry > 8.0) continue; // Only grow grass on lush valley biomes
+            // Grow grass across valley and mid-slope biomes, avoiding underwater sand and top snow caps
+            if (baseRy < 0.8 || baseRy > 11.0) continue;
 
             placed++;
-            const tuftBlades = 6;
+            const tuftBlades = 5;
             for (let b = 0; b < tuftBlades; b++) {
-                const angle = (b / tuftBlades) * Math.PI + rnd(seedIter + b) * 0.5;
-                const h = 0.55 + rnd(seedIter * 2 + b) * 0.35;
-                const w = 0.07;
+                const angle = (b / tuftBlades) * Math.PI + rnd(seedIter + b) * 0.6;
+                const bladeH = 0.45 + rnd(seedIter * 2 + b) * 0.4;
+                const bladeW = 0.065;
 
-                const cosA = Math.cos(angle) * w;
-                const sinA = Math.sin(angle) * w;
+                const cosA = Math.cos(angle) * bladeW;
+                const sinA = Math.sin(angle) * bladeW;
+
+                const bx = rx + (rnd(seedIter + b * 1.3) - 0.5) * 0.3;
+                const bz = rz + (rnd(seedIter * 3 + b * 1.7) - 0.5) * 0.3;
+
+                // Accurately sample the precise terrain elevation at the individual blade root coordinate
+                const bladeRy = terrainMesh ? sampleTerrainHeightAndBilinear(terrainMesh, bx, bz) : baseRy;
 
                 const baseIdx = vertices.length / 3;
 
-                const bx = rx + (rnd(seedIter + b) - 0.5) * 0.25;
-                const bz = rz + (rnd(seedIter * 3 + b) - 0.5) * 0.25;
+                // Blade Root Left & Right (Deep organic soil green - anchored firmly on ground surface)
+                vertices.push(bx - cosA, bladeRy, bz - sinA);
+                colors.push(0.12, 0.38, 0.08, 1.0);
 
-                // Blade Root Left & Right (Dark Green)
-                vertices.push(bx - cosA, ry, bz - sinA);
-                colors.push(0.18, 0.48, 0.12, 1.0);
+                vertices.push(bx + cosA, bladeRy, bz + sinA);
+                colors.push(0.12, 0.38, 0.08, 1.0);
 
-                vertices.push(bx + cosA, ry, bz + sinA);
-                colors.push(0.18, 0.48, 0.12, 1.0);
-
-                // Blade Tip (Bright Lush Green)
-                const lean = (b % 2 === 0 ? 0.22 : -0.22);
-                vertices.push(bx + sinA * lean, ry + h, bz + cosA * lean);
-                colors.push(0.35, 0.88, 0.22, 1.0);
+                // Blade Tip (Vibrant realistic sunny green - curved outwards)
+                const leanX = (rnd(seedIter * 5 + b) - 0.5) * 0.35;
+                const leanZ = (rnd(seedIter * 7 + b) - 0.5) * 0.35;
+                vertices.push(bx + leanX, bladeRy + bladeH, bz + leanZ);
+                colors.push(0.38, 0.85, 0.22, 1.0);
 
                 indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
+                indices.push(baseIdx + 2, baseIdx + 1, baseIdx); // Double-sided blade face rendering
             }
         }
 
