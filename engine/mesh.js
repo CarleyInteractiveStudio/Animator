@@ -330,25 +330,41 @@ export class Mesh {
             ];
         }
 
+        // Subdivide path smoothly for realistic curved river geometry
+        const densePath = [];
+        const subdivisionsPerSegment = 8;
+        for (let i = 0; i < pathPoints.length - 1; i++) {
+            const p0 = pathPoints[i];
+            const p1 = pathPoints[i + 1];
+            for (let s = 0; s < subdivisionsPerSegment; s++) {
+                const t = s / subdivisionsPerSegment;
+                const x = p0[0] * (1 - t) + p1[0] * t;
+                const y = p0[1] * (1 - t) + p1[1] * t;
+                const z = p0[2] * (1 - t) + p1[2] * t;
+                densePath.push([x, y, z]);
+            }
+        }
+        densePath.push(pathPoints[pathPoints.length - 1]);
+
         const vertices = [];
         const indices = [];
         const colors = [];
         const texcoords = [];
 
-        const numSegments = pathPoints.length;
+        const numSegments = densePath.length;
         const halfW = width / 2;
 
         for (let i = 0; i < numSegments; i++) {
-            const p = pathPoints[i];
+            const p = densePath[i];
             const px = p[0], py = p[1], pz = p[2];
 
             let dirX = 0, dirZ = 1;
             if (i < numSegments - 1) {
-                const nextP = pathPoints[i + 1];
+                const nextP = densePath[i + 1];
                 dirX = nextP[0] - px;
                 dirZ = nextP[2] - pz;
             } else if (i > 0) {
-                const prevP = pathPoints[i - 1];
+                const prevP = densePath[i - 1];
                 dirX = px - prevP[0];
                 dirZ = pz - prevP[2];
             }
@@ -363,21 +379,33 @@ export class Mesh {
 
             const vProgress = i / (numSegments - 1);
 
-            // Left vertex
-            vertices.push(px - normX * halfW, py + 0.08, pz - normZ * halfW);
+            // Left vertex (sits snugly in carved riverbed channel)
+            vertices.push(px - normX * halfW, py - 0.02, pz - normZ * halfW);
             colors.push(0.1, 0.65, 0.75, 0.85);
-            texcoords.push(0.0, vProgress);
+            texcoords.push(0.0, vProgress * 12.0);
+
+            // Center vertex
+            vertices.push(px, py - 0.05, pz);
+            colors.push(0.08, 0.60, 0.72, 0.90);
+            texcoords.push(0.5, vProgress * 12.0);
 
             // Right vertex
-            vertices.push(px + normX * halfW, py + 0.08, pz + normZ * halfW);
+            vertices.push(px + normX * halfW, py - 0.02, pz + normZ * halfW);
             colors.push(0.1, 0.65, 0.75, 0.85);
-            texcoords.push(1.0, vProgress);
+            texcoords.push(1.0, vProgress * 12.0);
         }
 
         for (let i = 0; i < numSegments - 1; i++) {
-            const base = i * 2;
-            indices.push(base, base + 1, base + 2);
-            indices.push(base + 1, base + 3, base + 2);
+            const base = i * 3;
+            const next = (i + 1) * 3;
+
+            // Left quad
+            indices.push(base, next, base + 1);
+            indices.push(base + 1, next, next + 1);
+
+            // Right quad
+            indices.push(base + 1, next + 1, base + 2);
+            indices.push(base + 2, next + 1, next + 2);
         }
 
         return new Mesh(gl, vertices, indices, null, colors, texcoords);

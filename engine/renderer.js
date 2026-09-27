@@ -518,77 +518,86 @@ export function initWebGL(canvas) {
                 vec3 lightDir = normalize(u_lightDirection);
 
                 // High-fidelity water colors for each type
-                vec3 shallowCol = vec3(0.12, 0.75, 0.88); // Crystalline ocean turquoise
-                vec3 deepCol    = vec3(0.01, 0.18, 0.45); // Deep ocean navy
+                vec3 shallowCol = vec3(0.12, 0.78, 0.90); // Crystalline turquoise
+                vec3 deepCol    = vec3(0.01, 0.15, 0.42); // Deep navy ocean
 
                 if (u_waterType == 1) {
                     // River: Vibrant mountain emerald / teal water
-                    shallowCol = vec3(0.10, 0.72, 0.78);
-                    deepCol    = vec3(0.02, 0.32, 0.42);
+                    shallowCol = vec3(0.08, 0.72, 0.78);
+                    deepCol    = vec3(0.02, 0.28, 0.38);
                 } else if (u_waterType == 2) {
                     // Lake: Tranquil emerald / azure crystal lake water
-                    shallowCol = vec3(0.14, 0.68, 0.62);
-                    deepCol    = vec3(0.03, 0.25, 0.35);
+                    shallowCol = vec3(0.14, 0.68, 0.65);
+                    deepCol    = vec3(0.03, 0.22, 0.32);
                 }
 
-                // Normal perturbation for water surface micro-ripples and flow currents
-                vec2 waveSpeed = vec2(u_time * 0.4, u_time * 0.25);
+                // Multi-layered procedural normal perturbation for high-detail water surface
+                vec2 waveSpeed1 = vec2(u_time * 0.5, u_time * 0.35);
+                vec2 waveSpeed2 = vec2(-u_time * 0.4, u_time * 0.6);
+
                 if (u_waterType == 1) {
-                    // River current fast directional flow along UV
-                    waveSpeed = vec2(u_time * 1.2, u_time * 2.5 + v_texcoord.y * 10.0);
+                    // River current fast directional flow along UV coordinates
+                    waveSpeed1 = vec2(u_time * 0.5, u_time * 3.5 + v_texcoord.y);
+                    waveSpeed2 = vec2(-u_time * 0.3, u_time * 5.0 + v_texcoord.y * 1.5);
                 }
 
                 vec3 waveNormalGrad = vec3(
-                    sin(v_worldPosition.x * 2.5 + waveSpeed.x) * 0.12 + cos(v_worldPosition.z * 3.1 + waveSpeed.y) * 0.08,
+                    sin(v_worldPosition.x * 3.5 + waveSpeed1.x) * 0.15 + cos(v_worldPosition.z * 4.2 + waveSpeed2.y) * 0.10,
                     1.0,
-                    cos(v_worldPosition.x * 1.8 - waveSpeed.y) * 0.10 + sin(v_worldPosition.z * 2.2 + waveSpeed.x) * 0.12
+                    cos(v_worldPosition.x * 2.8 - waveSpeed2.x) * 0.12 + sin(v_worldPosition.z * 3.6 + waveSpeed1.y) * 0.15
                 );
-                vec3 liquidNormal = normalize(normNorm + waveNormalGrad);
+
+                if (u_waterType == 1) {
+                    // High-frequency directional ripple normal vectors along river flow
+                    waveNormalGrad.x += sin(v_texcoord.x * 20.0 + u_time * 4.0) * 0.12;
+                    waveNormalGrad.z += cos(v_texcoord.y * 32.0 - u_time * 6.0) * 0.22;
+                }
+
+                vec3 liquidNormal = normalize(normNorm + waveNormalGrad * 0.65);
 
                 // Physical Fresnel reflectance calculation
                 float NdotV = max(0.0, dot(liquidNormal, viewDir));
-                float fresnel = pow(1.0 - NdotV, 4.0);
+                float fresnel = pow(1.0 - NdotV, 3.5);
 
-                vec3 baseLiquid = mix(deepCol, shallowCol, clamp(NdotV * 1.2, 0.0, 1.0));
+                vec3 baseLiquid = mix(deepCol, shallowCol, clamp(NdotV * 1.3, 0.0, 1.0));
 
-                // Specular sun glint
+                // Dual specular sun glint
                 vec3 halfDir = normalize(lightDir + viewDir);
                 float NdotH = max(0.0, dot(liquidNormal, halfDir));
-                float specularGlint = pow(NdotH, 160.0) * 2.8;
+                float specularGlint = pow(NdotH, 180.0) * 3.2 + pow(NdotH, 24.0) * 0.4;
 
                 // Sky reflection
-                vec3 skyReflection = mix(vec3(0.6, 0.8, 1.0), vec3(0.95, 0.98, 1.0), fresnel);
-                vec3 finalLiquidRGB = mix(baseLiquid, skyReflection, fresnel * 0.6) + vec3(specularGlint);
+                vec3 skyReflection = mix(vec3(0.55, 0.78, 1.0), vec3(0.95, 0.98, 1.0), fresnel);
+                vec3 finalLiquidRGB = mix(baseLiquid, skyReflection, fresnel * 0.65) + vec3(specularGlint);
 
                 // Ocean Wave Crest & Shoreline Foam Generation
                 if (u_waterType == 0) {
-                    // Foam on wave crests and shore contact
-                    float foamFactor = smoothstep(0.18, 0.35, v_waveHeight);
+                    float foamFactor = smoothstep(0.12, 0.30, v_waveHeight);
 
                     // Add shoreline edge foam based on shallow depth / shore proximity
-                    float shoreProximity = smoothstep(2.0, -0.5, v_worldPosition.y);
-                    foamFactor = max(foamFactor, shoreProximity * 0.65);
+                    float shoreProximity = smoothstep(2.5, -0.3, v_worldPosition.y);
+                    foamFactor = max(foamFactor, shoreProximity * 0.75);
 
                     if (foamFactor > 0.02) {
-                        float foamPattern = noise(v_worldPosition.xz * 8.0 + u_time * 0.5) * 0.3 + 0.7;
-                        vec3 foamColor = vec3(0.95, 0.98, 1.0);
+                        float foamPattern = noise(v_worldPosition.xz * 12.0 + u_time * 0.8) * 0.4 + 0.6;
+                        vec3 foamColor = vec3(0.96, 0.98, 1.0);
                         finalLiquidRGB = mix(finalLiquidRGB, foamColor, foamFactor * foamPattern);
                     }
                 } else if (u_waterType == 1) {
                     // River current foam streaks along river banks and rapids
-                    float bankFoam = smoothstep(0.35, 0.48, abs(v_texcoord.x - 0.5));
-                    float currentRipple = noise(vec2(v_texcoord.x * 12.0, v_texcoord.y * 30.0 - u_time * 4.0));
-                    if (bankFoam > 0.1 || currentRipple > 0.68) {
-                        vec3 foamColor = vec3(0.92, 0.96, 1.0);
-                        finalLiquidRGB = mix(finalLiquidRGB, foamColor, bankFoam * 0.4 + smoothstep(0.68, 0.85, currentRipple) * 0.35);
+                    float bankFoam = smoothstep(0.32, 0.49, abs(v_texcoord.x - 0.5));
+                    float currentRipple = noise(vec2(v_texcoord.x * 16.0, v_texcoord.y * 40.0 - u_time * 6.0));
+                    if (bankFoam > 0.08 || currentRipple > 0.65) {
+                        vec3 foamColor = vec3(0.94, 0.97, 1.0);
+                        finalLiquidRGB = mix(finalLiquidRGB, foamColor, bankFoam * 0.45 + smoothstep(0.65, 0.85, currentRipple) * 0.40);
                     }
                 } else if (u_waterType == 2) {
                     // Lake caustic highlights
-                    float caustic = noise(v_worldPosition.xz * 3.5 + u_time * 0.8) * noise(v_worldPosition.zx * 4.0 - u_time * 0.6);
-                    finalLiquidRGB += vec3(0.1, 0.2, 0.18) * caustic;
+                    float caustic = noise(v_worldPosition.xz * 4.5 + u_time * 0.9) * noise(v_worldPosition.zx * 5.0 - u_time * 0.7);
+                    finalLiquidRGB += vec3(0.12, 0.22, 0.20) * caustic;
                 }
 
-                gl_FragColor = vec4(finalLiquidRGB, 0.85);
+                gl_FragColor = vec4(finalLiquidRGB, 0.88);
                 return;
             }
 

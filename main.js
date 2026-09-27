@@ -1213,18 +1213,20 @@ async function generateSmoothTerrainFromModal() {
         await updateProgress('Trazando cauce del Río desde el terreno hasta el mar...', 58);
         objectCounters.river = (objectCounters.river || 0) + 1;
 
-        const startY = Math.max(waterLevel + 0.8, sampleTerrainHeight(terrainMesh, width * 0.28, -depth * 0.28));
-        const midY1  = Math.max(waterLevel + 0.5, sampleTerrainHeight(terrainMesh, width * 0.14, -depth * 0.14));
-        const midY2  = Math.max(waterLevel + 0.3, sampleTerrainHeight(terrainMesh, 0.0, 0.0));
-        const midY3  = Math.max(waterLevel + 0.15, sampleTerrainHeight(terrainMesh, -width * 0.14, depth * 0.14));
+        const p0 = [width * 0.28, -depth * 0.28];
+        const p1 = [width * 0.14, -depth * 0.14];
+        const p2 = [0.0, 0.0];
+        const p3 = [-width * 0.14, depth * 0.14];
+        const p4 = [-width * 0.35, depth * 0.35];
 
-        const riverPath = [
-            [width * 0.28, startY + 0.05, -depth * 0.28],
-            [width * 0.14, midY1 + 0.04, -depth * 0.14],
-            [0.0, midY2 + 0.03, 0.0],
-            [-width * 0.14, midY3 + 0.02, depth * 0.14],
-            [-width * 0.35, waterLevel + 0.02, depth * 0.35]
-        ];
+        const points2D = [p0, p1, p2, p3, p4];
+        const riverPath = points2D.map(([px, pz]) => {
+            const groundY = sampleTerrainHeight(terrainMesh, px, pz);
+            // Fit river mesh directly inside carved riverbed channel
+            const riverY = Math.max(waterLevel + 0.05, groundY + 0.08);
+            return [px, riverY, pz];
+        });
+
         const riverMesh = Mesh.createRiverMesh(Engine.gl, riverPath, Math.min(4.0, width * 0.08));
         const riverObj = new GameObject(`Río de Terreno a Mar ${objectCounters.river}`, riverMesh);
         riverObj.material = {
