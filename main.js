@@ -1273,21 +1273,28 @@ async function generateSmoothTerrainFromModal() {
         await updateProgress(`Superficie emergida insuficiente (${landAreaAboveSea.toFixed(0)}m² < 500m²: río omitido)...`, 58);
     }
 
-    // --- 3. Generar Lago Tranquilo ---
-    if (hasLake) {
-        await updateProgress('Modelando Lago 3D tranquilo con cáusticas suaves...', 68);
-        objectCounters.lake = (objectCounters.lake || 0) + 1;
-        const lakeMesh = Mesh.createLakeMesh(Engine.gl, width * 0.14, depth * 0.14, 32);
-        const lakeObj = new GameObject(`Lago Tranquilo ${objectCounters.lake}`, lakeMesh);
-        vec3.set(lakeObj.transform.position, width * 0.22, waterLevel + 0.1, depth * 0.15);
-        lakeObj.material = {
-            textureType: 4,
-            waterType: 2,
-            metallic: 0.88,
-            roughness: 0.05
-        };
-        mapParentObj.addChild(lakeObj);
-        Engine.scene.addGameObject(lakeObj);
+    // --- 3. Generar Lago Tranquilo (Estricto: Solo en cuencas de tierra emergida inland >= 500m²) ---
+    if (hasLake && isLandSufficient) {
+        // Find high inland basin coordinate above sea level
+        const lakeX = width * 0.18;
+        const lakeZ = depth * 0.12;
+        const lakeGroundY = sampleTerrainHeight(terrainMesh, lakeX, lakeZ);
+
+        if (lakeGroundY > waterLevel + 0.3) {
+            await updateProgress('Modelando Lago 3D en cuenca interior con cáusticas suaves...', 68);
+            objectCounters.lake = (objectCounters.lake || 0) + 1;
+            const lakeMesh = Mesh.createLakeMesh(Engine.gl, Math.min(5.0, width * 0.08), Math.min(5.0, depth * 0.08), 32);
+            const lakeObj = new GameObject(`Lago Tranquilo ${objectCounters.lake}`, lakeMesh);
+            vec3.set(lakeObj.transform.position, lakeX, lakeGroundY + 0.05, lakeZ);
+            lakeObj.material = {
+                textureType: 4,
+                waterType: 2,
+                metallic: 0.88,
+                roughness: 0.05
+            };
+            mapParentObj.addChild(lakeObj);
+            Engine.scene.addGameObject(lakeObj);
+        }
     }
 
     if (grassDensityVal > 0) {
