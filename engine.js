@@ -20,6 +20,7 @@ const Engine = {
     activeTool: 'translate', // 'translate', 'rotate', 'scale', 'deform', 'inflate', 'smooth', 'brush', 'eraser', 'fill', 'box-create', 'sketch-draw', 'extrude'
     subElementMode: 'vertex', // 'vertex', 'edge', 'face'
     selectedSubElement: null, // { type: 'vertex'|'edge'|'face', index: number }
+    selectedSubElements: [], // array of subelement objects for multi-selection
     brushRadius: 0.8,
     brushColor: [1.0, 0.2, 0.2, 1.0],
     time: 0.0,
@@ -202,6 +203,80 @@ const Engine = {
         }
 
         return closestObj;
+    },
+
+    pickSubElementsInRect: (minX, minY, maxX, maxY) => {
+        if (!canvas || !camera || !Engine.selectedGameObject || !Engine.selectedGameObject.mesh) return [];
+
+        const targetObj = Engine.selectedGameObject;
+        const mesh = targetObj.mesh;
+        const modelMatrix = targetObj.getModelMatrix();
+        const viewMatrix = camera.getViewMatrix();
+
+        const aspect = canvas.clientWidth / canvas.clientHeight || 1.0;
+        const projectionMatrix = mat4.create();
+        mat4.perspective(projectionMatrix, 45 * Math.PI / 180, aspect, 0.1, 100.0);
+
+        const mvp = mat4.create();
+        mat4.multiply(mvp, projectionMatrix, viewMatrix);
+        mat4.multiply(mvp, mvp, modelMatrix);
+
+        const results = [];
+
+        if (Engine.subElementMode === 'vertex') {
+            const numVerts = Math.floor(mesh.vertices.length / 3);
+            for (let i = 0; i < numVerts; i++) {
+                const vx = mesh.vertices[i * 3];
+                const vy = mesh.vertices[i * 3 + 1];
+                const vz = mesh.vertices[i * 3 + 2];
+
+                const clip = [
+                    mvp[0]*vx + mvp[4]*vy + mvp[8]*vz + mvp[12],
+                    mvp[1]*vx + mvp[5]*vy + mvp[9]*vz + mvp[13],
+                    mvp[2]*vx + mvp[6]*vy + mvp[10]*vz + mvp[14],
+                    mvp[3]*vx + mvp[7]*vy + mvp[11]*vz + mvp[15]
+                ];
+
+                if (clip[3] <= 0) continue;
+
+                const ndcX = clip[0] / clip[3];
+                const ndcY = clip[1] / clip[3];
+
+                const scrX = (ndcX * 0.5 + 0.5) * canvas.clientWidth;
+                const scrY = (-ndcY * 0.5 + 0.5) * canvas.clientHeight;
+
+                if (scrX >= minX && scrX <= maxX && scrY >= minY && scrY <= maxY) {
+                    results.push({ type: 'vertex', index: i });
+                }
+            }
+        } else if (Engine.subElementMode === 'face') {
+            const numFaces = Math.floor(mesh.indices.length / 3);
+            for (let f = 0; f < numFaces; f++) {
+                const centroid = mesh.getFaceCentroid(f);
+                const vx = centroid[0], vy = centroid[1], vz = centroid[2];
+
+                const clip = [
+                    mvp[0]*vx + mvp[4]*vy + mvp[8]*vz + mvp[12],
+                    mvp[1]*vx + mvp[5]*vy + mvp[9]*vz + mvp[13],
+                    mvp[2]*vx + mvp[6]*vy + mvp[10]*vz + mvp[14],
+                    mvp[3]*vx + mvp[7]*vy + mvp[11]*vz + mvp[15]
+                ];
+
+                if (clip[3] <= 0) continue;
+
+                const ndcX = clip[0] / clip[3];
+                const ndcY = clip[1] / clip[3];
+
+                const scrX = (ndcX * 0.5 + 0.5) * canvas.clientWidth;
+                const scrY = (-ndcY * 0.5 + 0.5) * canvas.clientHeight;
+
+                if (scrX >= minX && scrX <= maxX && scrY >= minY && scrY <= maxY) {
+                    results.push({ type: 'face', index: f });
+                }
+            }
+        }
+
+        return results;
     },
 
     pickSubElement: (clientX, clientY) => {

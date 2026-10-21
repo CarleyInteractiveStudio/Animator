@@ -1,5 +1,5 @@
 export class Mesh {
-    constructor(gl, vertices, indices, normals = null, colors = null) {
+    constructor(gl, vertices, indices, normals = null, colors = null, texcoords = null) {
         this.gl = gl;
         this.vertices = new Float32Array(vertices);
         this.indices = new Uint16Array(indices);
@@ -17,6 +17,10 @@ export class Mesh {
             normals = Mesh.calculateNormals(this.vertices, this.indices);
         }
         this.normals = new Float32Array(normals);
+
+        if (texcoords) {
+            this.texcoords = new Float32Array(texcoords);
+        }
 
         this.vertexBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
@@ -154,6 +158,375 @@ export class Mesh {
         this.indices = new Uint16Array(newIndices);
 
         this.rebuildBuffers();
+    }
+
+    separateLooseParts() {
+        const numFaces = Math.floor(this.indices.length / 3);
+        if (numFaces <= 1) return [this];
+
+        const numVerts = Math.floor(this.vertices.length / 3);
+        const vertexToFaces = Array.from({ length: numVerts }, () => []);
+
+        for (let f = 0; f < numFaces; f++) {
+            const i1 = this.indices[f * 3];
+            const i2 = this.indices[f * 3 + 1];
+            const i3 = this.indices[f * 3 + 2];
+            if (i1 < numVerts) vertexToFaces[i1].push(f);
+            if (i2 < numVerts) vertexToFaces[i2].push(f);
+            if (i3 < numVerts) vertexToFaces[i3].push(f);
+        }
+
+        const visitedFaces = new Uint8Array(numFaces);
+        const components = [];
+
+        for (let f = 0; f < numFaces; f++) {
+            if (visitedFaces[f]) continue;
+
+            const compFaces = [];
+            const queue = [f];
+            visitedFaces[f] = 1;
+
+            let head = 0;
+            while (head < queue.length) {
+                const currF = queue[head++];
+                compFaces.push(currF);
+
+                const i1 = this.indices[currF * 3];
+                const i2 = this.indices[currF * 3 + 1];
+                const i3 = this.indices[currF * 3 + 2];
+
+                const vertsOfFace = [i1, i2, i3];
+                for (const vIdx of vertsOfFace) {
+                    const neighbors = vertexToFaces[vIdx];
+                    for (let i = 0; i < neighbors.length; i++) {
+                        const nF = neighbors[i];
+                        if (!visitedFaces[nF]) {
+                            visitedFaces[nF] = 1;
+                            queue.push(nF);
+                        }
+                    }
+                }
+            }
+
+            components.push(compFaces);
+        }
+
+        if (components.length <= 1) {
+            return [this];
+        }
+
+        const meshes = [];
+        for (const compFaces of components) {
+            const newVerts = [];
+            const newColors = [];
+            const newNormals = [];
+            const newTexcoords = [];
+            const newIndices = [];
+
+            const oldToNewVert = new Map();
+
+            for (const fIdx of compFaces) {
+                for (let k = 0; k < 3; k++) {
+                    const oldV = this.indices[fIdx * 3 + k];
+                    let newV = oldToNewVert.get(oldV);
+
+                    if (newV === undefined) {
+                        newV = newVerts.length / 3;
+                        oldToNewVert.set(oldV, newV);
+
+                        newVerts.push(
+                            this.vertices[oldV * 3],
+                            this.vertices[oldV * 3 + 1],
+                            this.vertices[oldV * 3 + 2]
+                        );
+
+                        if (this.colors && this.colors.length >= (oldV + 1) * 4) {
+                            newColors.push(
+                                this.colors[oldV * 4],
+                                this.colors[oldV * 4 + 1],
+                                this.colors[oldV * 4 + 2],
+                                this.colors[oldV * 4 + 3]
+                            );
+                        } else {
+                            newColors.push(1, 1, 1, 1);
+                        }
+
+                        if (this.normals && this.normals.length >= (oldV + 1) * 3) {
+                            newNormals.push(
+                                this.normals[oldV * 3],
+                                this.normals[oldV * 3 + 1],
+                                this.normals[oldV * 3 + 2]
+                            );
+                        }
+
+                        if (this.texcoords && this.texcoords.length >= (oldV + 1) * 2) {
+                            newTexcoords.push(
+                                this.texcoords[oldV * 2],
+                                this.texcoords[oldV * 2 + 1]
+                            );
+                        }
+                    }
+
+                    newIndices.push(newV);
+                }
+            }
+
+            const mesh = new Mesh(
+                this.gl,
+                newVerts,
+                newIndices,
+                newNormals.length > 0 ? newNormals : null,
+                newColors.length > 0 ? newColors : null,
+                newTexcoords.length > 0 ? newTexcoords : null
+            );
+            meshes.push(mesh);
+        }
+
+        return meshes;
+    }
+
+    sliceByPlane(planePoint, planeNormal) {
+        const nx = planeNormal[0], ny = planeNormal[1], nz = planeNormal[2];
+        const len = Math.hypot(nx, ny, nz) || 1;
+        const norm = [nx / len, ny / len, nz / len];
+        const px = planePoint[0], py = planePoint[1], pz = planePoint[2];
+
+        const getDist = (vx, vy, vz) => {
+            return (vx - px) * norm[0] + (vy - py) * norm[1] + (vz - pz) * norm[2];
+        };
+
+        const sideA = { verts: [], colors: [], normals: [], texcoords: [], indices: [] };
+        const sideB = { verts: [], colors: [], normals: [], texcoords: [], indices: [] };
+
+        const addVertToSide = (side, vData) => {
+            const sideVerts = side.verts;
+            const newIdx = sideVerts.length / 3;
+
+            sideVerts.push(vData.pos[0], vData.pos[1], vData.pos[2]);
+            if (vData.color) side.colors.push(...vData.color); else side.colors.push(1, 1, 1, 1);
+            if (vData.normal) side.normals.push(...vData.normal);
+            if (vData.texcoord) side.texcoords.push(...vData.texcoord);
+
+            return newIdx;
+        };
+
+        const getVertData = (vIdx) => {
+            const p = [this.vertices[vIdx * 3], this.vertices[vIdx * 3 + 1], this.vertices[vIdx * 3 + 2]];
+            const c = this.colors && this.colors.length >= (vIdx + 1) * 4
+                ? [this.colors[vIdx * 4], this.colors[vIdx * 4 + 1], this.colors[vIdx * 4 + 2], this.colors[vIdx * 4 + 3]]
+                : [1, 1, 1, 1];
+            const n = this.normals && this.normals.length >= (vIdx + 1) * 3
+                ? [this.normals[vIdx * 3], this.normals[vIdx * 3 + 1], this.normals[vIdx * 3 + 2]]
+                : [0, 1, 0];
+            const t = this.texcoords && this.texcoords.length >= (vIdx + 1) * 2
+                ? [this.texcoords[vIdx * 2], this.texcoords[vIdx * 2 + 1]]
+                : [0, 0];
+
+            return { pos: p, color: c, normal: n, texcoord: t };
+        };
+
+        const interpolateVerts = (vA, vB, t) => {
+            const p = [
+                vA.pos[0] + t * (vB.pos[0] - vA.pos[0]),
+                vA.pos[1] + t * (vB.pos[1] - vA.pos[1]),
+                vA.pos[2] + t * (vB.pos[2] - vA.pos[2])
+            ];
+            const c = [
+                vA.color[0] + t * (vB.color[0] - vA.color[0]),
+                vA.color[1] + t * (vB.color[1] - vA.color[1]),
+                vA.color[2] + t * (vB.color[2] - vA.color[2]),
+                vA.color[3] + t * (vB.color[3] - vA.color[3])
+            ];
+            const nRaw = [
+                vA.normal[0] + t * (vB.normal[0] - vA.normal[0]),
+                vA.normal[1] + t * (vB.normal[1] - vA.normal[1]),
+                vA.normal[2] + t * (vB.normal[2] - vA.normal[2])
+            ];
+            const nLen = Math.hypot(nRaw[0], nRaw[1], nRaw[2]) || 1;
+            const n = [nRaw[0] / nLen, nRaw[1] / nLen, nRaw[2] / nLen];
+            const tex = [
+                vA.texcoord[0] + t * (vB.texcoord[0] - vA.texcoord[0]),
+                vA.texcoord[1] + t * (vB.texcoord[1] - vA.texcoord[1])
+            ];
+
+            return { pos: p, color: c, normal: n, texcoord: tex };
+        };
+
+        const addTriToSide = (side, v1, v2, v3) => {
+            const i1 = addVertToSide(side, v1);
+            const i2 = addVertToSide(side, v2);
+            const i3 = addVertToSide(side, v3);
+            side.indices.push(i1, i2, i3);
+        };
+
+        const numFaces = Math.floor(this.indices.length / 3);
+
+        for (let f = 0; f < numFaces; f++) {
+            const idx1 = this.indices[f * 3];
+            const idx2 = this.indices[f * 3 + 1];
+            const idx3 = this.indices[f * 3 + 2];
+
+            const v1 = getVertData(idx1);
+            const v2 = getVertData(idx2);
+            const v3 = getVertData(idx3);
+
+            const d1 = getDist(v1.pos[0], v1.pos[1], v1.pos[2]);
+            const d2 = getDist(v2.pos[0], v2.pos[1], v2.pos[2]);
+            const d3 = getDist(v3.pos[0], v3.pos[1], v3.pos[2]);
+
+            const posCount = (d1 >= 0 ? 1 : 0) + (d2 >= 0 ? 1 : 0) + (d3 >= 0 ? 1 : 0);
+
+            if (posCount === 3) {
+                addTriToSide(sideA, v1, v2, v3);
+            } else if (posCount === 0) {
+                addTriToSide(sideB, v1, v2, v3);
+            } else {
+                let vA, vB, vC, dA, dB, dC;
+                if ((d1 >= 0 && d2 < 0 && d3 < 0) || (d1 < 0 && d2 >= 0 && d3 >= 0)) {
+                    vA = v1; vB = v2; vC = v3; dA = d1; dB = d2; dC = d3;
+                } else if ((d2 >= 0 && d1 < 0 && d3 < 0) || (d2 < 0 && d1 >= 0 && d3 >= 0)) {
+                    vA = v2; vB = v3; vC = v1; dA = d2; dB = d3; dC = d1;
+                } else {
+                    vA = v3; vB = v1; vC = v2; dA = d3; dB = d1; dC = d2;
+                }
+
+                const tAB = dA / (dA - dB);
+                const tAC = dA / (dA - dC);
+
+                const vAB = interpolateVerts(vA, vB, Math.max(0, Math.min(1, tAB)));
+                const vAC = interpolateVerts(vA, vC, Math.max(0, Math.min(1, tAC)));
+
+                if (dA >= 0) {
+                    addTriToSide(sideA, vA, vAB, vAC);
+                    addTriToSide(sideB, vAB, vB, vC);
+                    addTriToSide(sideB, vAB, vC, vAC);
+                } else {
+                    addTriToSide(sideB, vA, vAB, vAC);
+                    addTriToSide(sideA, vAB, vB, vC);
+                    addTriToSide(sideA, vAB, vC, vAC);
+                }
+            }
+        }
+
+        if (sideA.indices.length === 0 || sideB.indices.length === 0) {
+            return null;
+        }
+
+        const meshA = new Mesh(
+            this.gl, sideA.verts, sideA.indices,
+            sideA.normals.length > 0 ? sideA.normals : null,
+            sideA.colors.length > 0 ? sideA.colors : null,
+            sideA.texcoords.length > 0 ? sideA.texcoords : null
+        );
+
+        const meshB = new Mesh(
+            this.gl, sideB.verts, sideB.indices,
+            sideB.normals.length > 0 ? sideB.normals : null,
+            sideB.colors.length > 0 ? sideB.colors : null,
+            sideB.texcoords.length > 0 ? sideB.texcoords : null
+        );
+
+        return [meshA, meshB];
+    }
+
+    separateSelectedFaces(selectedFaceIndices) {
+        if (!selectedFaceIndices || selectedFaceIndices.length === 0) return null;
+
+        const faceSet = new Set(selectedFaceIndices);
+        const numFaces = Math.floor(this.indices.length / 3);
+
+        const keptFaces = [];
+        const extractedFaces = [];
+
+        for (let f = 0; f < numFaces; f++) {
+            if (faceSet.has(f)) {
+                extractedFaces.push(f);
+            } else {
+                keptFaces.push(f);
+            }
+        }
+
+        if (extractedFaces.length === 0 || keptFaces.length === 0) {
+            return null; // Cannot separate all or none
+        }
+
+        const buildMeshFromFaces = (compFaces) => {
+            const newVerts = [];
+            const newColors = [];
+            const newNormals = [];
+            const newTexcoords = [];
+            const newIndices = [];
+
+            const oldToNewVert = new Map();
+
+            for (const fIdx of compFaces) {
+                for (let k = 0; k < 3; k++) {
+                    const oldV = this.indices[fIdx * 3 + k];
+                    let newV = oldToNewVert.get(oldV);
+
+                    if (newV === undefined) {
+                        newV = newVerts.length / 3;
+                        oldToNewVert.set(oldV, newV);
+
+                        newVerts.push(
+                            this.vertices[oldV * 3],
+                            this.vertices[oldV * 3 + 1],
+                            this.vertices[oldV * 3 + 2]
+                        );
+
+                        if (this.colors && this.colors.length >= (oldV + 1) * 4) {
+                            newColors.push(
+                                this.colors[oldV * 4],
+                                this.colors[oldV * 4 + 1],
+                                this.colors[oldV * 4 + 2],
+                                this.colors[oldV * 4 + 3]
+                            );
+                        } else {
+                            newColors.push(1, 1, 1, 1);
+                        }
+
+                        if (this.normals && this.normals.length >= (oldV + 1) * 3) {
+                            newNormals.push(
+                                this.normals[oldV * 3],
+                                this.normals[oldV * 3 + 1],
+                                this.normals[oldV * 3 + 2]
+                            );
+                        }
+
+                        if (this.texcoords && this.texcoords.length >= (oldV + 1) * 2) {
+                            newTexcoords.push(
+                                this.texcoords[oldV * 2],
+                                this.texcoords[oldV * 2 + 1]
+                            );
+                        }
+                    }
+
+                    newIndices.push(newV);
+                }
+            }
+
+            return new Mesh(
+                this.gl,
+                newVerts,
+                newIndices,
+                newNormals.length > 0 ? newNormals : null,
+                newColors.length > 0 ? newColors : null,
+                newTexcoords.length > 0 ? newTexcoords : null
+            );
+        };
+
+        const extractedMesh = buildMeshFromFaces(extractedFaces);
+        const keptMesh = buildMeshFromFaces(keptFaces);
+
+        this.vertices = keptMesh.vertices;
+        this.indices = keptMesh.indices;
+        this.colors = keptMesh.colors;
+        this.normals = keptMesh.normals;
+        if (keptMesh.texcoords) this.texcoords = keptMesh.texcoords;
+
+        this.rebuildBuffers();
+
+        return extractedMesh;
     }
 
     subdivide() {

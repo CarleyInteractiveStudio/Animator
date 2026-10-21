@@ -69,34 +69,43 @@ export class Gizmo {
         }
     }
 
-    renderSubElementOverlay(gl, programInfo, targetObject, selectedSubElement, viewMatrix, projectionMatrix) {
-        if (!targetObject || !targetObject.mesh || !selectedSubElement) return;
+    renderSubElementOverlay(gl, programInfo, targetObject, selectedSubElement, viewMatrix, projectionMatrix, selectedSubElements = null) {
+        if (!targetObject || !targetObject.mesh) return;
+
+        const subEls = selectedSubElements && selectedSubElements.length > 0 ? selectedSubElements : (selectedSubElement ? [selectedSubElement] : []);
+        if (subEls.length === 0) return;
 
         gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
         gl.uniformMatrix4fv(programInfo.uniformLocations.viewMatrix, false, viewMatrix);
 
         const modelMatrix = targetObject.getModelMatrix();
-        const type = selectedSubElement.type;
-        const idx = selectedSubElement.index;
-
         gl.uniform4f(programInfo.uniformLocations.tintColor, 1.0, 0.65, 0.0, 1.0);
 
-        if (type === 'vertex') {
-            const vIdx = idx * 3;
-            const vx = targetObject.mesh.vertices[vIdx];
-            const vy = targetObject.mesh.vertices[vIdx + 1];
-            const vz = targetObject.mesh.vertices[vIdx + 2];
+        for (const subEl of subEls) {
+            const type = subEl.type;
+            const idx = subEl.index;
 
-            const dotMatrix = mat4.create();
-            mat4.translate(dotMatrix, modelMatrix, [vx, vy, vz]);
-            gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, dotMatrix);
-            this.drawMesh(gl, programInfo, this.vertexDot);
-        } else if (type === 'face') {
-            const centroid = targetObject.mesh.getFaceCentroid(idx);
-            const dotMatrix = mat4.create();
-            mat4.translate(dotMatrix, modelMatrix, centroid);
-            gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, dotMatrix);
-            this.drawMesh(gl, programInfo, this.vertexDot);
+            if (type === 'vertex') {
+                const vIdx = idx * 3;
+                if (vIdx + 2 < targetObject.mesh.vertices.length) {
+                    const vx = targetObject.mesh.vertices[vIdx];
+                    const vy = targetObject.mesh.vertices[vIdx + 1];
+                    const vz = targetObject.mesh.vertices[vIdx + 2];
+
+                    const dotMatrix = mat4.create();
+                    mat4.translate(dotMatrix, modelMatrix, [vx, vy, vz]);
+                    gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, dotMatrix);
+                    this.drawMesh(gl, programInfo, this.vertexDot);
+                }
+            } else if (type === 'face') {
+                if (idx * 3 < targetObject.mesh.indices.length) {
+                    const centroid = targetObject.mesh.getFaceCentroid(idx);
+                    const dotMatrix = mat4.create();
+                    mat4.translate(dotMatrix, modelMatrix, centroid);
+                    gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, dotMatrix);
+                    this.drawMesh(gl, programInfo, this.vertexDot);
+                }
+            }
         }
     }
 

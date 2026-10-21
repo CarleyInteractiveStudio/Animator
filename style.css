@@ -697,3 +697,12 @@ body {
     background: #ff4d4d;
     color: #fff;
 }
+
+/* Box Select Marquee Rectangle Overlay */
+.box-select-rect {
+    position: absolute;
+    border: 1px dashed #00d2ff;
+    background: rgba(0, 210, 255, 0.15);
+    pointer-events: none;
+    z-index: 100;
+}
