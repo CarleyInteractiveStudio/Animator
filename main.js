@@ -3,7 +3,7 @@ import { GameObject } from './engine/gameObject.js';
 import { Mesh } from './engine/mesh.js';
 import { Sculpt } from './engine/sculpt.js';
 import { Paint } from './engine/paint.js';
-import { vec3 } from './engine/math.js';
+import { vec3, mat4, mat3 } from './engine/math.js';
 import { OBJLoader, GLTFLoader } from './engine/importer.js';
 import { Armature, Bone } from './engine/bone.js';
 import { VolumetricLightComponent, DarknessZoneComponent } from './engine/lightEffects.js';
@@ -127,6 +127,178 @@ function updateHierarchyPanel() {
     jerarquiaContent.appendChild(ul);
 }
 
+function separateLoosePartsOfSelected() {
+    const obj = Engine.selectedGameObject;
+    if (!obj || !obj.mesh) return;
+
+    const meshes = obj.mesh.separateLooseParts();
+    if (!meshes || meshes.length <= 1) return;
+
+    const parent = obj.parent;
+    if (parent) {
+        parent.removeChild(obj);
+    }
+    const idx = Engine.scene.gameObjects.indexOf(obj);
+    if (idx !== -1) {
+        Engine.scene.gameObjects.splice(idx, 1);
+    }
+
+    const baseName = obj.name;
+    const newObjs = [];
+
+    for (let i = 0; i < meshes.length; i++) {
+        const childObj = new GameObject(`${baseName}_Parte${i + 1}`, meshes[i]);
+        vec3.copy(childObj.transform.position, obj.transform.position);
+        vec3.copy(childObj.transform.scale, obj.transform.scale);
+        childObj.setRotationDegrees(
+            obj.transform.rotationDegrees[0],
+            obj.transform.rotationDegrees[1],
+            obj.transform.rotationDegrees[2]
+        );
+        if (obj.material) {
+            childObj.material = { ...obj.material };
+        }
+
+        if (parent) {
+            parent.addChild(childObj);
+        }
+        Engine.scene.addGameObject(childObj);
+        newObjs.push(childObj);
+    }
+
+    if (newObjs.length > 0) {
+        selectObject(newObjs[0]);
+    }
+}
+
+function separateSelectionOfSelected() {
+    const obj = Engine.selectedGameObject;
+    if (!obj || !obj.mesh) return;
+
+    const subEls = Engine.selectedSubElements && Engine.selectedSubElements.length > 0
+        ? Engine.selectedSubElements
+        : (Engine.selectedSubElement ? [Engine.selectedSubElement] : []);
+
+    if (subEls.length === 0) return;
+
+    const faceIndices = subEls.filter(s => s.type === 'face').map(s => s.index);
+    if (faceIndices.length === 0) return;
+
+    const extractedMesh = obj.mesh.separateSelectedFaces(faceIndices);
+    if (!extractedMesh) return;
+
+    const baseName = obj.name;
+    const newObj = new GameObject(`${baseName}_Selección`, extractedMesh);
+    vec3.copy(newObj.transform.position, obj.transform.position);
+    vec3.copy(newObj.transform.scale, obj.transform.scale);
+    newObj.setRotationDegrees(
+        obj.transform.rotationDegrees[0],
+        obj.transform.rotationDegrees[1],
+        obj.transform.rotationDegrees[2]
+    );
+    if (obj.material) {
+        newObj.material = { ...obj.material };
+    }
+
+    if (obj.parent) {
+        obj.parent.addChild(newObj);
+    }
+    Engine.scene.addGameObject(newObj);
+
+    Engine.selectedSubElement = null;
+    Engine.selectedSubElements = [];
+
+    selectObject(newObj);
+}
+
+function knifeCutSelected() {
+    const obj = Engine.selectedGameObject;
+    if (!obj || !obj.mesh) return;
+
+    let cutterObj = null;
+    if (Engine.scene && Engine.scene.gameObjects) {
+        for (const candidate of Engine.scene.gameObjects) {
+            if (candidate !== obj && candidate.mesh && (candidate.name.toLowerCase().includes('plano') || candidate.name.toLowerCase().includes('cuchillo') || candidate.name.toLowerCase().includes('corte'))) {
+                cutterObj = candidate;
+                break;
+            }
+        }
+    }
+
+    let worldPlanePoint, worldPlaneNormal;
+
+    if (cutterObj) {
+        const cutterMat = cutterObj.getModelMatrix();
+        worldPlanePoint = [cutterMat[12], cutterMat[13], cutterMat[14]];
+        worldPlaneNormal = [cutterMat[1], cutterMat[5], cutterMat[9]];
+    } else {
+        worldPlanePoint = [...obj.transform.position];
+        worldPlaneNormal = [0, 1, 0];
+    }
+
+    const targetMat = obj.getModelMatrix();
+    const invTargetMat = mat4.create();
+    mat4.invert(invTargetMat, targetMat);
+
+    const localPoint = [
+        invTargetMat[0]*worldPlanePoint[0] + invTargetMat[4]*worldPlanePoint[1] + invTargetMat[8]*worldPlanePoint[2] + invTargetMat[12],
+        invTargetMat[1]*worldPlanePoint[0] + invTargetMat[5]*worldPlanePoint[1] + invTargetMat[9]*worldPlanePoint[2] + invTargetMat[13],
+        invTargetMat[2]*worldPlanePoint[0] + invTargetMat[6]*worldPlanePoint[1] + invTargetMat[10]*worldPlanePoint[2] + invTargetMat[14]
+    ];
+
+    const invMat3 = mat3.create();
+    mat3.fromMat4(invMat3, invTargetMat);
+    mat3.transpose(invMat3, invMat3);
+
+    const localNormal = [
+        invMat3[0]*worldPlaneNormal[0] + invMat3[3]*worldPlaneNormal[1] + invMat3[6]*worldPlaneNormal[2],
+        invMat3[1]*worldPlaneNormal[0] + invMat3[4]*worldPlaneNormal[1] + invMat3[7]*worldPlaneNormal[2],
+        invMat3[2]*worldPlaneNormal[0] + invMat3[5]*worldPlaneNormal[1] + invMat3[8]*worldPlaneNormal[2]
+    ];
+
+    const cutMeshes = obj.mesh.sliceByPlane(localPoint, localNormal);
+    if (!cutMeshes || cutMeshes.length < 2) return;
+
+    const parent = obj.parent;
+    if (parent) {
+        parent.removeChild(obj);
+    }
+    const idx = Engine.scene.gameObjects.indexOf(obj);
+    if (idx !== -1) {
+        Engine.scene.gameObjects.splice(idx, 1);
+    }
+
+    const baseName = obj.name;
+    const cutObj1 = new GameObject(`${baseName}_Corte1`, cutMeshes[0]);
+    vec3.copy(cutObj1.transform.position, obj.transform.position);
+    vec3.copy(cutObj1.transform.scale, obj.transform.scale);
+    cutObj1.setRotationDegrees(
+        obj.transform.rotationDegrees[0],
+        obj.transform.rotationDegrees[1],
+        obj.transform.rotationDegrees[2]
+    );
+    if (obj.material) cutObj1.material = { ...obj.material };
+
+    const cutObj2 = new GameObject(`${baseName}_Corte2`, cutMeshes[1]);
+    vec3.copy(cutObj2.transform.position, obj.transform.position);
+    vec3.copy(cutObj2.transform.scale, obj.transform.scale);
+    cutObj2.setRotationDegrees(
+        obj.transform.rotationDegrees[0],
+        obj.transform.rotationDegrees[1],
+        obj.transform.rotationDegrees[2]
+    );
+    if (obj.material) cutObj2.material = { ...obj.material };
+
+    if (parent) {
+        parent.addChild(cutObj1);
+        parent.addChild(cutObj2);
+    }
+    Engine.scene.addGameObject(cutObj1);
+    Engine.scene.addGameObject(cutObj2);
+
+    selectObject(cutObj1);
+}
+
 function selectObject(gameObject) {
     Engine.selectedGameObject = gameObject;
     updateHierarchyPanel();
@@ -228,6 +400,28 @@ function updateInspectorPanel() {
             </div>
         </div>
     `;
+
+    if (selectedObject.mesh) {
+        html += `
+        <div class="inspector-section" style="border: 1px solid #007acc44; background: #007acc0a; padding: 10px; border-radius: 6px; margin-top: 10px;">
+            <div class="inspector-section-title" style="color: #00d2ff; display: flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00d2ff" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                <span>Operaciones de Malla y Separación</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
+                <button id="btn-insp-separate-loose" style="padding: 6px; background: #2ecc7122; color: #2ecc71; border: 1px solid #2ecc71; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 11px;">
+                    Separar Partes Sueltas
+                </button>
+                <button id="btn-insp-separate-sel" style="padding: 6px; background: #00d2ff22; color: #00d2ff; border: 1px solid #00d2ff; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 11px;">
+                    Separar Caras Seleccionadas
+                </button>
+                <button id="btn-insp-knife" style="padding: 6px; background: #e74c3c22; color: #e74c3c; border: 1px solid #e74c3c; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 11px;">
+                    Cortar con Cuchillo (Bisect)
+                </button>
+            </div>
+        </div>
+        `;
+    }
 
     if (isTerrain) {
         const matScale = selectedObject.material.textureScale !== undefined ? selectedObject.material.textureScale : 1.0;
@@ -674,6 +868,37 @@ function updateInspectorPanel() {
             }
         });
     }
+
+    const ctxSepLoose = document.getElementById('ctx-separate-loose');
+    const btnToolSepLoose = document.getElementById('btn-tool-separate-loose');
+    if (ctxSepLoose) ctxSepLoose.addEventListener('click', separateLoosePartsOfSelected);
+    if (btnToolSepLoose) btnToolSepLoose.addEventListener('click', separateLoosePartsOfSelected);
+
+    const ctxSepSel = document.getElementById('ctx-separate-sel');
+    const btnToolSepSel = document.getElementById('btn-tool-separate-sel');
+    if (ctxSepSel) ctxSepSel.addEventListener('click', separateSelectionOfSelected);
+    if (btnToolSepSel) btnToolSepSel.addEventListener('click', separateSelectionOfSelected);
+
+    const ctxKnife = document.getElementById('ctx-knife-cut');
+    const btnToolKnife = document.getElementById('btn-tool-knife');
+    if (ctxKnife) ctxKnife.addEventListener('click', knifeCutSelected);
+    if (btnToolKnife) btnToolKnife.addEventListener('click', knifeCutSelected);
+
+    const btnTopSepLoose = document.getElementById('btn-top-separate-loose');
+    const btnTopSepSel = document.getElementById('btn-top-separate-sel');
+    const btnTopKnife = document.getElementById('btn-top-knife');
+
+    if (btnTopSepLoose) btnTopSepLoose.addEventListener('click', separateLoosePartsOfSelected);
+    if (btnTopSepSel) btnTopSepSel.addEventListener('click', separateSelectionOfSelected);
+    if (btnTopKnife) btnTopKnife.addEventListener('click', knifeCutSelected);
+
+    const btnInspSepLoose = inspectorContent.querySelector('#btn-insp-separate-loose');
+    const btnInspSepSel = inspectorContent.querySelector('#btn-insp-separate-sel');
+    const btnInspKnife = inspectorContent.querySelector('#btn-insp-knife');
+
+    if (btnInspSepLoose) btnInspSepLoose.addEventListener('click', separateLoosePartsOfSelected);
+    if (btnInspSepSel) btnInspSepSel.addEventListener('click', separateSelectionOfSelected);
+    if (btnInspKnife) btnInspKnife.addEventListener('click', knifeCutSelected);
 
     if (chkTideEnabled) {
         chkTideEnabled.addEventListener('change', (e) => {
@@ -1778,6 +2003,10 @@ function setupToolbarEvents() {
             } else if (['brush', 'eraser', 'fill'].includes(selectedTool)) {
                 Engine.mode = 'paint';
                 if (statusMode) statusMode.textContent = 'Modo Pintura';
+            } else if (selectedTool === 'select_box') {
+                Engine.mode = 'model';
+                Engine.subElementMode = 'face';
+                if (statusMode) statusMode.textContent = 'Modo Modelo (Box Select Caras)';
             }
         });
     });
@@ -1895,6 +2124,11 @@ function main() {
             let clickStartX = 0;
             let clickStartY = 0;
 
+            let boxSelectDiv = document.createElement('div');
+            boxSelectDiv.className = 'box-select-rect';
+            boxSelectDiv.style.display = 'none';
+            visorContent.appendChild(boxSelectDiv);
+
             canvas.addEventListener('mousedown', (e) => {
                 if (e.button === 0) { // Left click
                     isMouseDown = true;
@@ -1920,6 +2154,25 @@ function main() {
                 const dy = e.clientY - lastMouseY;
                 lastMouseX = e.clientX;
                 lastMouseY = e.clientY;
+
+                const distMoved = Math.hypot(e.clientX - clickStartX, e.clientY - clickStartY);
+
+                if (Engine.mode === 'model' && !activeGizmoAxis && distMoved > 5) {
+                    const rect = canvas.getBoundingClientRect();
+                    const x1 = Math.min(clickStartX, e.clientX) - rect.left;
+                    const y1 = Math.min(clickStartY, e.clientY) - rect.top;
+                    const x2 = Math.max(clickStartX, e.clientX) - rect.left;
+                    const y2 = Math.max(clickStartY, e.clientY) - rect.top;
+
+                    boxSelectDiv.style.left = `${x1}px`;
+                    boxSelectDiv.style.top = `${y1}px`;
+                    boxSelectDiv.style.width = `${x2 - x1}px`;
+                    boxSelectDiv.style.height = `${y2 - y1}px`;
+                    boxSelectDiv.style.display = 'block';
+
+                    Engine.selectedSubElements = Engine.pickSubElementsInRect(x1, y1, x2, y2);
+                    return;
+                }
 
                 if (Engine.mode === 'object' && activeGizmoAxis) {
                     const axisMap = { x: 0, y: 1, z: 2 };
@@ -1991,12 +2244,15 @@ function main() {
             canvas.addEventListener('mouseup', (e) => {
                 if (e.button === 0 && isMouseDown) {
                     isMouseDown = false;
+                    boxSelectDiv.style.display = 'none';
+
                     const distMoved = Math.hypot(e.clientX - clickStartX, e.clientY - clickStartY);
 
                     if (distMoved < 5 && !activeGizmoAxis) {
                         if (Engine.mode === 'model' && Engine.selectedGameObject) {
                             const subEl = Engine.pickSubElement(e.clientX, e.clientY);
                             Engine.selectedSubElement = subEl;
+                            Engine.selectedSubElements = subEl ? [subEl] : [];
                         } else {
                             const pickedObj = Engine.pickObject(e.clientX, e.clientY);
                             selectObject(pickedObj);

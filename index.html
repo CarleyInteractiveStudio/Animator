@@ -22,6 +22,10 @@
                 <div class="dropdown-menu">
                     <div class="dropdown-item disabled">Deshacer</div>
                     <div class="dropdown-item disabled">Rehacer</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" id="btn-top-separate-loose" style="color: #2ecc71; font-weight: bold;">Separar Partes Sueltas</div>
+                    <div class="dropdown-item" id="btn-top-separate-sel" style="color: #00d2ff; font-weight: bold;">Separar Selección (Caras)</div>
+                    <div class="dropdown-item" id="btn-top-knife" style="color: #e74c3c; font-weight: bold;">Cortar con Cuchillo</div>
                 </div>
             </div>
             <div class="menu-item">
@@ -115,6 +119,19 @@
                         <div class="submenu-item" data-tool="brush">Pincel de Color</div>
                         <div class="submenu-item" data-tool="eraser">Borrador</div>
                         <div class="submenu-item" data-tool="fill">Relleno Completo</div>
+                    </div>
+                </div>
+
+                <div class="tool-category" id="cat-model">
+                    <button class="tool-btn" title="Modelado y Mallas">
+                        <svg class="tool-icon" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                        <span>Modelado</span>
+                    </button>
+                    <div class="tool-submenu">
+                        <div class="submenu-item" data-tool="select_box">Cuadro de Selección (Box Select)</div>
+                        <div class="submenu-item" id="btn-tool-separate-loose" style="color: #2ecc71; font-weight: bold;">Separar Partes Sueltas</div>
+                        <div class="submenu-item" id="btn-tool-separate-sel" style="color: #00d2ff; font-weight: bold;">Separar Selección</div>
+                        <div class="submenu-item" id="btn-tool-knife" style="color: #e74c3c; font-weight: bold;">Cortar con Cuchillo</div>
                     </div>
                 </div>
             </div>
@@ -450,6 +467,10 @@
         <div class="context-menu-divider"></div>
         <div class="context-menu-item" data-create="cloud" style="color: #4da6ff; font-weight: bold;">+ Nube 3D Volumétrica</div>
         <div class="context-menu-item" data-create="windzone" style="color: #00d2ff; font-weight: bold;">+ Zona de Viento 3D</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" id="ctx-separate-loose" style="color: #2ecc71; font-weight: bold;">Separar Partes Sueltas</div>
+        <div class="context-menu-item" id="ctx-separate-sel" style="color: #00d2ff; font-weight: bold;">Separar Selección (Caras)</div>
+        <div class="context-menu-item" id="ctx-knife-cut" style="color: #e74c3c; font-weight: bold;">Cortar con Cuchillo</div>
         <div class="context-menu-divider"></div>
         <div class="context-menu-item" id="ctx-delete-object" style="color: #ff4d4d;">Eliminar Objeto</div>
     </div>

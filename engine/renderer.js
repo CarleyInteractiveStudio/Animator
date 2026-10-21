@@ -1032,8 +1032,8 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.uniform1f(programInfo.uniformLocations.windElasticity, 0.0);
         gizmo.render(gl, programInfo, selectedGameObject, viewMatrix, projectionMatrix, mode, tool, brushRadius);
 
-        if (mode === 'model' && Engine && Engine.selectedSubElement) {
-            gizmo.renderSubElementOverlay(gl, programInfo, selectedGameObject, Engine.selectedSubElement, viewMatrix, projectionMatrix);
+        if (mode === 'model' && Engine && (Engine.selectedSubElement || (Engine.selectedSubElements && Engine.selectedSubElements.length > 0))) {
+            gizmo.renderSubElementOverlay(gl, programInfo, selectedGameObject, Engine.selectedSubElement, viewMatrix, projectionMatrix, Engine.selectedSubElements);
         }
     }
 }
