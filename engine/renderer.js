@@ -325,7 +325,6 @@ export function initWebGL(canvas) {
         uniform float u_cloudTranslucency;
         uniform vec3 u_cloudTint;
 
-        // 3D Volumetric Hash & Noise for per-pixel continuous surface texturing
         float hash3D(vec3 p) {
             p = fract(p * vec3(443.897, 441.423, 437.195));
             p += dot(p, p.yzx + 19.19);
@@ -348,7 +347,6 @@ export function initWebGL(canvas) {
             return noise3D(vec3(p, 0.0));
         }
 
-        // Per-Pixel Triplanar Projection mapping for seamless textures across all angles and meshes
         vec4 getTriplanarCheckerboard(vec3 pos, vec3 norm, float scale) {
             vec3 blending = pow(abs(norm), vec3(4.0));
             blending = max(blending, 0.00001);
@@ -393,21 +391,17 @@ export function initWebGL(canvas) {
 
                 float diff = max(dot(normal, lightDir), 0.0);
 
-                // Subsurface Forward Light Scattering (Light transmitting through cloud body)
                 float forwardScatter = max(0.0, dot(-viewDir, lightDir));
                 float sss = pow(forwardScatter, 2.5) * u_cloudTranslucency;
 
                 float lighting = u_ambientIntensity + diff * 0.55 + sss * 0.7;
                 vec3 finalRGB = baseColor.rgb * u_cloudTint * lighting;
 
-                // Warm golden scattering glow on edges
                 finalRGB += vec3(1.0, 0.82, 0.45) * sss * 0.5;
 
-                // 3D Procedural Cloud Noise Density & Edge Semi-Transparency
                 vec3 cloudPos = v_worldPosition * 1.5;
                 float noiseDensity = noise(cloudPos.xz) * 0.35 + noise(cloudPos.xy * 2.0) * 0.15;
 
-                // Edge falloff based on view-normal alignment
                 float edgeAlpha = pow(max(0.0, dot(normal, viewDir)), 0.65);
                 float cloudAlpha = clamp(baseColor.a * (0.65 + noiseDensity) * edgeAlpha, 0.2, 0.95);
 
@@ -439,7 +433,6 @@ export function initWebGL(canvas) {
                 float diff = max(dot(normal, lightDir), 0.0);
                 float ambient = u_ambientIntensity;
 
-                // Specular highlight
                 vec3 viewDir = normalize(-v_worldPosition);
                 vec3 halfDir = normalize(lightDir + viewDir);
                 float specAngle = max(dot(normal, halfDir), 0.0);
@@ -448,7 +441,6 @@ export function initWebGL(canvas) {
 
                 float lighting = ambient + diff * 0.65;
 
-                // Apply Darkness Zone Volumetric Extinction
                 if (u_darknessEnabled) {
                     float distToCenter = length(v_worldPosition - u_darknessCenter);
                     if (distToCenter < u_darknessRadius) {
@@ -460,7 +452,6 @@ export function initWebGL(canvas) {
 
                 vec3 finalRGB = baseColor.rgb * lighting + vec3(specular);
 
-                // 3D Volumetric Ray-marching Light Shafts / God Rays
                 if (u_godRaysEnabled) {
                     vec3 rayStep = lightDir * 0.2;
                     vec3 currentPos = v_worldPosition;
@@ -476,7 +467,6 @@ export function initWebGL(canvas) {
                     finalRGB += u_godRaysColor * godRayIntensity;
                 }
 
-                // Dark Volumetric Absorption Fog
                 if (u_darknessEnabled) {
                     float distToCenter = length(v_worldPosition - u_darknessCenter);
                     if (distToCenter < u_darknessRadius) {
@@ -553,7 +543,6 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     const env = Engine ? Engine.environment : null;
     const timeOfDay = env ? env.timeOfDay : 12.0;
 
-    // Calculate celestial Sun & Moon positions based on Time of Day
     const angle = ((timeOfDay - 6.0) / 24.0) * Math.PI * 2.0;
     const sunDir = vec3.fromValues(Math.cos(angle), Math.sin(angle), 0.3);
     vec3.normalize(sunDir, sunDir);
@@ -564,9 +553,8 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.useProgram(skyProgramInfo.program);
         gl.depthMask(false);
 
-        // Inverse View-Rotation * Projection Matrix for full 3D viewport camera tracking
         const viewRot = mat4.clone(viewMatrix);
-        viewRot[12] = 0; viewRot[13] = 0; viewRot[14] = 0; // strip camera position translation
+        viewRot[12] = 0; viewRot[13] = 0; viewRot[14] = 0;
 
         const projViewRot = mat4.create();
         mat4.multiply(projViewRot, projectionMatrix, viewRot);
@@ -587,7 +575,7 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.uniform1f(skyProgramInfo.uniformLocations.windSpeed, env ? env.windSpeed : 0.5);
         gl.uniform1i(skyProgramInfo.uniformLocations.showSkyClouds, env && env.showSkyClouds !== undefined ? (env.showSkyClouds ? 1 : 0) : 1);
 
-        let presetCode = 1; // Default: Dynamic 3D Sky
+        let presetCode = 1;
         if (env) {
             if (env.preset === 'dark') presetCode = 0;
             else if (env.preset === 'custom') presetCode = 2;
@@ -620,7 +608,6 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
     gl.uniformMatrix4fv(programInfo.uniformLocations.viewMatrix, false, viewMatrix);
 
-    // Active light source direction (Sun during day, Moon during night)
     let activeLightDir = sunDir;
     if (sunDir[1] < -0.05) {
         activeLightDir = moonDir;
@@ -629,13 +616,14 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     gl.uniform3fv(programInfo.uniformLocations.lightDirection, activeLightDir);
     gl.uniform1f(programInfo.uniformLocations.ambientIntensity, env ? env.ambientIntensity : 0.35);
 
-    // Objects are lit by default
     gl.uniform1i(programInfo.uniformLocations.isUnlit, 0);
 
     for (const gameObject of scene.gameObjects) {
-        if (!gameObject.mesh) {
-            continue;
-        }
+        // Hide pure wind zone objects in mesh render pass (they are rendered as Gizmo in edit mode, or particles in play mode)
+        if (gameObject.windZone && !gameObject.mesh) continue;
+        if (gameObject.windZone) continue; // Wind zone object itself is invisible in edit mode except for its area box gizmo
+
+        if (!gameObject.mesh) continue;
 
         gl.bindBuffer(gl.ARRAY_BUFFER, gameObject.mesh.vertexBuffer);
         gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
@@ -662,7 +650,6 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         mat3.normalFromMat4(normalMatrix, modelMatrix);
         gl.uniformMatrix3fv(programInfo.uniformLocations.normalMatrix, false, normalMatrix);
 
-        // Cloud Specific Properties
         if (gameObject.cloudProps) {
             gl.uniform1i(programInfo.uniformLocations.isCloud, 1);
             gl.uniform1f(programInfo.uniformLocations.cloudTranslucency, gameObject.cloudProps.translucency !== undefined ? gameObject.cloudProps.translucency : 0.6);
@@ -671,14 +658,12 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
             gl.uniform1i(programInfo.uniformLocations.isCloud, 0);
         }
 
-        // Material & Volumetric / Darkness uniforms
         const mat = gameObject.material || {};
         gl.uniform1i(programInfo.uniformLocations.textureType, mat.textureType || 0);
         gl.uniform1f(programInfo.uniformLocations.textureScale, mat.textureScale || 5.0);
         gl.uniform1f(programInfo.uniformLocations.metallic, mat.metallic !== undefined ? mat.metallic : 0.2);
         gl.uniform1f(programInfo.uniformLocations.roughness, mat.roughness !== undefined ? mat.roughness : 0.5);
 
-        // God Rays Component Uniforms
         if (gameObject.volumetricLight) {
             gl.uniform1i(programInfo.uniformLocations.godRaysEnabled, gameObject.volumetricLight.enabled ? 1 : 0);
             gl.uniform1f(programInfo.uniformLocations.godRaysDensity, gameObject.volumetricLight.density);
@@ -688,7 +673,6 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
             gl.uniform1i(programInfo.uniformLocations.godRaysEnabled, 0);
         }
 
-        // Darkness Zone Component Uniforms
         if (gameObject.darknessZone) {
             gl.uniform1i(programInfo.uniformLocations.darknessEnabled, gameObject.darknessZone.enabled ? 1 : 0);
             gl.uniform3fv(programInfo.uniformLocations.darknessCenter, gameObject.transform.position);
@@ -708,32 +692,36 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
         gl.drawElements(gl.TRIANGLES, gameObject.mesh.vertexCount, gl.UNSIGNED_SHORT, 0);
     }
 
-    // --- 3. RENDER 3D WIND STREAM RIBBONS & TORNADO PARTICLES ---
-    if (Engine && Engine.windParticleSystem && Engine.windParticleSystem.particles.length > 0) {
+    // --- 3. RENDER 3D WIND STREAM RIBBONS & TORNADO VOLUMETRIC CLOUDS (ONLY WHEN PLAYING) ---
+    if (Engine && Engine.isPlaying && Engine.windParticleSystem && Engine.windParticleSystem.particles.length > 0) {
         if (!Engine.windRayMesh) Engine.windRayMesh = Mesh.createWindRay(gl);
-        const mesh = Engine.windRayMesh;
+        if (!Engine.cloudPuffMesh) Engine.cloudPuffMesh = Mesh.createCloudPuff(gl);
+
+        const rayMesh = Engine.windRayMesh;
+        const puffMesh = Engine.cloudPuffMesh;
 
         gl.uniform1i(programInfo.uniformLocations.isUnlit, 1);
         gl.uniform1i(programInfo.uniformLocations.isCloud, 0);
         gl.uniform1i(programInfo.uniformLocations.textureType, 0);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffer);
-        gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
-
-        if (mesh.colorBuffer) {
-            gl.bindBuffer(gl.ARRAY_BUFFER, mesh.colorBuffer);
-            gl.vertexAttribPointer(programInfo.attribLocations.vertexColor, 4, gl.FLOAT, false, 0, 0);
-            gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
-        }
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
-
         for (const p of Engine.windParticleSystem.particles) {
+            const currentMesh = (p.isTornado && p.isCloudPuff) ? puffMesh : rayMesh;
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, currentMesh.vertexBuffer);
+            gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
+
+            if (currentMesh.colorBuffer) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, currentMesh.colorBuffer);
+                gl.vertexAttribPointer(programInfo.attribLocations.vertexColor, 4, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
+            }
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, currentMesh.indexBuffer);
+
             const particleMatrix = mat4.create();
             mat4.translate(particleMatrix, particleMatrix, p.position);
 
-            // Orient particle along its 3D flow tangent direction
             const tx = p.tangent ? p.tangent[0] : 1;
             const ty = p.tangent ? p.tangent[1] : 0;
             const tz = p.tangent ? p.tangent[2] : 0;
@@ -742,15 +730,24 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
 
             mat4.rotateY(particleMatrix, particleMatrix, rotY);
             mat4.rotateX(particleMatrix, particleMatrix, rotX);
-            mat4.scale(particleMatrix, particleMatrix, [p.scale, p.scale, p.scale * 1.5]);
+
+            const particleScale = p.scale * (currentMesh === puffMesh ? 1.8 : 1.0);
+            mat4.scale(particleMatrix, particleMatrix, [particleScale, particleScale, particleScale * 1.5]);
 
             gl.uniformMatrix4fv(programInfo.uniformLocations.modelMatrix, false, particleMatrix);
-            gl.uniform4f(programInfo.uniformLocations.tintColor, 1.0, 1.0, 1.0, p.isTornado ? 0.9 : 0.7);
 
-            gl.drawElements(gl.TRIANGLES, mesh.vertexCount, gl.UNSIGNED_SHORT, 0);
+            const finalAlpha = Math.max(0.0, Math.min(1.0, (p.alpha !== undefined ? p.alpha : 0.8)));
+            if (currentMesh === puffMesh) {
+                gl.uniform4f(programInfo.uniformLocations.tintColor, 0.85, 0.88, 0.92, finalAlpha * 0.7);
+            } else {
+                gl.uniform4f(programInfo.uniformLocations.tintColor, 1.0, 1.0, 1.0, finalAlpha * (p.isTornado ? 0.95 : 0.75));
+            }
+
+            gl.drawElements(gl.TRIANGLES, currentMesh.vertexCount, gl.UNSIGNED_SHORT, 0);
         }
     }
 
+    // --- 4. RENDER GIZMOS (BOUNDING BOX AREA, SELECTION HANDLES) ---
     if (gizmo && selectedGameObject) {
         gl.uniform1i(programInfo.uniformLocations.isUnlit, 1);
         gl.uniform1i(programInfo.uniformLocations.textureType, 0);

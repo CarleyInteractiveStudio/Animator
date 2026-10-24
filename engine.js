@@ -254,7 +254,6 @@ const Engine = {
                 const vy = mesh.vertices[i * 3 + 1];
                 const vz = mesh.vertices[i * 3 + 2];
 
-                // Transform vertex position to world space
                 const wPos = [
                     modelMatrix[0]*vx + modelMatrix[4]*vy + modelMatrix[8]*vz + modelMatrix[12],
                     modelMatrix[1]*vx + modelMatrix[5]*vy + modelMatrix[9]*vz + modelMatrix[13],
@@ -336,13 +335,15 @@ const Engine = {
                 }
             }
 
-            // Wind Physics & Particle Updates
+            // Wind Physics & Particle Updates (pass Engine.isPlaying explicitly)
             if (Engine.scene) {
                 const windZones = Engine.scene.gameObjects.filter(o => o.windZone && o.windZone.enabled);
                 if (Engine.windParticleSystem) {
-                    Engine.windParticleSystem.update(windZones, deltaTime, Engine.time);
+                    Engine.windParticleSystem.update(windZones, deltaTime, Engine.time, Engine.isPlaying);
                 }
-                applyWindPhysics(Engine.scene, deltaTime, Engine.time);
+                if (Engine.isPlaying) {
+                    applyWindPhysics(Engine.scene, deltaTime, Engine.time);
+                }
             }
 
             updateCamera(deltaTime);
