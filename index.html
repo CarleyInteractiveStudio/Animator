@@ -158,12 +158,12 @@
 
                     <div class="env-row-split">
                         <div class="env-col">
-                            <label>Ancho (X): <span id="val-terrain-width" class="highlight-val">30m</span></label>
-                            <input type="range" id="slider-terrain-width" min="10" max="80" step="2" value="30" class="modern-range">
+                            <label>Ancho (X en Metros):</label>
+                            <input type="number" id="input-terrain-width" min="10" max="2000" step="5" value="40" style="width: 100%; padding: 5px; background: #222; color: #00d2ff; border: 1px solid #444; border-radius: 4px; font-weight: bold; font-size: 13px;">
                         </div>
                         <div class="env-col">
-                            <label>Largo (Z): <span id="val-terrain-depth" class="highlight-val">30m</span></label>
-                            <input type="range" id="slider-terrain-depth" min="10" max="80" step="2" value="30" class="modern-range">
+                            <label>Largo (Z en Metros):</label>
+                            <input type="number" id="input-terrain-depth" min="10" max="2000" step="5" value="40" style="width: 100%; padding: 5px; background: #222; color: #00d2ff; border: 1px solid #444; border-radius: 4px; font-weight: bold; font-size: 13px;">
                         </div>
                     </div>
 
@@ -210,12 +210,32 @@
                     <div class="env-row-split" style="margin-top: 8px;">
                         <div class="env-col">
                             <label>Densidad de Césped 3D:</label>
-                            <input type="range" id="slider-grass-density" min="0" max="60" step="5" value="25" class="modern-range">
+                            <input type="range" id="slider-grass-density" min="0" max="100" step="5" value="35" class="modern-range">
                         </div>
-                        <div class="env-col" style="display: flex; align-items: center; gap: 8px; margin-top: 16px;">
-                            <input type="checkbox" id="chk-terrain-water" checked style="accent-color: #007acc; cursor: pointer;">
-                            <label for="chk-terrain-water" style="font-size: 11px; color: #eee; cursor: pointer; font-weight: bold;">Generar Superficie de Lago / Agua</label>
+                        <div class="env-col">
+                            <label>Resolución / Calidad de Texturas PBR:</label>
+                            <select id="select-terrain-texture-quality" style="width: 100%; padding: 5px; background: #222; color: #2ecc71; border: 1px solid #444; border-radius: 4px; font-weight: bold; font-size: 11px;">
+                                <option value="2.0">Ultra HD (Detalle Triplanar Alto)</option>
+                                <option value="1.0" selected>HD Estándar (Equilibrado)</option>
+                                <option value="0.5">Rendimiento (Textura Extendida)</option>
+                            </select>
                         </div>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px;">
+                        <input type="checkbox" id="chk-terrain-water" checked style="accent-color: #007acc; cursor: pointer;">
+                        <label for="chk-terrain-water" style="font-size: 11px; color: #eee; cursor: pointer; font-weight: bold;">Generar Superficie de Lago / Agua Realista</label>
+                    </div>
+                </div>
+
+                <!-- Progress overlay during progressive creation -->
+                <div id="terrain-progress-container" style="display: none; margin-top: 16px; padding: 12px; background: #1a1a1a; border: 1px solid #2ecc71; border-radius: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span id="terrain-progress-status" style="font-size: 11px; color: #2ecc71; font-weight: bold;">Generando terreno...</span>
+                        <span id="terrain-progress-percent" style="font-size: 11px; color: #00d2ff; font-weight: bold;">0%</span>
+                    </div>
+                    <div style="width: 100%; height: 8px; background: #333; border-radius: 4px; overflow: hidden;">
+                        <div id="terrain-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #2ecc71, #00d2ff); transition: width 0.15s ease;"></div>
                     </div>
                 </div>
 
@@ -223,7 +243,7 @@
                     <button id="btn-cancel-terrain" style="padding: 8px 16px; background: #333; color: #ccc; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 12px;">Cancelar</button>
                     <button id="btn-generate-terrain" style="padding: 8px 20px; background: #2ecc71; color: #111; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                        Generar Terreno Roblox
+                        Generar Terreno Roblox (Progresivo)
                     </button>
                 </div>
             </div>
