@@ -15,8 +15,10 @@ const Engine = {
     camera: null,
     selectedGameObject: null,
     gizmo: null,
-    mode: 'object', // 'object', 'sculpt', 'paint'
-    activeTool: 'translate', // 'translate', 'rotate', 'scale', 'deform', 'inflate', 'smooth', 'brush', 'eraser', 'fill'
+    mode: 'object', // 'object', 'sculpt', 'paint', 'animation', 'model'
+    activeTool: 'translate', // 'translate', 'rotate', 'scale', 'deform', 'inflate', 'smooth', 'brush', 'eraser', 'fill', 'box-create', 'sketch-draw', 'extrude'
+    subElementMode: 'vertex', // 'vertex', 'edge', 'face'
+    selectedSubElement: null, // { type: 'vertex'|'edge'|'face', index: number }
     brushRadius: 0.8,
     brushColor: [1.0, 0.2, 0.2, 1.0],
 
@@ -177,6 +179,116 @@ const Engine = {
         }
 
         return closestObj;
+    },
+
+    pickSubElement: (clientX, clientY) => {
+        if (!canvas || !camera || !Engine.selectedGameObject || !Engine.selectedGameObject.mesh) return null;
+
+        const rect = canvas.getBoundingClientRect();
+        const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        const y = -(((clientY - rect.top) / rect.height) * 2 - 1);
+
+        const aspect = canvas.clientWidth / canvas.clientHeight || 1.0;
+        const projectionMatrix = mat4.create();
+        mat4.perspective(projectionMatrix, 45 * Math.PI / 180, aspect, 0.1, 100.0);
+
+        const viewMatrix = camera.getViewMatrix();
+        const invProj = mat4.create();
+        mat4.invert(invProj, projectionMatrix);
+
+        const invView = mat4.create();
+        mat4.invert(invView, viewMatrix);
+
+        const clipRay = [x, y, -1.0, 1.0];
+        const eyeRay = [
+            invProj[0]*clipRay[0] + invProj[4]*clipRay[1] + invProj[8]*clipRay[2] + invProj[12]*clipRay[3],
+            invProj[1]*clipRay[0] + invProj[5]*clipRay[1] + invProj[9]*clipRay[2] + invProj[13]*clipRay[3],
+            invProj[2]*clipRay[0] + invProj[6]*clipRay[1] + invProj[10]*clipRay[2] + invProj[14]*clipRay[3],
+            invProj[3]*clipRay[0] + invProj[7]*clipRay[1] + invProj[11]*clipRay[2] + invProj[15]*clipRay[3]
+        ];
+
+        const rayDirEye = vec3.fromValues(eyeRay[0], eyeRay[1], -1.0);
+        vec3.normalize(rayDirEye, rayDirEye);
+
+        const invView3 = mat3.create();
+        mat3.fromMat4(invView3, invView);
+
+        const rayDirWorld = vec3.create();
+        vec3.transformMat3(rayDirWorld, rayDirEye, invView3);
+        vec3.normalize(rayDirWorld, rayDirWorld);
+
+        const rayOrigin = camera.position;
+        const targetObj = Engine.selectedGameObject;
+        const modelMatrix = targetObj.getModelMatrix();
+        const mesh = targetObj.mesh;
+
+        if (Engine.subElementMode === 'vertex') {
+            let closestVertexIdx = -1;
+            let minDistance = Infinity;
+
+            for (let i = 0; i < mesh.vertices.length / 3; i++) {
+                const vx = mesh.vertices[i * 3];
+                const vy = mesh.vertices[i * 3 + 1];
+                const vz = mesh.vertices[i * 3 + 2];
+
+                // Transform vertex position to world space
+                const wPos = [
+                    modelMatrix[0]*vx + modelMatrix[4]*vy + modelMatrix[8]*vz + modelMatrix[12],
+                    modelMatrix[1]*vx + modelMatrix[5]*vy + modelMatrix[9]*vz + modelMatrix[13],
+                    modelMatrix[2]*vx + modelMatrix[6]*vy + modelMatrix[10]*vz + modelMatrix[14]
+                ];
+
+                const oc = vec3.create();
+                vec3.subtract(oc, rayOrigin, wPos);
+                const b = vec3.dot(oc, rayDirWorld);
+                const c = vec3.dot(oc, oc) - 0.25 * 0.25;
+                const discriminant = b * b - c;
+
+                if (discriminant > 0) {
+                    const t = -b - Math.sqrt(discriminant);
+                    if (t > 0 && t < minDistance) {
+                        minDistance = t;
+                        closestVertexIdx = i;
+                    }
+                }
+            }
+
+            if (closestVertexIdx !== -1) {
+                return { type: 'vertex', index: closestVertexIdx };
+            }
+        } else if (Engine.subElementMode === 'face') {
+            let closestFaceIdx = -1;
+            let minDistance = Infinity;
+
+            for (let f = 0; f < mesh.indices.length / 3; f++) {
+                const centroid = mesh.getFaceCentroid(f);
+                const wPos = [
+                    modelMatrix[0]*centroid[0] + modelMatrix[4]*centroid[1] + modelMatrix[8]*centroid[2] + modelMatrix[12],
+                    modelMatrix[1]*centroid[0] + modelMatrix[5]*centroid[1] + modelMatrix[9]*centroid[2] + modelMatrix[13],
+                    modelMatrix[2]*centroid[0] + modelMatrix[6]*centroid[1] + modelMatrix[10]*centroid[2] + modelMatrix[14]
+                ];
+
+                const oc = vec3.create();
+                vec3.subtract(oc, rayOrigin, wPos);
+                const b = vec3.dot(oc, rayDirWorld);
+                const c = vec3.dot(oc, oc) - 0.35 * 0.35;
+                const discriminant = b * b - c;
+
+                if (discriminant > 0) {
+                    const t = -b - Math.sqrt(discriminant);
+                    if (t > 0 && t < minDistance) {
+                        minDistance = t;
+                        closestFaceIdx = f;
+                    }
+                }
+            }
+
+            if (closestFaceIdx !== -1) {
+                return { type: 'face', index: closestFaceIdx };
+            }
+        }
+
+        return null;
     },
 
     start: () => {

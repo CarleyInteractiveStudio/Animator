@@ -4,6 +4,9 @@ import { Mesh } from './engine/mesh.js';
 import { Sculpt } from './engine/sculpt.js';
 import { Paint } from './engine/paint.js';
 import { vec3 } from './engine/math.js';
+import { OBJLoader, GLTFLoader } from './engine/importer.js';
+import { Armature, Bone } from './engine/bone.js';
+import { VolumetricLightComponent, DarknessZoneComponent } from './engine/lightEffects.js';
 
 let objectCounters = {
     cube: 1,
@@ -98,6 +101,13 @@ function updateInspectorPanel() {
         return;
     }
 
+    if (!selectedObject.material) {
+        selectedObject.material = { textureType: 0, textureScale: 5.0, metallic: 0.2, roughness: 0.5 };
+    }
+
+    const hasGodRays = !!selectedObject.volumetricLight;
+    const hasDarkness = !!selectedObject.darknessZone;
+
     inspectorContent.innerHTML = `
         <div class="inspector-section">
             <div class="inspector-section-title">Objeto: ${selectedObject.name}</div>
@@ -159,6 +169,44 @@ function updateInspectorPanel() {
                 </div>
             </div>
         </div>
+
+        <div class="inspector-section" style="margin-top: 15px;">
+            <button id="btn-open-comp-modal" style="width: 100%; background: #007acc; color: #fff; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">
+                + Añadir Componente
+            </button>
+        </div>
+
+        ${hasGodRays ? `
+        <div class="inspector-section">
+            <div class="inspector-section-title">Efectos de Luz Volumétrica (God Rays)</div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Densidad de Rayo: <span id="val-god-density">${selectedObject.volumetricLight.density.toFixed(2)}</span></label>
+                <input type="range" id="god-density" min="0.1" max="2.0" step="0.05" value="${selectedObject.volumetricLight.density}" style="width: 100%;">
+            </div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Exposición / Brillo: <span id="val-god-exposure">${selectedObject.volumetricLight.exposure.toFixed(2)}</span></label>
+                <input type="range" id="god-exposure" min="0.1" max="2.0" step="0.05" value="${selectedObject.volumetricLight.exposure}" style="width: 100%;">
+            </div>
+        </div>
+        ` : ''}
+
+        ${hasDarkness ? `
+        <div class="inspector-section">
+            <div class="inspector-section-title">Zona de Oscuridad y Niebla Volumétrica</div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Radio de Influencia: <span id="val-dark-radius">${selectedObject.darknessZone.radius.toFixed(1)}</span></label>
+                <input type="range" id="dark-radius" min="0.5" max="10.0" step="0.5" value="${selectedObject.darknessZone.radius}" style="width: 100%;">
+            </div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Cancelación de Luz (Intensidad): <span id="val-dark-intensity">${selectedObject.darknessZone.intensity.toFixed(2)}</span></label>
+                <input type="range" id="dark-intensity" min="0.0" max="1.0" step="0.05" value="${selectedObject.darknessZone.intensity}" style="width: 100%;">
+            </div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;">Niebla Oscura (Volumétrica): <span id="val-dark-fog">${selectedObject.darknessZone.fogDensity.toFixed(2)}</span></label>
+                <input type="range" id="dark-fog" min="0.0" max="1.0" step="0.05" value="${selectedObject.darknessZone.fogDensity}" style="width: 100%;">
+            </div>
+        </div>
+        ` : ''}
     `;
 
     const posXInput = inspectorContent.querySelector('#pos-x');
@@ -191,6 +239,129 @@ function updateInspectorPanel() {
     [posXInput, posYInput, posZInput, rotXInput, rotYInput, rotZInput, scaleXInput, scaleYInput, scaleZInput].forEach(input => {
         if (input) input.addEventListener('input', updateTransform);
     });
+
+    const btnOpenCompModal = inspectorContent.querySelector('#btn-open-comp-modal');
+    if (btnOpenCompModal) {
+        btnOpenCompModal.addEventListener('click', () => {
+            const modal = document.getElementById('modal-component');
+            if (modal) modal.style.display = 'flex';
+        });
+    }
+
+    const godDensity = inspectorContent.querySelector('#god-density');
+    const godExposure = inspectorContent.querySelector('#god-exposure');
+
+    if (godDensity) {
+        godDensity.addEventListener('input', (e) => {
+            selectedObject.volumetricLight.density = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-god-density').textContent = selectedObject.volumetricLight.density.toFixed(2);
+        });
+    }
+
+    if (godExposure) {
+        godExposure.addEventListener('input', (e) => {
+            selectedObject.volumetricLight.exposure = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-god-exposure').textContent = selectedObject.volumetricLight.exposure.toFixed(2);
+        });
+    }
+
+    const darkRadius = inspectorContent.querySelector('#dark-radius');
+    const darkIntensity = inspectorContent.querySelector('#dark-intensity');
+    const darkFog = inspectorContent.querySelector('#dark-fog');
+
+    if (darkRadius) {
+        darkRadius.addEventListener('input', (e) => {
+            selectedObject.darknessZone.radius = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-dark-radius').textContent = selectedObject.darknessZone.radius.toFixed(1);
+        });
+    }
+
+    if (darkIntensity) {
+        darkIntensity.addEventListener('input', (e) => {
+            selectedObject.darknessZone.intensity = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-dark-intensity').textContent = selectedObject.darknessZone.intensity.toFixed(2);
+        });
+    }
+
+    if (darkFog) {
+        darkFog.addEventListener('input', (e) => {
+            selectedObject.darknessZone.fogDensity = parseFloat(e.target.value);
+            inspectorContent.querySelector('#val-dark-fog').textContent = selectedObject.darknessZone.fogDensity.toFixed(2);
+        });
+    }
+}
+
+function setupModals() {
+    const modalComp = document.getElementById('modal-component');
+    const closeComp = document.getElementById('close-component-modal');
+
+    const modalEnv = document.getElementById('modal-environment');
+    const btnOpenEnv = document.getElementById('btn-open-env-modal');
+    const closeEnv = document.getElementById('close-env-modal');
+
+    if (closeComp && modalComp) {
+        closeComp.addEventListener('click', () => modalComp.style.display = 'none');
+    }
+
+    if (btnOpenEnv && modalEnv) {
+        btnOpenEnv.addEventListener('click', () => modalEnv.style.display = 'flex');
+    }
+
+    if (closeEnv && modalEnv) {
+        closeEnv.addEventListener('click', () => modalEnv.style.display = 'none');
+    }
+
+    document.querySelectorAll('[data-add-comp]').forEach(card => {
+        card.addEventListener('click', (e) => {
+            const compType = e.currentTarget.getAttribute('data-add-comp');
+            if (Engine.selectedGameObject) {
+                if (compType === 'godrays') {
+                    Engine.selectedGameObject.volumetricLight = new VolumetricLightComponent();
+                } else if (compType === 'darkness') {
+                    Engine.selectedGameObject.darknessZone = new DarknessZoneComponent();
+                }
+                updateInspectorPanel();
+            }
+            if (modalComp) modalComp.style.display = 'none';
+        });
+    });
+
+    const visorPanel = document.getElementById('visor-panel');
+    const presetDark = document.getElementById('preset-dark');
+    const presetSky = document.getElementById('preset-sky');
+    const presetCustom = document.getElementById('preset-custom');
+    const envFileInput = document.getElementById('env-file-input');
+
+    if (presetDark) {
+        presetDark.addEventListener('click', () => {
+            document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+            presetDark.classList.add('active');
+            if (visorPanel) visorPanel.style.background = '#141414';
+        });
+    }
+
+    if (presetSky) {
+        presetSky.addEventListener('click', () => {
+            document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+            presetSky.classList.add('active');
+            if (visorPanel) visorPanel.style.background = 'linear-gradient(to bottom, #1e3c72, #2a5298, #6dd5ed)';
+        });
+    }
+
+    if (envFileInput) {
+        envFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file && visorPanel) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+                    if (presetCustom) presetCustom.classList.add('active');
+                    visorPanel.style.background = `url(${evt.target.result}) center/cover no-repeat`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
 }
 
 function createPrimitiveMesh(type) {
@@ -243,6 +414,111 @@ function setupCreateMenuEvents() {
             spawnPrimitive(type);
         });
     });
+
+    const btnAddBone = document.getElementById('btn-add-bone');
+    if (btnAddBone) {
+        btnAddBone.addEventListener('click', () => {
+            const boneMesh = Bone.createBoneMesh(Engine.gl, 1.2);
+            const boneObj = new GameObject('Hueso 1', boneMesh);
+            boneObj.material = { isUnlit: true, color: [0.9, 0.7, 0.2, 1.0] };
+            vec3.set(boneObj.transform.position, 0, 0, 0);
+            Engine.scene.addGameObject(boneObj);
+            selectObject(boneObj);
+        });
+    }
+}
+
+function setupFileImportExportEvents() {
+    const fileInput = document.getElementById('file-import-input');
+    const btnImport = document.getElementById('btn-import-obj');
+    const btnExportOBJ = document.getElementById('btn-export-obj');
+    const btnExportGLTF = document.getElementById('btn-export-gltf');
+
+    if (btnImport && fileInput) {
+        btnImport.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const text = event.target.result;
+                let mesh = null;
+                if (file.name.endsWith('.obj')) {
+                    mesh = OBJLoader.parseOBJ(Engine.gl, text);
+                } else if (file.name.endsWith('.gltf')) {
+                    try {
+                        const json = JSON.parse(text);
+                        mesh = GLTFLoader.parseGLTF(Engine.gl, json);
+                    } catch (err) {
+                        console.error("Error parsing glTF:", err);
+                    }
+                }
+
+                if (mesh) {
+                    const obj = new GameObject(file.name.split('.')[0], mesh);
+                    Engine.scene.addGameObject(obj);
+                    selectObject(obj);
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    if (btnExportOBJ) {
+        btnExportOBJ.addEventListener('click', () => {
+            if (!Engine.selectedGameObject) return;
+            const objData = OBJLoader.exportOBJ(Engine.selectedGameObject);
+            const blob = new Blob([objData], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${Engine.selectedGameObject.name}.obj`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+    }
+
+    if (btnExportGLTF) {
+        btnExportGLTF.addEventListener('click', () => {
+            if (!Engine.selectedGameObject) return;
+            const gltfData = GLTFLoader.exportGLTF(Engine.selectedGameObject);
+            if (!gltfData) return;
+            const blob = new Blob([gltfData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${Engine.selectedGameObject.name}.gltf`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+    }
+}
+
+function setupKeyboardShortcuts() {
+    window.addEventListener('keydown', (e) => {
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+            return;
+        }
+
+        const key = e.key.toLowerCase();
+
+        if (key === 'escape') {
+            e.preventDefault();
+            selectObject(null);
+            Engine.selectedSubElement = null;
+        } else if (key === '1') {
+            Engine.subElementMode = 'vertex';
+            Engine.selectedSubElement = null;
+        } else if (key === '3') {
+            Engine.subElementMode = 'face';
+            Engine.selectedSubElement = null;
+        } else if (key === 'e' && Engine.mode === 'model' && Engine.selectedGameObject && Engine.selectedSubElement && Engine.selectedSubElement.type === 'face') {
+            e.preventDefault();
+            Engine.selectedGameObject.mesh.extrudeFace(Engine.selectedSubElement.index, 0.5);
+            Engine.selectedSubElement = null;
+        }
+    });
 }
 
 function setupToolbarEvents() {
@@ -288,7 +564,10 @@ function main() {
 
         if (Engine.initialize(canvas)) {
             setupCreateMenuEvents();
+            setupFileImportExportEvents();
+            setupModals();
             setupToolbarEvents();
+            setupKeyboardShortcuts();
 
             const sphereMesh = Mesh.createSphere(Engine.gl);
             const cubeMesh = Mesh.createCube(Engine.gl);
@@ -345,7 +624,25 @@ function main() {
                     const axisIdx = axisMap[activeGizmoAxis];
 
                     if (axisIdx !== undefined) {
-                        if (Engine.activeTool === 'translate') {
+                        if (Engine.mode === 'model' && Engine.selectedSubElement && Engine.selectedGameObject.mesh) {
+                            const mesh = Engine.selectedGameObject.mesh;
+                            const sub = Engine.selectedSubElement;
+
+                            if (sub.type === 'vertex') {
+                                const vIdx = sub.index * 3 + axisIdx;
+                                mesh.vertices[vIdx] += delta;
+                                mesh.updateVertexBuffer();
+                            } else if (sub.type === 'face') {
+                                const i1 = mesh.indices[sub.index * 3];
+                                const i2 = mesh.indices[sub.index * 3 + 1];
+                                const i3 = mesh.indices[sub.index * 3 + 2];
+
+                                mesh.vertices[i1 * 3 + axisIdx] += delta;
+                                mesh.vertices[i2 * 3 + axisIdx] += delta;
+                                mesh.vertices[i3 * 3 + axisIdx] += delta;
+                                mesh.updateVertexBuffer();
+                            }
+                        } else if (Engine.activeTool === 'translate') {
                             Engine.selectedGameObject.transform.position[axisIdx] += delta;
                         } else if (Engine.activeTool === 'rotate') {
                             const deg = Engine.selectedGameObject.transform.rotationDegrees[axisIdx] + delta * 20;
@@ -373,9 +670,14 @@ function main() {
                     isMouseDown = false;
                     const distMoved = Math.hypot(e.clientX - clickStartX, e.clientY - clickStartY);
 
-                    if (distMoved < 5 && Engine.mode === 'object' && !activeGizmoAxis) {
-                        const pickedObj = Engine.pickObject(e.clientX, e.clientY);
-                        selectObject(pickedObj);
+                    if (distMoved < 5 && !activeGizmoAxis) {
+                        if (Engine.mode === 'model' && Engine.selectedGameObject) {
+                            const subEl = Engine.pickSubElement(e.clientX, e.clientY);
+                            Engine.selectedSubElement = subEl;
+                        } else {
+                            const pickedObj = Engine.pickObject(e.clientX, e.clientY);
+                            selectObject(pickedObj);
+                        }
                     }
                     activeGizmoAxis = null;
                 }
