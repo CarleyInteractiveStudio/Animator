@@ -425,4 +425,220 @@ export class Mesh {
 
         return new Mesh(gl, vertices, indices);
     }
+
+    static createCloud(gl, seed = 1) {
+        return Mesh.createProceduralCloud(gl, seed);
+    }
+
+    static createProceduralCloud(gl, seed = 1) {
+        const vertices = [];
+        const indices = [];
+
+        // Pseudo-random generator based on seed
+        function rnd(s) {
+            const x = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        }
+
+        // Randomized shape parameters from seed
+        const stretchX = 1.2 + rnd(seed * 1.1) * 1.6;
+        const stretchY = 0.5 + rnd(seed * 2.3) * 0.7;
+        const stretchZ = 0.8 + rnd(seed * 3.7) * 0.9;
+        const noiseScale = 1.8 + rnd(seed * 4.9) * 2.2;
+        const noiseBumpiness = 0.35 + rnd(seed * 5.2) * 0.45;
+
+        // Smooth 3D organic sinusoidal FBM displacement noise
+        function fbm3D(x, y, z) {
+            let val = 0.0;
+            let freq = 1.2;
+            let amp = 0.22;
+
+            for (let i = 0; i < 3; i++) {
+                const sx = x * freq + (seed % 100) * 1.7;
+                const sy = y * freq + (seed % 100) * 2.3;
+                const sz = z * freq + (seed % 100) * 3.1;
+
+                const n = 0.5 * (Math.sin(sx) + Math.sin(sy + sz) + Math.cos(sz + sx));
+                val += n * amp;
+                freq *= 1.8;
+                amp *= 0.45;
+            }
+            return val;
+        }
+
+        const latBands = 36;
+        const longBands = 36;
+
+        for (let lat = 0; lat <= latBands; lat++) {
+            const theta = (lat * Math.PI) / latBands;
+            const sinTheta = Math.sin(theta);
+            const cosTheta = Math.cos(theta);
+
+            for (let lon = 0; lon <= longBands; lon++) {
+                const phi = (lon * 2 * Math.PI) / longBands;
+                const nx = Math.cos(phi) * sinTheta;
+                const ny = cosTheta;
+                const nz = Math.sin(phi) * sinTheta;
+
+                // Base ellipsoid coordinates
+                let px = nx * stretchX;
+                let py = ny * stretchY;
+                let pz = nz * stretchZ;
+
+                // Continuous FBM volumetric displacement along normal vector
+                const displacement = fbm3D(px, py, pz);
+                px += nx * displacement;
+                py += ny * displacement * 1.1; // Organic billowing around entire cloud body
+                pz += nz * displacement;
+
+                vertices.push(px, py, pz);
+            }
+        }
+
+        for (let lat = 0; lat < latBands; lat++) {
+            for (let lon = 0; lon < longBands; lon++) {
+                const first = lat * (longBands + 1) + lon;
+                const second = first + longBands + 1;
+
+                indices.push(first, first + 1, second);
+                indices.push(second, second + 1, first + 1);
+            }
+        }
+
+        // Return unified single continuous mesh with smooth auto-recalculated normals
+        return new Mesh(gl, vertices, indices);
+    }
+
+    static createTornadoVortex(gl) {
+        // Minimal subtle ground ring anchor for Tornado position handle
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+        const segs = 16;
+        const rad = 0.5;
+
+        for (let i = 0; i <= segs; i++) {
+            const a = (i * Math.PI * 2) / segs;
+            vertices.push(Math.cos(a) * rad, 0.05, Math.sin(a) * rad);
+            vertices.push(Math.cos(a) * (rad + 0.05), 0.05, Math.sin(a) * (rad + 0.05));
+            colors.push(0.3, 0.8, 1.0, 0.4, 0.3, 0.8, 1.0, 0.0);
+        }
+        for (let i = 0; i < segs; i++) {
+            const i1 = i * 2;
+            indices.push(i1, i1 + 1, i1 + 2, i1 + 1, i1 + 3, i1 + 2);
+        }
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
+    static createWindRay(gl) {
+        // 3D volumetric cross-profile curved ribbon segment (visible from all camera angles)
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        const segments = 8;
+        const length = 1.2;
+        const w = 0.04;
+
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const z = (t - 0.5) * length;
+            const curveY = Math.sin(t * Math.PI) * 0.12; // Natural 3D curve flow
+            const alpha = Math.sin(t * Math.PI) * 0.75;  // Fades softly at head and tail
+
+            // Horizontal plane vertices
+            vertices.push(-w, curveY, z,   w, curveY, z);
+            colors.push(0.85, 0.95, 1.0, alpha,   0.85, 0.95, 1.0, alpha);
+
+            // Vertical plane vertices (cross section for 3D visibility)
+            vertices.push(0, curveY - w, z,   0, curveY + w, z);
+            colors.push(0.85, 0.95, 1.0, alpha,   0.85, 0.95, 1.0, alpha);
+        }
+
+        for (let i = 0; i < segments; i++) {
+            const base = i * 4;
+            const next = (i + 1) * 4;
+
+            // Horizontal quad
+            indices.push(base, base + 1, next + 1, base, next + 1, next);
+            // Vertical quad
+            indices.push(base + 2, base + 3, next + 3, base + 2, next + 3, next + 2);
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
+
+    static createCinemaCamera(gl) {
+        // Game engine style Camera Gizmo: 3D frustum wireframe lines + top triangle indicator
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+
+        function addThickLine(x1, y1, z1, x2, y2, z2, radius, r, g, b, a = 1.0) {
+            const start = vertices.length / 3;
+            const dx = x2 - x1, dy = y2 - y1, dz = z2 - z1;
+            const len = Math.hypot(dx, dy, dz);
+            if (len < 0.0001) return;
+
+            let nx = -dy, ny = dx, nz = 0;
+            if (Math.abs(nx) < 0.001 && Math.abs(ny) < 0.001) { nx = 1; ny = 0; }
+            const nlen = Math.hypot(nx, ny, nz);
+            nx = (nx / nlen) * radius; ny = (ny / nlen) * radius; nz = (nz / nlen) * radius;
+
+            const px = (dy * nz - dz * ny) / radius;
+            const py = (dz * nx - dx * nz) / radius;
+            const pz = (dx * ny - dy * nx) / radius;
+            const plen = Math.hypot(px, py, pz);
+            const rx = (px / plen) * radius, ry = (py / plen) * radius, rz = (pz / plen) * radius;
+
+            vertices.push(
+                x1 - nx - rx, y1 - ny - ry, z1 - nz - rz,
+                x1 + nx - rx, y1 + ny - ry, z1 + nz - rz,
+                x1 + nx + rx, y1 + ny + ry, z1 + nz + rz,
+                x1 - nx + rx, y1 - ny + ry, z1 - nz + rz,
+                x2 - nx - rx, y2 - ny - ry, z2 - nz - rz,
+                x2 + nx - rx, y2 + ny - ry, z2 + nz - rz,
+                x2 + nx + rx, y2 + ny + ry, z2 + nz + rz,
+                x2 - nx + rx, y2 - ny + ry, z2 - nz + rz
+            );
+            const quadIndices = [
+                0, 1, 2, 0, 2, 3,   4, 6, 5, 4, 7, 6,
+                3, 2, 6, 3, 6, 7,   0, 5, 1, 0, 4, 5,
+                1, 5, 6, 1, 6, 2,   4, 0, 3, 4, 3, 7
+            ];
+            for (const idx of quadIndices) indices.push(start + idx);
+            for (let i = 0; i < 8; i++) colors.push(r, g, b, a);
+        }
+
+        const cr = 0.2, cg = 0.8, cb = 1.0; // Game engine cyan
+        const rad = 0.012;
+
+        // Origin point (0,0,0)
+        // Frustum pyramid corners at front (-Z)
+        const fw = 0.45, fh = 0.32, fz = -0.9;
+        const fp = [
+            [-fw, -fh, fz],
+            [ fw, -fh, fz],
+            [ fw,  fh, fz],
+            [-fw,  fh, fz]
+        ];
+
+        // 4 pyramid lines from camera origin (0,0,0) to frustum corners
+        for (let i = 0; i < 4; i++) {
+            addThickLine(0, 0, 0, fp[i][0], fp[i][1], fp[i][2], rad, cr, cg, cb);
+        }
+
+        // Frustum rectangle outline
+        for (let i = 0; i < 4; i++) {
+            const next = (i + 1) % 4;
+            addThickLine(fp[i][0], fp[i][1], fp[i][2], fp[next][0], fp[next][1], fp[next][2], rad, cr, cg, cb);
+        }
+
+        // Top triangle direction indicator
+        addThickLine(0, fh, fz, 0, fh + 0.25, fz, rad, cr, cg, cb);
+        addThickLine(-fw * 0.5, fh, fz, 0, fh + 0.25, fz, rad, cr, cg, cb);
+        addThickLine(fw * 0.5, fh, fz, 0, fh + 0.25, fz, rad, cr, cg, cb);
+
+        return new Mesh(gl, vertices, indices, null, colors);
+    }
 }

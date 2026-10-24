@@ -10,6 +10,7 @@ export class GameObject {
             rotation: quat.create(),
             scale: vec3.fromValues(1, 1, 1),
         };
+        this.cloudProps = null; // { seed: 1, preset: 'white'|'rain'|'sunset', translucency: 0.6, tint: [1,1,1] }
     }
 
     setRotationDegrees(xDeg, yDeg, zDeg) {
