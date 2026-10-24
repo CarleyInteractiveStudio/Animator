@@ -319,6 +319,174 @@ export class Mesh {
         return new Mesh(gl, vertices, indices, null, colors);
     }
 
+    // --- 3D Water Bodies: River, Lake, Ocean ---
+    static createRiverMesh(gl, pathPoints, width = 3.2) {
+        if (!pathPoints || pathPoints.length < 2) {
+            pathPoints = [
+                [-15, 4.0, -15],
+                [-8, 2.5, -5],
+                [0, 1.2, 5],
+                [10, 0.5, 12]
+            ];
+        }
+
+        // Subdivide path smoothly for realistic curved river geometry
+        const densePath = [];
+        const subdivisionsPerSegment = 8;
+        for (let i = 0; i < pathPoints.length - 1; i++) {
+            const p0 = pathPoints[i];
+            const p1 = pathPoints[i + 1];
+            for (let s = 0; s < subdivisionsPerSegment; s++) {
+                const t = s / subdivisionsPerSegment;
+                const x = p0[0] * (1 - t) + p1[0] * t;
+                const y = p0[1] * (1 - t) + p1[1] * t;
+                const z = p0[2] * (1 - t) + p1[2] * t;
+                densePath.push([x, y, z]);
+            }
+        }
+        densePath.push(pathPoints[pathPoints.length - 1]);
+
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+        const texcoords = [];
+
+        const numSegments = densePath.length;
+        const halfW = width / 2;
+
+        for (let i = 0; i < numSegments; i++) {
+            const p = densePath[i];
+            const px = p[0], py = p[1], pz = p[2];
+
+            let dirX = 0, dirZ = 1;
+            if (i < numSegments - 1) {
+                const nextP = densePath[i + 1];
+                dirX = nextP[0] - px;
+                dirZ = nextP[2] - pz;
+            } else if (i > 0) {
+                const prevP = densePath[i - 1];
+                dirX = px - prevP[0];
+                dirZ = pz - prevP[2];
+            }
+
+            const len = Math.hypot(dirX, dirZ) || 1.0;
+            dirX /= len;
+            dirZ /= len;
+
+            // Perpendicular normal vector in XZ plane
+            const normX = -dirZ;
+            const normZ = dirX;
+
+            const vProgress = i / (numSegments - 1);
+
+            // Left vertex (sits snugly in carved riverbed channel)
+            vertices.push(px - normX * halfW, py - 0.02, pz - normZ * halfW);
+            colors.push(0.1, 0.65, 0.75, 0.85);
+            texcoords.push(0.0, vProgress * 12.0);
+
+            // Center vertex
+            vertices.push(px, py - 0.05, pz);
+            colors.push(0.08, 0.60, 0.72, 0.90);
+            texcoords.push(0.5, vProgress * 12.0);
+
+            // Right vertex
+            vertices.push(px + normX * halfW, py - 0.02, pz + normZ * halfW);
+            colors.push(0.1, 0.65, 0.75, 0.85);
+            texcoords.push(1.0, vProgress * 12.0);
+        }
+
+        for (let i = 0; i < numSegments - 1; i++) {
+            const base = i * 3;
+            const next = (i + 1) * 3;
+
+            // Left quad
+            indices.push(base, next, base + 1);
+            indices.push(base + 1, next, next + 1);
+
+            // Right quad
+            indices.push(base + 1, next + 1, base + 2);
+            indices.push(base + 2, next + 1, next + 2);
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors, texcoords);
+    }
+
+    static createLakeMesh(gl, radiusX = 10, radiusZ = 10, subdivisions = 32) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+        const texcoords = [];
+
+        const stepX = (radiusX * 2) / subdivisions;
+        const stepZ = (radiusZ * 2) / subdivisions;
+
+        for (let z = 0; z <= subdivisions; z++) {
+            const posZ = -radiusZ + z * stepZ;
+            for (let x = 0; x <= subdivisions; x++) {
+                const posX = -radiusX + x * stepX;
+                vertices.push(posX, 0.0, posZ);
+                colors.push(0.12, 0.62, 0.68, 0.82);
+                texcoords.push(x / subdivisions, z / subdivisions);
+            }
+        }
+
+        for (let z = 0; z < subdivisions; z++) {
+            for (let x = 0; x < subdivisions; x++) {
+                const row1 = z * (subdivisions + 1);
+                const row2 = (z + 1) * (subdivisions + 1);
+
+                const i1 = row1 + x;
+                const i2 = row1 + x + 1;
+                const i3 = row2 + x;
+                const i4 = row2 + x + 1;
+
+                indices.push(i1, i3, i2);
+                indices.push(i2, i3, i4);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors, texcoords);
+    }
+
+    static createOceanMesh(gl, width = 80, depth = 80, subdivisions = 64) {
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+        const texcoords = [];
+
+        const halfW = width / 2;
+        const halfD = depth / 2;
+        const stepX = width / subdivisions;
+        const stepZ = depth / subdivisions;
+
+        for (let z = 0; z <= subdivisions; z++) {
+            const posZ = -halfD + z * stepZ;
+            for (let x = 0; x <= subdivisions; x++) {
+                const posX = -halfW + x * stepX;
+                vertices.push(posX, 0.0, posZ);
+                colors.push(0.02, 0.35, 0.72, 0.88);
+                texcoords.push(x / subdivisions, z / subdivisions);
+            }
+        }
+
+        for (let z = 0; z < subdivisions; z++) {
+            for (let x = 0; x < subdivisions; x++) {
+                const row1 = z * (subdivisions + 1);
+                const row2 = (z + 1) * (subdivisions + 1);
+
+                const i1 = row1 + x;
+                const i2 = row1 + x + 1;
+                const i3 = row2 + x;
+                const i4 = row2 + x + 1;
+
+                indices.push(i1, i3, i2);
+                indices.push(i2, i3, i4);
+            }
+        }
+
+        return new Mesh(gl, vertices, indices, null, colors, texcoords);
+    }
+
     static createPlane(gl) {
         const vertices = [
             -1.0, 0.0, -1.0,

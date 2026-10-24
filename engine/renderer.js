@@ -279,20 +279,51 @@ export function initWebGL(canvas) {
         uniform mediump float u_time;
         uniform mediump float u_windElasticity;
         uniform int u_textureType;
+        uniform int u_waterType;
 
         varying vec3 v_normal;
         varying vec4 v_color;
         varying vec2 v_texcoord;
         varying vec3 v_worldPosition;
+        varying float v_waveHeight;
 
         void main() {
             vec4 pos = a_position;
+            float waveHeightAcc = 0.0;
 
             // Real 3D liquid wave vertex displacement for water meshes
             if (u_textureType == 4) {
-                float wave1 = sin(pos.x * 0.8 + u_time * 2.2) * cos(pos.z * 0.6 + u_time * 1.8) * 0.18;
-                float wave2 = sin(pos.x * 2.2 - u_time * 3.1 + pos.z * 1.5) * 0.08;
-                pos.y += wave1 + wave2;
+                if (u_waterType == 0) {
+                    // Mar / Océano: Waves refracting and wrapping naturally around shorelines
+                    float distFromCenter = length(pos.xz);
+                    vec2 shoreDir = distFromCenter > 0.001 ? -pos.xz / distFromCenter : vec2(0.0, -1.0);
+
+                    float t = u_time * 1.5;
+
+                    // Coastline-conforming radial swells
+                    float wave1 = sin(distFromCenter * 0.45 - t) * 0.12;
+                    float wave2 = sin(pos.x * 0.25 + pos.z * 0.35 + t * 0.8) * 0.05;
+                    float wave3 = cos(distFromCenter * 0.8 - t * 1.2) * 0.03;
+
+                    pos.x += shoreDir.x * cos(distFromCenter * 0.45 - t) * 0.06;
+                    pos.z += shoreDir.y * cos(distFromCenter * 0.45 - t) * 0.06;
+                    float dispY = wave1 + wave2 + wave3;
+                    pos.y += dispY;
+                    waveHeightAcc = dispY;
+                } else if (u_waterType == 1) {
+                    // Río: Directional flow along river path (texcoord.y downstream)
+                    float flowTime = u_time * 3.8;
+                    float riverWave1 = sin(a_texcoord.y * 24.0 - flowTime + pos.x * 2.0) * 0.10;
+                    float riverWave2 = cos(a_texcoord.y * 42.0 - flowTime * 1.5 + pos.z * 2.5) * 0.05;
+                    pos.y += riverWave1 + riverWave2;
+                    pos.x += sin(a_texcoord.y * 12.0 - flowTime) * 0.06;
+                    waveHeightAcc = riverWave1 + riverWave2;
+                } else {
+                    // Lago Tranquilo: Calm Caustics & Smooth Ripples
+                    float lakeWave = sin(pos.x * 1.4 + u_time * 1.2) * cos(pos.z * 1.4 + u_time * 1.0) * 0.04;
+                    pos.y += lakeWave;
+                    waveHeightAcc = lakeWave;
+                }
             }
 
             // Real-time dynamic grass & foliage wind animation (root base v=0.0 stays 100% fixed, tip v=1.0 sways)
@@ -314,6 +345,7 @@ export function initWebGL(canvas) {
             v_normal = u_normalMatrix * a_normal;
             v_color = a_color;
             v_texcoord = a_texcoord;
+            v_waveHeight = waveHeightAcc;
         }
     `;
 
@@ -325,6 +357,7 @@ export function initWebGL(canvas) {
         varying vec4 v_color;
         varying vec2 v_texcoord;
         varying vec3 v_worldPosition;
+        varying float v_waveHeight;
 
         uniform vec4 u_tintColor;
         uniform vec3 u_lightDirection;
@@ -338,6 +371,12 @@ export function initWebGL(canvas) {
         uniform float u_textureScale;
         uniform float u_metallic;
         uniform float u_roughness;
+
+        uniform sampler2D u_grassTexture;
+        uniform sampler2D u_sandTexture;
+        uniform sampler2D u_rockTexture;
+        uniform sampler2D u_waterNormalTexture;
+        uniform bool u_useImageTextures;
 
         // Volumetric God Rays & Raymarching Shafts
         uniform bool u_godRaysEnabled;
@@ -432,49 +471,61 @@ export function initWebGL(canvas) {
             blendWeights = max(blendWeights, 0.00001);
             blendWeights /= (blendWeights.x + blendWeights.y + blendWeights.z);
 
-            // Multi-octave triplanar noise for organic micro-details and normal map perturbations
-            float nX = noise3D(scaledPos.yzx * 2.5);
-            float nY = noise3D(scaledPos.xzy * 2.5 + vec3(17.1, 31.4, 9.2));
-            float nZ = noise3D(scaledPos.xyz * 2.5 + vec3(5.3, 88.2, 12.8));
-            float microTriplanar = nX * blendWeights.x + nY * blendWeights.y + nZ * blendWeights.z;
-
-            // High frequency micro-grain textures (grass blades, rock crevices, sand ripples, snow crystals)
-            float fineGrassGrain = noise3D(pos * 8.0 * scale) * 0.35 + noise3D(pos * 24.0 * scale) * 0.15;
-            float rockStrata = sin(pos.y * 3.5 * scale + noise3D(pos * 1.5) * 4.0) * 0.2 + noise3D(pos * 12.0 * scale) * 0.3;
-            float macroNoise = noise3D(pos * 0.08);
-
-            // Calculate procedural perturbed surface normal for realistic PBR bump highlights
+            // Per-pixel procedural normal bump map calculation
             vec3 bumpGrad = vec3(
-                noise3D(pos * 6.0 + vec3(0.05, 0.0, 0.0)) - noise3D(pos * 6.0 - vec3(0.05, 0.0, 0.0)),
-                noise3D(pos * 6.0 + vec3(0.0, 0.05, 0.0)) - noise3D(pos * 6.0 - vec3(0.0, 0.05, 0.0)),
-                noise3D(pos * 6.0 + vec3(0.0, 0.0, 0.05)) - noise3D(pos * 6.0 - vec3(0.0, 0.0, 0.05))
+                noise3D(pos * 8.0 + vec3(0.04, 0.0, 0.0)) - noise3D(pos * 8.0 - vec3(0.04, 0.0, 0.0)),
+                noise3D(pos * 8.0 + vec3(0.0, 0.04, 0.0)) - noise3D(pos * 8.0 - vec3(0.0, 0.04, 0.0)),
+                noise3D(pos * 8.0 + vec3(0.0, 0.0, 0.04)) - noise3D(pos * 8.0 - vec3(0.0, 0.0, 0.04))
             );
-            perturbedNormal = normalize(norm + bumpGrad * 0.35);
+            perturbedNormal = normalize(norm + bumpGrad * 0.28);
 
-            // Photorealistic Biome Materials
-            vec3 grassLush = vec3(0.18, 0.52, 0.12) + vec3(fineGrassGrain * 0.14, fineGrassGrain * 0.28, fineGrassGrain * 0.05);
-            vec3 leafyDirt = vec3(0.32, 0.22, 0.14) + vec3(microTriplanar * 0.12);
-            vec3 wetSand   = vec3(0.82, 0.74, 0.52) + vec3(microTriplanar * 0.06);
-            vec3 rockCliff = vec3(0.38, 0.38, 0.42) + vec3(rockStrata * 0.25);
-            vec3 darkStone = vec3(0.24, 0.25, 0.28) + vec3(rockStrata * 0.18);
-            vec3 snowCap   = vec3(0.95, 0.97, 1.0)  + vec3(microTriplanar * 0.04);
+            // High-detail procedural photorealistic micro-texture generators
+            float fineGrassGrain = noise3D(pos * 16.0 * scale) * 0.35 + noise3D(pos * 48.0 * scale) * 0.20;
+            float sandRipples = sin(pos.x * 18.0 * scale + pos.z * 18.0 * scale + noise3D(pos * 4.0) * 4.0) * 0.15 + noise3D(pos * 24.0) * 0.15;
+            float rockStrata = sin(pos.y * 6.0 * scale + noise3D(pos * 2.5) * 6.0) * 0.28 + noise3D(pos * 18.0 * scale) * 0.32;
+            float macroNoise = noise3D(pos * 0.05);
+
+            // High-resolution PBR Color Gradients
+            vec3 grassLush = vec3(0.16, 0.52, 0.12) + vec3(fineGrassGrain * 0.15, fineGrassGrain * 0.28, fineGrassGrain * 0.08);
+            vec3 goldenSand = vec3(0.92, 0.82, 0.58) + vec3(sandRipples * 0.12, sandRipples * 0.10, sandRipples * 0.05);
+            vec3 leafyDirt = vec3(0.32, 0.22, 0.12) + vec3(fineGrassGrain * 0.12);
+            vec3 rockCliff = vec3(0.45, 0.44, 0.48) + vec3(rockStrata * 0.25);
+            vec3 darkStone = vec3(0.24, 0.24, 0.28) + vec3(rockStrata * 0.20);
+            vec3 snowCap   = vec3(0.98, 0.99, 1.0)  + vec3(fineGrassGrain * 0.05);
 
             vec3 groundMat;
-            if (height < 1.2) {
-                float sandFactor = smoothstep(1.4, 0.1, height + macroNoise * 0.6);
-                groundMat = mix(grassLush, wetSand, sandFactor);
-            } else if (height < 7.5) {
-                float dirtBlend = smoothstep(0.4, 0.8, macroNoise);
-                groundMat = mix(grassLush, leafyDirt, dirtBlend * 0.45);
-            } else if (height < 12.0) {
-                float rockBlend = smoothstep(7.0, 11.5, height + macroNoise * 2.0);
-                groundMat = mix(grassLush, darkStone, rockBlend);
+            if (u_useImageTextures) {
+                vec2 uv = pos.xz * scale * 0.1;
+                vec3 gTex = texture2D(u_grassTexture, uv).rgb;
+                vec3 sTex = texture2D(u_sandTexture, uv).rgb;
+                vec3 rTex = texture2D(u_rockTexture, uv).rgb;
+
+                if (height < 1.4) {
+                    float sandFactor = smoothstep(1.6, 0.1, height + macroNoise * 0.5);
+                    groundMat = mix(gTex, sTex, sandFactor);
+                } else if (height < 7.5) {
+                    groundMat = mix(gTex, leafyDirt, 0.25);
+                } else {
+                    float rockBlend = smoothstep(7.0, 11.5, height + macroNoise * 2.0);
+                    groundMat = mix(gTex, rTex, rockBlend);
+                }
             } else {
-                float snowBlend = smoothstep(11.5, 15.0, height - macroNoise * 1.5);
-                groundMat = mix(darkStone, snowCap, snowBlend);
+                if (height < 1.4) {
+                    float sandFactor = smoothstep(1.6, 0.1, height + macroNoise * 0.5);
+                    groundMat = mix(grassLush, goldenSand, sandFactor);
+                } else if (height < 7.5) {
+                    float dirtBlend = smoothstep(0.4, 0.8, macroNoise);
+                    groundMat = mix(grassLush, leafyDirt, dirtBlend * 0.40);
+                } else if (height < 12.0) {
+                    float rockBlend = smoothstep(7.0, 11.5, height + macroNoise * 2.0);
+                    groundMat = mix(grassLush, darkStone, rockBlend);
+                } else {
+                    float snowBlend = smoothstep(11.5, 15.0, height - macroNoise * 1.5);
+                    groundMat = mix(darkStone, snowCap, snowBlend);
+                }
             }
 
-            float cliffFactor = smoothstep(0.28, 0.58, slope + rockStrata * 0.15);
+            float cliffFactor = smoothstep(0.26, 0.56, slope + rockStrata * 0.15);
             vec3 finalTerrain = mix(groundMat, rockCliff, cliffFactor);
 
             return finalTerrain;
@@ -485,51 +536,91 @@ export function initWebGL(canvas) {
             vec3 normNorm = normalize(v_normal);
 
             if (u_textureType == 4) {
-                // Photorealistic Translucent Liquid Water Shader (Clean, Smooth Water Optics without noise artifacts)
+                // Photorealistic Translucent Liquid Water Shader (Ocean, River, Lake)
                 vec3 viewDir = normalize(-v_worldPosition);
                 vec3 lightDir = normalize(u_lightDirection);
 
-                // High-fidelity liquid color tones
-                vec3 shallowCol = vec3(0.12, 0.72, 0.85); // Pure crystalline turquoise
-                vec3 deepCol    = vec3(0.01, 0.18, 0.42); // Rich deep ocean navy blue
+                // High-fidelity water colors for each type
+                vec3 shallowCol = vec3(0.12, 0.78, 0.90); // Crystalline turquoise
+                vec3 deepCol    = vec3(0.01, 0.15, 0.42); // Deep navy ocean
 
                 if (u_waterType == 1) {
-                    // River
-                    shallowCol = vec3(0.10, 0.65, 0.72);
+                    // River: Vibrant mountain emerald / teal water
+                    shallowCol = vec3(0.08, 0.72, 0.78);
                     deepCol    = vec3(0.02, 0.28, 0.38);
                 } else if (u_waterType == 2) {
-                    // Lake
-                    shallowCol = vec3(0.14, 0.62, 0.58);
+                    // Lake: Tranquil emerald / azure crystal lake water
+                    shallowCol = vec3(0.14, 0.68, 0.65);
                     deepCol    = vec3(0.03, 0.22, 0.32);
                 }
 
-                // Procedural normal perturbation for liquid surface micro-ripples
-                vec2 waveSpeed = vec2(u_time * 0.4, u_time * 0.25);
+                // Multi-layered procedural normal perturbation for high-detail water surface
+                vec2 waveSpeed1 = vec2(u_time * 0.5, u_time * 0.35);
+                vec2 waveSpeed2 = vec2(-u_time * 0.4, u_time * 0.6);
+
+                if (u_waterType == 1) {
+                    // River current fast directional flow along UV coordinates
+                    waveSpeed1 = vec2(u_time * 0.5, u_time * 3.5 + v_texcoord.y);
+                    waveSpeed2 = vec2(-u_time * 0.3, u_time * 5.0 + v_texcoord.y * 1.5);
+                }
+
                 vec3 waveNormalGrad = vec3(
-                    sin(v_worldPosition.x * 2.5 + waveSpeed.x) * 0.12 + cos(v_worldPosition.z * 3.1 + waveSpeed.y) * 0.08,
+                    sin(v_worldPosition.x * 3.5 + waveSpeed1.x) * 0.15 + cos(v_worldPosition.z * 4.2 + waveSpeed2.y) * 0.10,
                     1.0,
-                    cos(v_worldPosition.x * 1.8 - waveSpeed.y) * 0.10 + sin(v_worldPosition.z * 2.2 + waveSpeed.x) * 0.12
+                    cos(v_worldPosition.x * 2.8 - waveSpeed2.x) * 0.12 + sin(v_worldPosition.z * 3.6 + waveSpeed1.y) * 0.15
                 );
-                vec3 liquidNormal = normalize(normNorm + waveNormalGrad);
 
-                // Physical Fresnel reflectance calculation (viewing angle reflectivity)
+                if (u_waterType == 1) {
+                    // High-frequency directional ripple normal vectors along river flow
+                    waveNormalGrad.x += sin(v_texcoord.x * 20.0 + u_time * 4.0) * 0.12;
+                    waveNormalGrad.z += cos(v_texcoord.y * 32.0 - u_time * 6.0) * 0.22;
+                }
+
+                vec3 liquidNormal = normalize(normNorm + waveNormalGrad * 0.65);
+
+                // Physical Fresnel reflectance calculation
                 float NdotV = max(0.0, dot(liquidNormal, viewDir));
-                float fresnel = pow(1.0 - NdotV, 4.0);
+                float fresnel = pow(1.0 - NdotV, 3.5);
 
-                // Depth tinting and liquid refraction tone
-                vec3 baseLiquid = mix(deepCol, shallowCol, clamp(NdotV * 1.2, 0.0, 1.0));
+                vec3 baseLiquid = mix(deepCol, shallowCol, clamp(NdotV * 1.3, 0.0, 1.0));
 
-                // Physical specular sun glint (sharp liquid reflections)
+                // Dual specular sun glint
                 vec3 halfDir = normalize(lightDir + viewDir);
                 float NdotH = max(0.0, dot(liquidNormal, halfDir));
-                float specularGlint = pow(NdotH, 160.0) * 2.8;
+                float specularGlint = pow(NdotH, 180.0) * 3.2 + pow(NdotH, 24.0) * 0.4;
 
-                // Sky reflection blend via Fresnel
-                vec3 skyReflection = mix(vec3(0.6, 0.8, 1.0), vec3(0.95, 0.98, 1.0), fresnel);
-                vec3 finalLiquidRGB = mix(baseLiquid, skyReflection, fresnel * 0.6) + vec3(specularGlint);
+                // Sky reflection
+                vec3 skyReflection = mix(vec3(0.55, 0.78, 1.0), vec3(0.95, 0.98, 1.0), fresnel);
+                vec3 finalLiquidRGB = mix(baseLiquid, skyReflection, fresnel * 0.65) + vec3(specularGlint);
 
-                // Translucent liquid alpha
-                gl_FragColor = vec4(finalLiquidRGB, 0.82);
+                // Ocean Wave Crest & Shoreline Foam Generation
+                if (u_waterType == 0) {
+                    float foamFactor = smoothstep(0.12, 0.30, v_waveHeight);
+
+                    // Add shoreline edge foam based on shallow depth / shore proximity
+                    float shoreProximity = smoothstep(2.5, -0.3, v_worldPosition.y);
+                    foamFactor = max(foamFactor, shoreProximity * 0.75);
+
+                    if (foamFactor > 0.02) {
+                        float foamPattern = noise(v_worldPosition.xz * 12.0 + u_time * 0.8) * 0.4 + 0.6;
+                        vec3 foamColor = vec3(0.96, 0.98, 1.0);
+                        finalLiquidRGB = mix(finalLiquidRGB, foamColor, foamFactor * foamPattern);
+                    }
+                } else if (u_waterType == 1) {
+                    // River current foam streaks along river banks and rapids
+                    float bankFoam = smoothstep(0.32, 0.49, abs(v_texcoord.x - 0.5));
+                    float currentRipple = noise(vec2(v_texcoord.x * 16.0, v_texcoord.y * 40.0 - u_time * 6.0));
+                    if (bankFoam > 0.08 || currentRipple > 0.65) {
+                        vec3 foamColor = vec3(0.94, 0.97, 1.0);
+                        finalLiquidRGB = mix(finalLiquidRGB, foamColor, bankFoam * 0.45 + smoothstep(0.65, 0.85, currentRipple) * 0.40);
+                    }
+                } else if (u_waterType == 2) {
+                    // Lake caustic highlights
+                    float caustic = noise(v_worldPosition.xz * 4.5 + u_time * 0.9) * noise(v_worldPosition.zx * 5.0 - u_time * 0.7);
+                    finalLiquidRGB += vec3(0.12, 0.22, 0.20) * caustic;
+                }
+
+                gl_FragColor = vec4(finalLiquidRGB, 0.88);
                 return;
             }
 
@@ -677,6 +768,12 @@ export function initWebGL(canvas) {
             isCloud: gl.getUniformLocation(program, 'u_isCloud'),
             cloudTranslucency: gl.getUniformLocation(program, 'u_cloudTranslucency'),
             cloudTint: gl.getUniformLocation(program, 'u_cloudTint'),
+
+            grassTexture: gl.getUniformLocation(program, 'u_grassTexture'),
+            sandTexture: gl.getUniformLocation(program, 'u_sandTexture'),
+            rockTexture: gl.getUniformLocation(program, 'u_rockTexture'),
+            waterNormalTexture: gl.getUniformLocation(program, 'u_waterNormalTexture'),
+            useImageTextures: gl.getUniformLocation(program, 'u_useImageTextures'),
         },
     };
 
@@ -778,10 +875,9 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
     gl.uniform1i(programInfo.uniformLocations.isUnlit, 0);
 
     for (const gameObject of scene.gameObjects) {
+        if (!gameObject.mesh) continue;
         if (gameObject.windZone && !gameObject.mesh) continue;
         if (gameObject.windZone) continue;
-
-        if (!gameObject.mesh) continue;
 
         gl.uniform1f(programInfo.uniformLocations.windElasticity, gameObject.windElasticity || 0.0);
 
@@ -848,6 +944,24 @@ export function renderWebGL(webglContext, canvas, scene, projectionMatrix, viewM
             gl.uniform4f(programInfo.uniformLocations.tintColor, 0.6, 0.6, 0.7, 1.0);
         } else {
             gl.uniform4f(programInfo.uniformLocations.tintColor, 1.0, 1.0, 1.0, 1.0);
+        }
+
+        if (window.globalTextures) {
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, window.globalTextures.grass);
+            gl.uniform1i(programInfo.uniformLocations.grassTexture, 1);
+
+            gl.activeTexture(gl.TEXTURE2);
+            gl.bindTexture(gl.TEXTURE_2D, window.globalTextures.sand);
+            gl.uniform1i(programInfo.uniformLocations.sandTexture, 2);
+
+            gl.activeTexture(gl.TEXTURE3);
+            gl.bindTexture(gl.TEXTURE_2D, window.globalTextures.rock);
+            gl.uniform1i(programInfo.uniformLocations.rockTexture, 3);
+
+            gl.uniform1i(programInfo.uniformLocations.useImageTextures, 1);
+        } else {
+            gl.uniform1i(programInfo.uniformLocations.useImageTextures, 0);
         }
 
         gl.drawElements(gl.TRIANGLES, gameObject.mesh.vertexCount, gl.UNSIGNED_SHORT, 0);

@@ -33,12 +33,16 @@
                     <div class="dropdown-item" data-create="deformable_plane" style="color: #2ecc71; font-weight: bold;">Plano Deformable (Grid)</div>
                     <div class="dropdown-item" id="btn-open-terrain-modal" style="color: #2ecc71; font-weight: bold;">Terreno Smooth (Roblox Style)</div>
                     <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" data-create="ocean" style="color: #00d2ff; font-weight: bold;">Mar / Océano 3D (Olas)</div>
+                    <div class="dropdown-item" data-create="river" style="color: #00d2ff; font-weight: bold;">Río 3D (Corriente)</div>
+                    <div class="dropdown-item" data-create="lake" style="color: #00d2ff; font-weight: bold;">Lago 3D (Tranquilo)</div>
+                    <div class="dropdown-divider"></div>
                     <div class="dropdown-item" data-create="cylinder">Cilindro</div>
                     <div class="dropdown-item" data-create="cone">Cono</div>
                     <div class="dropdown-item" data-create="pyramid">Pirámide</div>
                     <div class="dropdown-item" data-create="ramp">Prisma / Rampa</div>
                     <div class="dropdown-item" data-create="torus">Torus (Dona)</div>
-                    <div class="dropdown-item" data-create="cloud">Nube 3D Volumétrica</div>
+                    <div class="dropdown-item" data-create="cloud" style="color: #4da6ff; font-weight: bold;">Nube 3D Volumétrica</div>
                     <div class="dropdown-item" data-create="windzone" style="color: #00d2ff; font-weight: bold;">Zona de Viento 3D</div>
                     <div class="dropdown-divider"></div>
                     <div class="dropdown-item" id="btn-add-bone">Armadura / Hueso</div>
@@ -222,9 +226,20 @@
                         </div>
                     </div>
 
-                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px;">
-                        <input type="checkbox" id="chk-terrain-water" checked style="accent-color: #007acc; cursor: pointer;">
-                        <label for="chk-terrain-water" style="font-size: 11px; color: #eee; cursor: pointer; font-weight: bold;">Generar Superficie de Lago / Agua Realista</label>
+                    <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding: 8px; background: #1f1f1f; border-radius: 4px; border: 1px solid #00d2ff44;">
+                        <span style="font-size: 11px; color: #00d2ff; font-weight: bold; margin-bottom: 2px;">Cuerpos de Agua Automáticos del Mapa:</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="chk-terrain-ocean" checked style="accent-color: #00d2ff; cursor: pointer;">
+                            <label for="chk-terrain-ocean" style="font-size: 11px; color: #eee; cursor: pointer;">Generar Mar / Océano (Olas 3D + Espuma Rompiente)</label>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="chk-terrain-river" checked style="accent-color: #00d2ff; cursor: pointer;">
+                            <label for="chk-terrain-river" style="font-size: 11px; color: #eee; cursor: pointer;">Generar Río (de Montaña a Mar con Corriente Animada)</label>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="chk-terrain-lake" checked style="accent-color: #00d2ff; cursor: pointer;">
+                            <label for="chk-terrain-lake" style="font-size: 11px; color: #eee; cursor: pointer;">Generar Lago Tranquilo (Cáusticas Suaves)</label>
+                        </div>
                     </div>
                 </div>
 
@@ -429,6 +444,10 @@
         <div class="context-menu-item" data-create="pyramid">Pirámide</div>
         <div class="context-menu-item" data-create="ramp">Prisma / Rampa</div>
         <div class="context-menu-item" data-create="torus">Torus (Dona)</div>
+        <div class="context-menu-item" data-create="ocean" style="color: #00d2ff; font-weight: bold;">+ Mar / Océano 3D (Olas)</div>
+        <div class="context-menu-item" data-create="river" style="color: #00d2ff; font-weight: bold;">+ Río 3D (Corriente)</div>
+        <div class="context-menu-item" data-create="lake" style="color: #00d2ff; font-weight: bold;">+ Lago 3D (Tranquilo)</div>
+        <div class="context-menu-divider"></div>
         <div class="context-menu-item" data-create="cloud" style="color: #4da6ff; font-weight: bold;">+ Nube 3D Volumétrica</div>
         <div class="context-menu-item" data-create="windzone" style="color: #00d2ff; font-weight: bold;">+ Zona de Viento 3D</div>
         <div class="context-menu-divider"></div>
